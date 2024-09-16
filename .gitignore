@@ -1,0 +1,32 @@
+# Build directories
+build/
+out/
+cmake-build-debug/
+
+# Conan
+conanbuildinfo.cmake
+conaninfo.txt
+graph_info.json
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDEs
+.vscode/
+.idea/
+
+# Compiled shaders
+*.spv
+
+# macOS
+.DS_Store
+
+# Executables
+LillUgsi
+
+# Temporary files
+*.swp
+*~
