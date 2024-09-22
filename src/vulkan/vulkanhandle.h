@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include <utility>
 #include <functional>
 
 /// Template class for RAII management of Vulkan objects
