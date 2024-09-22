@@ -13,12 +13,10 @@ add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
 add_executable(LillUgsi
 		src/main.cpp
-		src/Application.cpp
-		src/Core/Logger.cpp
-		src/Renderer/VulkanRenderer.cpp
-		src/Renderer/VulkanInitializer.cpp
-		src/Window/WindowManager.cpp
-		src/Event/EventSystem.cpp
+#		src/core/application.cpp
+		src/vulkan/VulkanHandle.h
+		src/vulkan/vulkaninstance.h
+		src/vulkan/vulkaninstance.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
