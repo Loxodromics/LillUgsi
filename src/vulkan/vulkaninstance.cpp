@@ -4,7 +4,7 @@
 VulkanInstance::VulkanInstance() {
 	/// Initialize validation layers for debug builds
 	#ifdef NDEBUG
-		this->enableValidationLayers = false;
+		this->enableValidationLayers = true;
 	#else
 		this->enableValidationLayers = true;
 	#endif
@@ -28,15 +28,18 @@ bool VulkanInstance::initialize(const std::vector<const char*>& requiredExtensio
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_0;
 
-	VkInstanceCreateInfo createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	createInfo.pApplicationInfo = &appInfo;
-
 	/// Combine required extensions with validation layer extensions if enabled
 	auto extensions = requiredExtensions;
 	if (this->enableValidationLayers) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
+
+	VkInstanceCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	createInfo.pApplicationInfo = &appInfo;
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+	createInfo.ppEnabledExtensionNames = extensions.data();
+	createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	createInfo.ppEnabledExtensionNames = extensions.data();
@@ -50,7 +53,8 @@ bool VulkanInstance::initialize(const std::vector<const char*>& requiredExtensio
 
 	VkResult result = this->instanceWrapper.create(&createInfo);
 	if (result != VK_SUCCESS) {
-		spdlog::error("Failed to create Vulkan instance!");
+		this->lastError = "Failed to create Vulkan instance. Error code: " + std::to_string(result);
+		spdlog::error(this->lastError);
 		return false;
 	}
 

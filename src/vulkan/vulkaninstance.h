@@ -15,6 +15,8 @@ public:
 	/// Get the Vulkan instance handle
 	VkInstance getInstance() const { return this->instanceWrapper.get(); }
 
+	const std::string& getLastError() const { return this->lastError; }
+
 private:
 	/// Wrapper for the Vulkan instance
 	VulkanInstanceWrapper instanceWrapper;
@@ -33,4 +35,6 @@ private:
 
 	/// Flag to enable validation layers
 	bool enableValidationLayers;
+
+	std::string lastError;
 };

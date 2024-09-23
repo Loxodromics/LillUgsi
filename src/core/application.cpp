@@ -49,8 +49,23 @@ bool Application::initialize() {
 	/// Add VK_EXT_debug_utils extension if you want to use validation layers
 	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
+	/// Log available Vulkan extensions
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+
+	spdlog::info("Available Vulkan extensions:");
+	for (const auto& extension : availableExtensions) {
+		spdlog::info("  {}", extension.extensionName);
+	}
+
+	spdlog::info("Required Vulkan extensions:");
+	for (const auto& extension : extensions) {
+		spdlog::info("  {}", extension);
+	}
+
 	if (!this->vulkanInstance->initialize(extensions)) {
-		spdlog::error("Failed to initialize Vulkan instance");
+		spdlog::error("Failed to initialize Vulkan instance: {}", this->vulkanInstance->getLastError());
 		return false;
 	}
 
