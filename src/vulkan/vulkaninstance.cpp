@@ -6,7 +6,7 @@ VulkanInstance::VulkanInstance() {
 	#ifdef NDEBUG
 		this->enableValidationLayers = true;
 	#else
-		this->enableValidationLayers = true;
+		this->enableValidationLayers = false;
 	#endif
 
 	this->validationLayers = {"VK_LAYER_KHRONOS_validation"};

@@ -2,9 +2,11 @@
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
+#include <vector>
 
 Application::Application(const std::string& appName, uint32_t width, uint32_t height)
-	: appName(appName), width(width), height(height), window(nullptr), isRunning(false) {
+	: appName(appName), width(width), height(height), window(nullptr),
+	physicalDevice(VK_NULL_HANDLE), isRunning(false) {
 }
 
 Application::~Application() {
@@ -69,6 +71,21 @@ bool Application::initialize() {
 		return false;
 	}
 
+	/// Select a physical device
+	this->physicalDevice = this->pickPhysicalDevice();
+	if (this->physicalDevice == VK_NULL_HANDLE) {
+		spdlog::error("Failed to find a suitable GPU");
+		return false;
+	}
+
+	/// Create logical device
+	this->vulkanDevice = std::make_unique<VulkanDevice>();
+	std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	if (!this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions)) {
+		spdlog::error("Failed to create logical device");
+		return false;
+	}
+
 	this->isRunning = true;
 	return true;
 }
@@ -81,9 +98,8 @@ void Application::run() {
 }
 
 void Application::cleanup() {
-	if (this->vulkanInstance) {
-		this->vulkanInstance.reset();
-	}
+	this->vulkanDevice.reset();
+	this->vulkanInstance.reset();
 
 	if (this->window) {
 		SDL_DestroyWindow(this->window);
@@ -113,4 +129,21 @@ void Application::handleEvents() {
 void Application::render() {
 	/// Placeholder for rendering code
 	/// This will be implemented later when we set up the Vulkan rendering pipeline
+}
+
+VkPhysicalDevice Application::pickPhysicalDevice() {
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(this->vulkanInstance->getInstance(), &deviceCount, nullptr);
+
+	if (deviceCount == 0) {
+		spdlog::error("Failed to find GPUs with Vulkan support");
+		return VK_NULL_HANDLE;
+	}
+
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(this->vulkanInstance->getInstance(), &deviceCount, devices.data());
+
+	/// For now, just pick the first device
+	/// In a real application, you'd want to score and rank the devices based on their properties
+	return devices[0];
 }

@@ -17,6 +17,8 @@ add_executable(LillUgsi
 		src/vulkan/vulkaninstance.cpp
 		src/vulkan/vulkanwrappers.cpp
 		src/Core/application.cpp
+		src/vulkan/vulkandevice.h
+		src/vulkan/vulkandevice.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
