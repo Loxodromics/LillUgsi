@@ -78,6 +78,12 @@ bool Application::initialize() {
 		return false;
 	}
 
+	/// Create Vulkan surface
+	if (!SDL_Vulkan_CreateSurface(this->window, this->vulkanInstance->getInstance(), nullptr, &this->surface)) {
+		spdlog::error("Failed to create Vulkan surface");
+		return false;
+	}
+
 	/// Create logical device
 	this->vulkanDevice = std::make_unique<VulkanDevice>();
 	std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -86,7 +92,15 @@ bool Application::initialize() {
 		return false;
 	}
 
+
+	/// Create swap chain
+	if (!this->createSwapChain()) {
+		spdlog::error("Failed to create swap chain");
+		return false;
+	}
+
 	this->isRunning = true;
+	this->framebufferResized = false;
 	return true;
 }
 
@@ -97,7 +111,68 @@ void Application::run() {
 	}
 }
 
+bool Application::createSwapChain() {
+	this->vulkanSwapchain = std::make_unique<VulkanSwapchain>();
+	return this->vulkanSwapchain->initialize(this->physicalDevice, this->vulkanDevice->getDevice(), this->surface, this->width, this->height);
+}
+
+bool Application::recreateSwapChain() {
+	int w, h;
+	SDL_GetWindowSizeInPixels(this->window, &w, &h);
+	while (w == 0 || h == 0) {
+		SDL_GetWindowSizeInPixels(this->window, &w, &h);
+		SDL_WaitEvent(nullptr);
+	}
+	this->width = static_cast<uint32_t>(w);
+	this->height = static_cast<uint32_t>(h);
+
+	vkDeviceWaitIdle(this->vulkanDevice->getDevice());
+
+	this->cleanupSwapChain();
+
+	return this->createSwapChain();
+}
+
+void Application::cleanupSwapChain() {
+	this->vulkanSwapchain.reset();
+}
+
+void Application::handleEvents() {
+	SDL_Event event;
+	while (SDL_PollEvent(&event)) {
+		switch (event.type) {
+			case SDL_EVENT_QUIT:
+				this->isRunning = false;
+			break;
+			case SDL_EVENT_WINDOW_RESIZED:
+				/// This does not get called for me...
+				this->framebufferResized = true;
+			break;
+			default:
+				break;
+		}
+	}
+}
+
+void Application::render() {
+	if (this->framebufferResized) {
+		this->recreateSwapChain();
+		this->framebufferResized = false;
+		return;  // Skip this frame
+	}
+
+	/// Placeholder for rendering code
+	/// This will be implemented later when we set up the Vulkan rendering pipeline
+}
+
 void Application::cleanup() {
+	this->cleanupSwapChain();
+
+	if (this->surface) {
+		vkDestroySurfaceKHR(this->vulkanInstance->getInstance(), this->surface, nullptr);
+		this->surface = VK_NULL_HANDLE;
+	}
+
 	this->vulkanDevice.reset();
 	this->vulkanInstance.reset();
 
@@ -107,28 +182,6 @@ void Application::cleanup() {
 	}
 
 	SDL_Quit();
-}
-
-void Application::handleEvents() {
-	SDL_Event event;
-	while (SDL_PollEvent(&event)) {
-		switch (event.type) {
-			case SDL_EVENT_QUIT:
-				this->isRunning = false;
-				break;
-			case SDL_EVENT_WINDOW_RESIZED:
-				/// Handle window resize
-				spdlog::info("Window resized to {}x{}", event.window.data1, event.window.data2);
-				break;
-			default:
-				break;
-		}
-	}
-}
-
-void Application::render() {
-	/// Placeholder for rendering code
-	/// This will be implemented later when we set up the Vulkan rendering pipeline
 }
 
 VkPhysicalDevice Application::pickPhysicalDevice() {
