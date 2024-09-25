@@ -39,11 +39,19 @@ private:
 	/// Create the swap chain
 	bool createSwapChain();
 
+	/// Create the command pool
+	bool createCommandPool();
+
+	/// Create command buffers
+	bool createCommandBuffers();
+
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
 	VkPhysicalDevice physicalDevice;
 	VkSurfaceKHR surface;
+	VulkanCommandPoolHandle commandPool; /// Command pool for allocating command buffers
+	std::vector<VkCommandBuffer> commandBuffers; /// Command buffers for recording drawing commands
 
 	uint32_t width;
 	uint32_t height;

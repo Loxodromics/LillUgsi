@@ -20,6 +20,8 @@ public:
 	/// Get the present queue
 	VkQueue getPresentQueue() const { return this->presentQueue; }
 
+	uint32_t getGraphicsQueueFamilyIndex() const { return this->graphicsQueueFamilyIndex; }
+
 private:
 	/// Wrapper for the Vulkan logical device
 	VulkanDeviceHandle deviceHandle;
@@ -29,6 +31,8 @@ private:
 
 	/// Present queue
 	VkQueue presentQueue;
+
+	uint32_t graphicsQueueFamilyIndex;
 
 	/// Find queue families that support graphics and present operations
 	bool findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily);

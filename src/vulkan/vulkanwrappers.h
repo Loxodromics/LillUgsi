@@ -32,7 +32,7 @@ using VulkanRenderPassHandle = VulkanHandle<VkRenderPass, PFN_vkDestroyRenderPas
 using VulkanFramebufferHandle = VulkanHandle<VkFramebuffer, PFN_vkDestroyFramebuffer>;
 
 /// Type alias for VkCommandPool wrapper
-using VulkanCommandPoolHandle = VulkanHandle<VkCommandPool, PFN_vkDestroyCommandPool>;
+using VulkanCommandPoolHandle = VulkanHandle<VkCommandPool, std::function<void(VkCommandPool)>>;
 
 /// Type alias for VkSemaphore wrapper
 using VulkanSemaphoreHandle = VulkanHandle<VkSemaphore, PFN_vkDestroySemaphore>;

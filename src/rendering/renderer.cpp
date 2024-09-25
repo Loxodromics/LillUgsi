@@ -44,17 +44,48 @@ bool Renderer::initialize(SDL_Window* window) {
 		return false;
 	}
 
+	if (!this->createCommandPool()) {
+		spdlog::error("Failed to create command pool");
+		return false;
+	}
+
+	if (!this->createCommandBuffers()) {
+		spdlog::error("Failed to create command buffers");
+		return false;
+	}
+
 	return true;
 }
 
 void Renderer::cleanup() {
+	/// Ensure all GPU operations are completed before cleanup
+	/// This prevents destroying resources that might still be in use by the GPU,
+	/// which could lead to crashes or undefined behavior. It's a critical
+	/// synchronization point between the CPU and GPU.
+	if (this->vulkanDevice) {
+		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
+	}
+
+	/// Free command buffers
+	if (this->vulkanDevice && this->commandPool) {
+		vkFreeCommandBuffers(this->vulkanDevice->getDevice(), this->commandPool.get(),
+			static_cast<uint32_t>(this->commandBuffers.size()), this->commandBuffers.data());
+	}
+	this->commandBuffers.clear();
+
+	/// Reset command pool
+	this->commandPool.reset();
+
+	/// Reset swap chain
 	this->vulkanSwapchain.reset();
 
-	if (this->surface) {
+	/// Destroy surface
+	if (this->vulkanInstance && this->surface) {
 		vkDestroySurfaceKHR(this->vulkanInstance->getInstance(), this->surface, nullptr);
 		this->surface = VK_NULL_HANDLE;
 	}
 
+	/// Reset device and instance
 	this->vulkanDevice.reset();
 	this->vulkanInstance.reset();
 }
@@ -152,4 +183,54 @@ VkPhysicalDevice Renderer::pickPhysicalDevice() {
 bool Renderer::createSwapChain() {
 	this->vulkanSwapchain = std::make_unique<VulkanSwapchain>();
 	return this->vulkanSwapchain->initialize(this->physicalDevice, this->vulkanDevice->getDevice(), this->surface, this->width, this->height);
+}
+
+bool Renderer::createCommandPool() {
+	/// Command pools manage the memory used to store the buffers and command buffers are allocated from them.
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+
+	/// We want to create command buffers that are associated with the graphics queue family
+	poolInfo.queueFamilyIndex = this->vulkanDevice->getGraphicsQueueFamilyIndex();
+
+	/// VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT allows any command buffer allocated from this pool to be individually reset to the initial state
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+	VkCommandPool commandPool;
+	if (vkCreateCommandPool(this->vulkanDevice->getDevice(), &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+		spdlog::error("Failed to create command pool");
+		return false;
+	}
+
+	/// Wrap the command pool in our RAII wrapper
+	this->commandPool = VulkanCommandPoolHandle(commandPool, [this](VkCommandPool pool) {
+		vkDestroyCommandPool(this->vulkanDevice->getDevice(), pool, nullptr);
+	});
+
+	spdlog::info("Command pool created successfully");
+	return true;
+}
+
+bool Renderer::createCommandBuffers() {
+	/// We'll create one command buffer for each swap chain image
+	uint32_t swapChainImageCount = this->vulkanSwapchain->getSwapChainImages().size();
+	this->commandBuffers.resize(swapChainImageCount);
+
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = this->commandPool.get();
+
+	/// Primary command buffers can be submitted to a queue for execution, but cannot be called from other command buffers
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
+
+	/// Allocate the command buffers
+	if (vkAllocateCommandBuffers(this->vulkanDevice->getDevice(), &allocInfo, this->commandBuffers.data()) != VK_SUCCESS) {
+		spdlog::error("Failed to allocate command buffers");
+		return false;
+	}
+
+	spdlog::info("Command buffers created successfully");
+	return true;
 }

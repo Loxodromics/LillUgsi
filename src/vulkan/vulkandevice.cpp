@@ -6,12 +6,12 @@ VulkanDevice::VulkanDevice() : graphicsQueue(VK_NULL_HANDLE), presentQueue(VK_NU
 }
 
 bool VulkanDevice::initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) {
-	uint32_t graphicsFamily, presentFamily;
-	if (!this->findQueueFamilies(physicalDevice, graphicsFamily, presentFamily)) {
+	uint32_t presentFamily;
+	if (!this->findQueueFamilies(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily)) {
 		return false;
 	}
 
-	return this->createLogicalDevice(physicalDevice, graphicsFamily, presentFamily, requiredExtensions);
+	return this->createLogicalDevice(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily, requiredExtensions);
 }
 
 bool VulkanDevice::findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily) {
