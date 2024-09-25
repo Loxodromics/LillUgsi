@@ -3,8 +3,10 @@
 #include "vulkan/vulkaninstance.h"
 #include "vulkan/vulkandevice.h"
 #include "vulkan/vulkanswapchain.h"
+#include "vulkan/vulkanwrappers.h"
 #include <SDL3/SDL.h>
 #include <memory>
+#include <vector>
 
 class Renderer {
 public:
@@ -45,6 +47,9 @@ private:
 	/// Create command buffers
 	bool createCommandBuffers();
 
+	/// Create the render pass
+	bool createRenderPass();
+
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
@@ -52,7 +57,9 @@ private:
 	VkSurfaceKHR surface;
 	VulkanCommandPoolHandle commandPool; /// Command pool for allocating command buffers
 	std::vector<VkCommandBuffer> commandBuffers; /// Command buffers for recording drawing commands
-
+	VulkanRenderPassHandle renderPass; /// Handle for the render pass
 	uint32_t width;
 	uint32_t height;
+
+	bool isCleanedUp;
 };

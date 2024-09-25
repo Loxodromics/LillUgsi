@@ -54,22 +54,36 @@ bool Renderer::initialize(SDL_Window* window) {
 		return false;
 	}
 
+	if (!this->createRenderPass()) {
+		spdlog::error("Failed to create render pass");
+		return false;
+	}
+
 	return true;
 }
 
 void Renderer::cleanup() {
+	if (this->isCleanedUp) {
+		return;  /// Already cleaned up, do nothing
+	}
+
 	/// Ensure all GPU operations are completed before cleanup
 	/// This prevents destroying resources that might still be in use by the GPU,
 	/// which could lead to crashes or undefined behavior. It's a critical
 	/// synchronization point between the CPU and GPU.
-	if (this->vulkanDevice) {
-		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
-	}
+	/// Clean up resources in reverse order of creation
+	this->renderPass.reset();
 
 	/// Free command buffers
-	if (this->vulkanDevice && this->commandPool) {
-		vkFreeCommandBuffers(this->vulkanDevice->getDevice(), this->commandPool.get(),
-			static_cast<uint32_t>(this->commandBuffers.size()), this->commandBuffers.data());
+	if (this->vulkanDevice) {
+		if (this->commandPool) {
+			vkFreeCommandBuffers(this->vulkanDevice->getDevice(), this->commandPool.get(),
+				static_cast<uint32_t>(this->commandBuffers.size()), this->commandBuffers.data());
+		} else {
+			spdlog::warn("Attempting to free command buffers, but command pool is null");
+		}
+	} else {
+		spdlog::warn("Attempting to free command buffers, but device is null");
 	}
 	this->commandBuffers.clear();
 
@@ -85,9 +99,12 @@ void Renderer::cleanup() {
 		this->surface = VK_NULL_HANDLE;
 	}
 
-	/// Reset device and instance
+	/// Reset device and instance last
 	this->vulkanDevice.reset();
 	this->vulkanInstance.reset();
+	
+	this->isCleanedUp = true;
+	spdlog::info("Renderer cleanup completed");
 }
 
 void Renderer::drawFrame() {
@@ -232,5 +249,67 @@ bool Renderer::createCommandBuffers() {
 	}
 
 	spdlog::info("Command buffers created successfully");
+	return true;
+}
+
+bool Renderer::createRenderPass() {
+	/// VkAttachmentDescription: Describes a framebuffer attachment (e.g., color, depth, or stencil buffer).
+	/// It defines how the attachment will be used throughout the render pass.
+	VkAttachmentDescription colorAttachment{};
+	colorAttachment.format = this->vulkanSwapchain->getSwapChainImageFormat();
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; /// No multisampling
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; /// Clear the attachment at the start of the render pass
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; /// Store the result for later use (e.g., presentation)
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; /// We're not using stencil buffer
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; /// We don't care about the initial layout
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; /// The image will be presented in the swap chain
+
+	/// VkAttachmentReference: Describes how a specific attachment will be used in a subpass.
+	/// It links the attachment description to a specific subpass.
+	VkAttachmentReference colorAttachmentRef{};
+	colorAttachmentRef.attachment = 0; /// Index of the attachment in the attachment descriptions array
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; /// Layout to use during the subpass
+
+	/// VkSubpassDescription: Describes a single subpass in the render pass.
+	/// A subpass is a set of rendering operations that can be executed together efficiently.
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; /// This is a graphics subpass
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	/// VkSubpassDependency: Defines dependencies between subpasses.
+	/// This is crucial for handling synchronization between subpasses and with external operations.
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL; /// Dependency on operations outside the render pass
+	dependency.dstSubpass = 0; /// Our subpass index
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; /// Stage of the dependency in the source subpass
+	dependency.srcAccessMask = 0; /// No access in the source subpass
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; /// Stage of the dependency in the destination subpass
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; /// We'll be writing to the color attachment
+
+	/// VkRenderPassCreateInfo: Aggregates all the information needed to create a render pass.
+	/// It includes attachment descriptions, subpasses, and dependencies.
+	VkRenderPassCreateInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = 1;
+	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpass;
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
+
+	VkRenderPass renderPass;
+	if (vkCreateRenderPass(this->vulkanDevice->getDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+		spdlog::error("Failed to create render pass");
+		return false;
+	}
+
+	/// Wrap the render pass in our RAII wrapper for automatic resource management
+	this->renderPass = VulkanRenderPassHandle(renderPass, [this](VkRenderPass rp) {
+		vkDestroyRenderPass(this->vulkanDevice->getDevice(), rp, nullptr);
+	});
+
+	spdlog::info("Render pass created successfully");
 	return true;
 }
