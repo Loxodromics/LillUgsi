@@ -50,6 +50,12 @@ private:
 	/// Create the render pass
 	bool createRenderPass();
 
+	/// Create framebuffers for each swap chain image
+	bool createFramebuffers();
+
+	/// Clean up existing framebuffers
+	void cleanupFramebuffers();
+
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
@@ -58,6 +64,8 @@ private:
 	VulkanCommandPoolHandle commandPool; /// Command pool for allocating command buffers
 	std::vector<VkCommandBuffer> commandBuffers; /// Command buffers for recording drawing commands
 	VulkanRenderPassHandle renderPass; /// Handle for the render pass
+	std::vector<VulkanFramebufferHandle> swapChainFramebuffers; /// Vector to store framebuffer handles
+
 	uint32_t width;
 	uint32_t height;
 

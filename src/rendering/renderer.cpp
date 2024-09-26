@@ -6,7 +6,8 @@ Renderer::Renderer()
 	: physicalDevice(VK_NULL_HANDLE)
 	, surface(VK_NULL_HANDLE)
 	, width(0)
-	, height(0) {
+	, height(0)
+	, isCleanedUp(false) {
 }
 
 Renderer::~Renderer() {
@@ -59,6 +60,11 @@ bool Renderer::initialize(SDL_Window* window) {
 		return false;
 	}
 
+	if (!this->createFramebuffers()) {
+		spdlog::error("Failed to create framebuffers");
+		return false;
+	}
+
 	return true;
 }
 
@@ -71,7 +77,15 @@ void Renderer::cleanup() {
 	/// This prevents destroying resources that might still be in use by the GPU,
 	/// which could lead to crashes or undefined behavior. It's a critical
 	/// synchronization point between the CPU and GPU.
+	if (this->vulkanDevice) {
+		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
+	}
+
 	/// Clean up resources in reverse order of creation
+	/// Clean up framebuffers
+	this->cleanupFramebuffers();
+
+	/// Clean up render pass
 	this->renderPass.reset();
 
 	/// Free command buffers
@@ -102,7 +116,7 @@ void Renderer::cleanup() {
 	/// Reset device and instance last
 	this->vulkanDevice.reset();
 	this->vulkanInstance.reset();
-	
+
 	this->isCleanedUp = true;
 	spdlog::info("Renderer cleanup completed");
 }
@@ -113,15 +127,35 @@ void Renderer::drawFrame() {
 }
 
 bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
-	spdlog::info("Renderer::recreateSwapChain");
-	vkDeviceWaitIdle(this->vulkanDevice->getDevice());
+	if (this->vulkanDevice) {
+		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
+	}
 
+	/// Clean up old swap chain resources
+	this->cleanupFramebuffers();
 	this->vulkanSwapchain.reset();
 
+	/// Recreate swap chain
 	this->width = newWidth;
 	this->height = newHeight;
+	if (!this->createSwapChain()) {
+		spdlog::error("Failed to recreate swap chain");
+		return false;
+	}
 
-	return this->createSwapChain();
+	/// Recreate render pass (if necessary)
+	/// Note: In most cases, you don't need to recreate the render pass,
+	/// but if your render pass configuration depends on the swap chain format,
+	/// you might need to recreate it here.
+
+	/// Recreate framebuffers
+	if (!this->createFramebuffers()) {
+		spdlog::error("Failed to recreate framebuffers");
+		return false;
+	}
+
+	spdlog::info("Swap chain and framebuffers recreated successfully");
+	return true;
 }
 
 bool Renderer::isSwapChainAdequate() const {
@@ -312,4 +346,50 @@ bool Renderer::createRenderPass() {
 
 	spdlog::info("Render pass created successfully");
 	return true;
+}
+
+bool Renderer::createFramebuffers() {
+	/// Framebuffers are the destination for the rendering operations.
+	/// We create one framebuffer for each image view in the swap chain.
+
+	/// Resize the framebuffer vector to match the number of swap chain images
+	this->swapChainFramebuffers.resize(this->vulkanSwapchain->getSwapChainImageViews().size());
+
+	/// Iterate through each swap chain image view and create a framebuffer for it
+	for (size_t i = 0; i < this->vulkanSwapchain->getSwapChainImageViews().size(); i++) {
+		/// We'll use only one attachment for now - the color attachment
+		VkImageView attachments[] = {
+			this->vulkanSwapchain->getSwapChainImageViews()[i].get()
+		};
+
+		/// Create the framebuffer create info structure
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = this->renderPass.get(); /// The render pass this framebuffer is compatible with
+		framebufferInfo.attachmentCount = 1; /// Number of attachments (just color for now)
+		framebufferInfo.pAttachments = attachments; /// Pointer to the attachments array
+		framebufferInfo.width = this->vulkanSwapchain->getSwapChainExtent().width;
+		framebufferInfo.height = this->vulkanSwapchain->getSwapChainExtent().height;
+		framebufferInfo.layers = 1; /// Number of layers in image arrays
+
+		/// Create the framebuffer
+		VkFramebuffer framebuffer;
+		if (vkCreateFramebuffer(this->vulkanDevice->getDevice(), &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS) {
+			spdlog::error("Failed to create framebuffer for swap chain image {}", i);
+			return false;
+		}
+
+		/// Store the framebuffer in our vector, wrapped in a VulkanFramebufferHandle for RAII
+		this->swapChainFramebuffers[i] = VulkanFramebufferHandle(framebuffer, [this](VkFramebuffer fb) {
+			vkDestroyFramebuffer(this->vulkanDevice->getDevice(), fb, nullptr);
+		});
+	}
+
+	spdlog::info("Created {} framebuffers successfully", this->swapChainFramebuffers.size());
+	return true;
+}
+
+void Renderer::cleanupFramebuffers() {
+	this->swapChainFramebuffers.clear();
+	spdlog::info("Framebuffers cleaned up");
 }

@@ -29,7 +29,7 @@ using VulkanPipelineLayoutHandle = VulkanHandle<VkPipelineLayout, PFN_vkDestroyP
 using VulkanRenderPassHandle = VulkanHandle<VkRenderPass, std::function<void(VkRenderPass)>>;
 
 /// Type alias for VkFramebuffer wrapper
-using VulkanFramebufferHandle = VulkanHandle<VkFramebuffer, PFN_vkDestroyFramebuffer>;
+using VulkanFramebufferHandle = VulkanHandle<VkFramebuffer, std::function<void(VkFramebuffer)>>;
 
 /// Type alias for VkCommandPool wrapper
 using VulkanCommandPoolHandle = VulkanHandle<VkCommandPool, std::function<void(VkCommandPool)>>;
