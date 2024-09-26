@@ -158,29 +158,59 @@ void Renderer::cleanup() {
 void Renderer::drawFrame() {
 	// TODO: Implement synchronization primitives (semaphores and fences)
 	//       This is a simplified version and won't work correctly without proper synchronization
+	if (this->commandBuffers.empty()) {
+		spdlog::error("No command buffers available for drawing");
+		return;
+	}
 
 	uint32_t imageIndex;
-	VkSwapchainKHR swapChain = this->vulkanSwapchain->getSwapChain();
-	vkAcquireNextImageKHR(this->vulkanDevice->getDevice(), swapChain, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(
+		this->vulkanDevice->getDevice(),
+		this->vulkanSwapchain->getSwapChain(),
+		UINT64_MAX,
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE,
+		&imageIndex
+	);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		// Swap chain is out of date (e.g., after a resize)
+		// Recreate swap chain and return early
+		this->recreateSwapChain(this->width, this->height);
+		return;
+	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		spdlog::error("Failed to acquire swap chain image");
+		return;
+	}
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &this->commandBuffers[imageIndex];
 
-	vkQueueSubmit(this->vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+	result = vkQueueSubmit(this->vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+	if (result != VK_SUCCESS) {
+		spdlog::error("Failed to submit draw command buffer");
+		return;
+	}
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &swapChain;
+	VkSwapchainKHR swapChains[] = {this->vulkanSwapchain->getSwapChain()};
+	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &imageIndex;
 
-	vkQueuePresentKHR(this->vulkanDevice->getPresentQueue(), &presentInfo);
+	result = vkQueuePresentKHR(this->vulkanDevice->getPresentQueue(), &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		this->recreateSwapChain(this->width, this->height);
+	} else if (result != VK_SUCCESS) {
+		spdlog::error("Failed to present swap chain image");
+	}
 
 	// TODO: Implement proper frame synchronization
+	// Wait for the GPU to finish its work
 	vkQueueWaitIdle(this->vulkanDevice->getPresentQueue());
 }
 
@@ -192,6 +222,17 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 	/// Clean up old swap chain resources
 	this->cleanupFramebuffers();
 	this->vulkanSwapchain.reset();
+
+	/// Free old command buffers
+	if (this->vulkanDevice && !this->commandBuffers.empty()) {
+		vkFreeCommandBuffers(
+			this->vulkanDevice->getDevice(),
+			this->commandPool.get(),
+			static_cast<uint32_t>(this->commandBuffers.size()),
+			this->commandBuffers.data()
+		);
+		this->commandBuffers.clear();
+	}
 
 	/// Recreate swap chain
 	this->width = newWidth;
@@ -212,7 +253,13 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		return false;
 	}
 
-	spdlog::info("Swap chain and framebuffers recreated successfully");
+	/// Recreate command buffers
+	if (!this->recordCommandBuffers()) {
+		spdlog::error("Failed to recreate command buffers");
+		return false;
+	}
+
+	spdlog::info("Swap chain, framebuffers, and command buffers recreated successfully");
 	return true;
 }
 
