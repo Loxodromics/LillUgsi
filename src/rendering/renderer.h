@@ -32,10 +32,10 @@ public:
 
 private:
 	/// Initialize Vulkan-specific components
-	bool initializeVulkan();
+	void initializeVulkan();
 
 	/// Create the Vulkan surface for rendering
-	bool createSurface(SDL_Window* window);
+	void createSurface(SDL_Window* window);
 
 	/// Select a suitable physical device (GPU)
 	VkPhysicalDevice pickPhysicalDevice();

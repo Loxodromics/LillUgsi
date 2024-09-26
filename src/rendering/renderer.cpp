@@ -44,21 +44,9 @@ bool Renderer::initialize(SDL_Window* window) {
 	SDL_GetWindowSizeInPixels(window, reinterpret_cast<int*>(&this->width), reinterpret_cast<int*>(&this->height));
 
 	try {
-		if (!this->initializeVulkan()) {
-			return false;
-		}
-
-		if (!this->createSurface(window)) {
-			return false;
-		}
-
-		/// Select a physical device
+		this->initializeVulkan();
+		this->createSurface(window);
 		this->physicalDevice = this->pickPhysicalDevice();
-		if (this->physicalDevice == VK_NULL_HANDLE) {
-			spdlog::error("Failed to find a suitable GPU");
-			return false;
-		}
-
 		this->createLogicalDevice();
 		this->createSwapChain();
 		this->createCommandPool();
@@ -251,7 +239,7 @@ bool Renderer::isSwapChainAdequate() const {
 	return this->vulkanSwapchain != nullptr;
 }
 
-bool Renderer::initializeVulkan() {
+void Renderer::initializeVulkan() {
 	/// Initialize Vulkan
 	this->vulkanInstance = std::make_unique<VulkanInstance>();
 
@@ -260,8 +248,7 @@ bool Renderer::initializeVulkan() {
 	const char* const* sdlExtensions = SDL_Vulkan_GetInstanceExtensions(&extensionCount);
 
 	if (sdlExtensions == nullptr) {
-		spdlog::error("Failed to get Vulkan extensions from SDL");
-		return false;
+		throw VulkanException(VK_ERROR_EXTENSION_NOT_PRESENT, "Failed to get Vulkan extensions from SDL", __FUNCTION__, __FILE__, __LINE__);
 	}
 
 	/// Copy SDL extensions and add any additional required extensions
@@ -285,36 +272,34 @@ bool Renderer::initializeVulkan() {
 		spdlog::info("  {}", extension);
 	}
 
-	if (!this->vulkanInstance->initialize(extensions)) {
-		spdlog::error("Failed to initialize Vulkan instance: {}", this->vulkanInstance->getLastError());
-		return false;
-	}
+	this->vulkanInstance->initialize(extensions);
 
-	return true;
+	spdlog::info("Vulkan initialized successfully");
 }
 
-bool Renderer::createSurface(SDL_Window* window) {
-	if (!SDL_Vulkan_CreateSurface(window, this->vulkanInstance->getInstance(), nullptr, &this->surface)) {
-		spdlog::error("Failed to create Vulkan surface");
-		return false;
+void Renderer::createSurface(SDL_Window* window) {
+	VkSurfaceKHR surface;
+	if (!SDL_Vulkan_CreateSurface(window, this->vulkanInstance->getInstance(), nullptr, &surface)) {
+		throw VulkanException(VK_ERROR_INITIALIZATION_FAILED, "Failed to create Vulkan surface", __FUNCTION__, __FILE__, __LINE__);
 	}
-	return true;
+	this->surface = surface;
+	spdlog::info("Vulkan surface created successfully");
 }
 
 VkPhysicalDevice Renderer::pickPhysicalDevice() {
 	uint32_t deviceCount = 0;
-	vkEnumeratePhysicalDevices(this->vulkanInstance->getInstance(), &deviceCount, nullptr);
+	VK_CHECK(vkEnumeratePhysicalDevices(this->vulkanInstance->getInstance(), &deviceCount, nullptr));
 
 	if (deviceCount == 0) {
-		spdlog::error("Failed to find GPUs with Vulkan support");
-		return VK_NULL_HANDLE;
+		throw VulkanException(VK_ERROR_INITIALIZATION_FAILED, "Failed to find GPUs with Vulkan support", __FUNCTION__, __FILE__, __LINE__);
 	}
 
 	std::vector<VkPhysicalDevice> devices(deviceCount);
-	vkEnumeratePhysicalDevices(this->vulkanInstance->getInstance(), &deviceCount, devices.data());
+	VK_CHECK(vkEnumeratePhysicalDevices(this->vulkanInstance->getInstance(), &deviceCount, devices.data()));
 
 	/// TODO: Implement device selection logic
 	/// For now, just pick the first device
+	spdlog::info("Physical device selected successfully");
 	return devices[0];
 }
 
