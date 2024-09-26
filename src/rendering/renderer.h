@@ -13,6 +13,8 @@ public:
 	Renderer();
 	~Renderer();
 
+	void createLogicalDevice();
+
 	/// Initialize the renderer with the given SDL window
 	bool initialize(SDL_Window* window);
 
@@ -39,19 +41,19 @@ private:
 	VkPhysicalDevice pickPhysicalDevice();
 
 	/// Create the swap chain
-	bool createSwapChain();
+	void createSwapChain();
 
 	/// Create the command pool
-	bool createCommandPool();
+	void createCommandPool();
 
 	/// Create command buffers
-	bool createCommandBuffers();
+	void createCommandBuffers();
 
 	/// Create the render pass
-	bool createRenderPass();
+	void createRenderPass();
 
 	/// Create framebuffers for each swap chain image
-	bool createFramebuffers();
+	void createFramebuffers();
 
 	/// Clean up existing framebuffers
 	void cleanupFramebuffers();
@@ -60,10 +62,10 @@ private:
 	VulkanShaderModuleHandle createShaderModule(const std::vector<char>& code);
 
 	/// Set up the graphics pipeline
-	bool createGraphicsPipeline();
+	void createGraphicsPipeline();
 
 	/// Record command buffers
-	bool recordCommandBuffers();
+	void recordCommandBuffers();
 
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;

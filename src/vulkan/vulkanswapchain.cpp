@@ -7,31 +7,26 @@ VulkanSwapchain::VulkanSwapchain()
 	, swapChainExtent{0, 0} {
 }
 
-bool VulkanSwapchain::initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface, uint32_t width, uint32_t height) {
+void VulkanSwapchain::initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface, uint32_t width, uint32_t height) {
 	/// Query swap chain support
 	VkSurfaceCapabilitiesKHR capabilities;
-	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities) != VK_SUCCESS) {
-		this->setLastError("Failed to get physical device surface capabilities");
-		return false;
-	}
+	VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities));
 
 	uint32_t formatCount;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
+	VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr));
 	if (formatCount == 0) {
-		this->setLastError("No surface formats available");
-		return false;
+		throw VulkanException(VK_ERROR_FORMAT_NOT_SUPPORTED, "No surface formats available", __FUNCTION__, __FILE__, __LINE__);
 	}
 	std::vector<VkSurfaceFormatKHR> formats(formatCount);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data());
+	VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data()));
 
 	uint32_t presentModeCount;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
+	VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr));
 	if (presentModeCount == 0) {
-		this->setLastError("No presentation modes available");
-		return false;
+		throw VulkanException(VK_ERROR_FORMAT_NOT_SUPPORTED, "No presentation modes available", __FUNCTION__, __FILE__, __LINE__);
 	}
 	std::vector<VkPresentModeKHR> presentModes(presentModeCount);
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data());
+	VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data()));
 
 	/// Choose swap chain settings
 	VkSurfaceFormatKHR surfaceFormat = this->chooseSurfaceFormat(formats);
@@ -62,28 +57,22 @@ bool VulkanSwapchain::initialize(VkPhysicalDevice physicalDevice, VkDevice devic
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 
 	VkSwapchainKHR swapChain;
-	if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
-		this->setLastError("Failed to create swap chain");
-		return false;
-	}
+	VK_CHECK(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain));
 
 	this->swapChainHandle = VulkanSwapchainHandle(swapChain, [device](VkSwapchainKHR sc) { vkDestroySwapchainKHR(device, sc, nullptr); });
 
 	/// Retrieve the swap chain images
-	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+	VK_CHECK(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr));
 	this->swapChainImages.resize(imageCount);
-	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, this->swapChainImages.data());
+	VK_CHECK(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, this->swapChainImages.data()));
 
 	this->swapChainImageFormat = surfaceFormat.format;
 	this->swapChainExtent = extent;
 
 	/// Create image views
-	if (!this->createImageViews(device)) {
-		return false;
-	}
+	this->createImageViews(device);
 
 	spdlog::info("Swap chain initialized successfully");
-	return true;
 }
 
 VkSurfaceFormatKHR VulkanSwapchain::chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
@@ -123,7 +112,7 @@ VkExtent2D VulkanSwapchain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& cap
 	}
 }
 
-bool VulkanSwapchain::createImageViews(VkDevice device) {
+void VulkanSwapchain::createImageViews(VkDevice device) {
 	this->swapChainImageViews.resize(this->swapChainImages.size());
 
 	for (size_t i = 0; i < this->swapChainImages.size(); i++) {
@@ -143,10 +132,7 @@ bool VulkanSwapchain::createImageViews(VkDevice device) {
 		createInfo.subresourceRange.layerCount = 1;
 
 		VkImageView imageView;
-		if (vkCreateImageView(device, &createInfo, nullptr, &imageView) != VK_SUCCESS) {
-			this->setLastError("Failed to create image views");
-			return false;
-		}
+		VK_CHECK(vkCreateImageView(device, &createInfo, nullptr, &imageView));
 
 		this->swapChainImageViews[i] = VulkanImageViewHandle(imageView, [device](VkImageView iv) {
 			vkDestroyImageView(device, iv, nullptr);
@@ -154,10 +140,4 @@ bool VulkanSwapchain::createImageViews(VkDevice device) {
 	}
 
 	spdlog::info("Image views created successfully");
-	return true;
-}
-
-void VulkanSwapchain::setLastError(const std::string& error) {
-	this->lastError = error;
-	spdlog::error(error);
 }

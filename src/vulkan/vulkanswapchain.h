@@ -1,8 +1,8 @@
 #pragma once
 
 #include "vulkanwrappers.h"
+#include "vulkanexception.h"
 #include <vector>
-#include <string>
 
 class VulkanSwapchain {
 public:
@@ -10,7 +10,7 @@ public:
 	~VulkanSwapchain() = default;
 
 	/// Initialize the swap chain
-	bool initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface, uint32_t width, uint32_t height);
+	void initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface, uint32_t width, uint32_t height);
 
 	/// Get the swap chain handle
 	VkSwapchainKHR getSwapChain() const { return this->swapChainHandle.get(); }
@@ -26,9 +26,6 @@ public:
 
 	/// Get the swap chain extent
 	VkExtent2D getSwapChainExtent() const { return this->swapChainExtent; }
-
-	/// Get the last error message
-	const std::string& getLastError() const { return this->lastError; }
 
 private:
 	/// Wrapper for the Vulkan swap chain
@@ -46,9 +43,6 @@ private:
 	/// Swap chain extent
 	VkExtent2D swapChainExtent;
 
-	/// Last error message
-	std::string lastError;
-
 	/// Choose the surface format for the swap chain
 	VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 
@@ -59,8 +53,5 @@ private:
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
 
 	/// Create image views for the swap chain images
-	bool createImageViews(VkDevice device);
-
-	/// Set the last error message
-	void setLastError(const std::string& error);
+	void createImageViews(VkDevice device);
 };

@@ -34,70 +34,50 @@ Renderer::~Renderer() {
 	this->cleanup();
 }
 
+void Renderer::createLogicalDevice() {
+	this->vulkanDevice = std::make_unique<VulkanDevice>();
+	std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions);
+}
+
 bool Renderer::initialize(SDL_Window* window) {
 	SDL_GetWindowSizeInPixels(window, reinterpret_cast<int*>(&this->width), reinterpret_cast<int*>(&this->height));
 
-	if (!this->initializeVulkan()) {
-		return false;
-	}
-
-	if (!this->createSurface(window)) {
-		return false;
-	}
-
-	/// Select a physical device
-	this->physicalDevice = this->pickPhysicalDevice();
-	if (this->physicalDevice == VK_NULL_HANDLE) {
-		spdlog::error("Failed to find a suitable GPU");
-		return false;
-	}
-
-	/// Create logical device
 	try {
-		this->vulkanDevice = std::make_unique<VulkanDevice>();
-		std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions);
-	} catch (const VulkanException& e) {
-		spdlog::error("Failed to initialize Vulkan device: {}", e.what());
+		if (!this->initializeVulkan()) {
+			return false;
+		}
+
+		if (!this->createSurface(window)) {
+			return false;
+		}
+
+		/// Select a physical device
+		this->physicalDevice = this->pickPhysicalDevice();
+		if (this->physicalDevice == VK_NULL_HANDLE) {
+			spdlog::error("Failed to find a suitable GPU");
+			return false;
+		}
+
+		this->createLogicalDevice();
+		this->createSwapChain();
+		this->createCommandPool();
+		this->createCommandBuffers();
+		this->createRenderPass();
+		this->createFramebuffers();
+		this->createGraphicsPipeline();
+		this->recordCommandBuffers();
+
+		return true;
+	}
+	catch (const VulkanException& e) {
+		spdlog::error("Vulkan error during initialization: {}", e.what());
 		return false;
 	}
-
-	if (!this->createSwapChain()) {
-		spdlog::error("Failed to create swap chain");
+	catch (const std::exception& e) {
+		spdlog::error("Error during initialization: {}", e.what());
 		return false;
 	}
-
-	if (!this->createCommandPool()) {
-		spdlog::error("Failed to create command pool");
-		return false;
-	}
-
-	if (!this->createCommandBuffers()) {
-		spdlog::error("Failed to create command buffers");
-		return false;
-	}
-
-	if (!this->createRenderPass()) {
-		spdlog::error("Failed to create render pass");
-		return false;
-	}
-
-	if (!this->createFramebuffers()) {
-		spdlog::error("Failed to create framebuffers");
-		return false;
-	}
-
-	if (!this->createGraphicsPipeline()) {
-		spdlog::error("Failed to create graphics pipeline");
-		return false;
-	}
-
-	if (!this->recordCommandBuffers()) {
-		spdlog::error("Failed to record command buffers");
-		return false;
-	}
-
-	return true;
 }
 
 void Renderer::cleanup() {
@@ -217,52 +197,52 @@ void Renderer::drawFrame() {
 }
 
 bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
-	if (this->vulkanDevice) {
-		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
-	}
+	try {
+		if (this->vulkanDevice) {
+			vkDeviceWaitIdle(this->vulkanDevice->getDevice());
+		}
 
-	/// Clean up old swap chain resources
-	this->cleanupFramebuffers();
-	this->vulkanSwapchain.reset();
+		/// Clean up old swap chain resources
+		this->cleanupFramebuffers();
+		this->vulkanSwapchain.reset();
 
-	/// Free old command buffers
-	if (this->vulkanDevice && !this->commandBuffers.empty()) {
-		vkFreeCommandBuffers(
-			this->vulkanDevice->getDevice(),
-			this->commandPool.get(),
-			static_cast<uint32_t>(this->commandBuffers.size()),
-			this->commandBuffers.data()
-		);
-		this->commandBuffers.clear();
-	}
+		/// Free old command buffers
+		if (this->vulkanDevice && !this->commandBuffers.empty()) {
+			vkFreeCommandBuffers(
+				this->vulkanDevice->getDevice(),
+				this->commandPool.get(),
+				static_cast<uint32_t>(this->commandBuffers.size()),
+				this->commandBuffers.data()
+			);
+			this->commandBuffers.clear();
+		}
 
-	/// Recreate swap chain
-	this->width = newWidth;
-	this->height = newHeight;
-	if (!this->createSwapChain()) {
-		spdlog::error("Failed to recreate swap chain");
-		return false;
-	}
-
+		/// Recreate swap chain
+		this->width = newWidth;
+		this->height = newHeight;
 	/// Recreate render pass (if necessary)
 	/// Note: In most cases, you don't need to recreate the render pass,
 	/// but if your render pass configuration depends on the swap chain format,
 	/// you might need to recreate it here.
+		this->createSwapChain();
 
-	/// Recreate framebuffers
-	if (!this->createFramebuffers()) {
-		spdlog::error("Failed to recreate framebuffers");
+		/// Recreate framebuffers
+		this->createFramebuffers();
+
+		/// Recreate command buffers
+		this->recordCommandBuffers();
+
+		spdlog::info("Swap chain, framebuffers, and command buffers recreated successfully");
+		return true;
+	}
+	catch (const VulkanException& e) {
+		spdlog::error("Vulkan error during swap chain recreation: {}", e.what());
 		return false;
 	}
-
-	/// Recreate command buffers
-	if (!this->recordCommandBuffers()) {
-		spdlog::error("Failed to recreate command buffers");
+	catch (const std::exception& e) {
+		spdlog::error("Error during swap chain recreation: {}", e.what());
 		return false;
 	}
-
-	spdlog::info("Swap chain, framebuffers, and command buffers recreated successfully");
-	return true;
 }
 
 bool Renderer::isSwapChainAdequate() const {
@@ -338,16 +318,12 @@ VkPhysicalDevice Renderer::pickPhysicalDevice() {
 	return devices[0];
 }
 
-bool Renderer::createSwapChain() {
+void Renderer::createSwapChain() {
 	this->vulkanSwapchain = std::make_unique<VulkanSwapchain>();
-	if (!this->vulkanSwapchain->initialize(this->physicalDevice, this->vulkanDevice->getDevice(), this->surface, this->width, this->height)) {
-		spdlog::error("Failed to initialize Vulkan swapchain: {}", this->vulkanSwapchain->getLastError());
-		return false;
-	}
-	return true;
+	this->vulkanSwapchain->initialize(this->physicalDevice, this->vulkanDevice->getDevice(), this->surface, this->width, this->height);
 }
 
-bool Renderer::createCommandPool() {
+void Renderer::createCommandPool() {
 	/// Command pools manage the memory used to store the buffers and command buffers are allocated from them.
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -359,10 +335,7 @@ bool Renderer::createCommandPool() {
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	VkCommandPool commandPool;
-	if (vkCreateCommandPool(this->vulkanDevice->getDevice(), &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-		spdlog::error("Failed to create command pool");
-		return false;
-	}
+	VK_CHECK(vkCreateCommandPool(this->vulkanDevice->getDevice(), &poolInfo, nullptr, &commandPool));
 
 	/// Wrap the command pool in our RAII wrapper
 	this->commandPool = VulkanCommandPoolHandle(commandPool, [this](VkCommandPool pool) {
@@ -370,14 +343,14 @@ bool Renderer::createCommandPool() {
 	});
 
 	spdlog::info("Command pool created successfully");
-	return true;
 }
 
-bool Renderer::createCommandBuffers() {
+void Renderer::createCommandBuffers() {
 	/// We'll create one command buffer for each swap chain image
 	uint32_t swapChainImageCount = this->vulkanSwapchain->getSwapChainImages().size();
 	this->commandBuffers.resize(swapChainImageCount);
 
+	/// Set up command buffer allocation info
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = this->commandPool.get();
@@ -388,16 +361,12 @@ bool Renderer::createCommandBuffers() {
 	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
 
 	/// Allocate the command buffers
-	if (vkAllocateCommandBuffers(this->vulkanDevice->getDevice(), &allocInfo, this->commandBuffers.data()) != VK_SUCCESS) {
-		spdlog::error("Failed to allocate command buffers");
-		return false;
-	}
+	VK_CHECK(vkAllocateCommandBuffers(this->vulkanDevice->getDevice(), &allocInfo, this->commandBuffers.data()));
 
 	spdlog::info("Command buffers created successfully");
-	return true;
 }
 
-bool Renderer::createRenderPass() {
+void Renderer::createRenderPass() {
 	/// VkAttachmentDescription: Describes a framebuffer attachment (e.g., color, depth, or stencil buffer).
 	/// It defines how the attachment will be used throughout the render pass.
 	VkAttachmentDescription colorAttachment{};
@@ -445,10 +414,7 @@ bool Renderer::createRenderPass() {
 	renderPassInfo.pDependencies = &dependency;
 
 	VkRenderPass renderPass;
-	if (vkCreateRenderPass(this->vulkanDevice->getDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
-		spdlog::error("Failed to create render pass");
-		return false;
-	}
+	VK_CHECK(vkCreateRenderPass(this->vulkanDevice->getDevice(), &renderPassInfo, nullptr, &renderPass));
 
 	/// Wrap the render pass in our RAII wrapper for automatic resource management
 	this->renderPass = VulkanRenderPassHandle(renderPass, [this](VkRenderPass rp) {
@@ -456,10 +422,9 @@ bool Renderer::createRenderPass() {
 	});
 
 	spdlog::info("Render pass created successfully");
-	return true;
 }
 
-bool Renderer::createFramebuffers() {
+void Renderer::createFramebuffers() {
 	/// Framebuffers are the destination for the rendering operations.
 	/// We create one framebuffer for each image view in the swap chain.
 
@@ -485,10 +450,7 @@ bool Renderer::createFramebuffers() {
 
 		/// Create the framebuffer
 		VkFramebuffer framebuffer;
-		if (vkCreateFramebuffer(this->vulkanDevice->getDevice(), &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS) {
-			spdlog::error("Failed to create framebuffer for swap chain image {}", i);
-			return false;
-		}
+		VK_CHECK(vkCreateFramebuffer(this->vulkanDevice->getDevice(), &framebufferInfo, nullptr, &framebuffer));
 
 		/// Store the framebuffer in our vector, wrapped in a VulkanFramebufferHandle for RAII
 		this->swapChainFramebuffers[i] = VulkanFramebufferHandle(framebuffer, [this](VkFramebuffer fb) {
@@ -497,7 +459,6 @@ bool Renderer::createFramebuffers() {
 	}
 
 	spdlog::info("Created {} framebuffers successfully", this->swapChainFramebuffers.size());
-	return true;
 }
 
 void Renderer::cleanupFramebuffers() {
@@ -522,7 +483,7 @@ VulkanShaderModuleHandle Renderer::createShaderModule(const std::vector<char>& c
 	});
 }
 
-bool Renderer::createGraphicsPipeline() {
+void Renderer::createGraphicsPipeline() {
 	/// Read shader files
 	/// Shader code is precompiled into SPIR-V format using glslc
 	auto vertShaderCode = readFile("shaders/vert.spv");
@@ -530,13 +491,8 @@ bool Renderer::createGraphicsPipeline() {
 
 	/// Create shader modules
 	/// Shader modules are a thin wrapper around the shader bytecode
-	VulkanShaderModuleHandle vertShaderModule = createShaderModule(vertShaderCode);
-	VulkanShaderModuleHandle fragShaderModule = createShaderModule(fragShaderCode);
-
-	if (!vertShaderModule.isValid() || !fragShaderModule.isValid()) {
-		spdlog::error("Failed to create shader modules");
-		return false;
-	}
+	VulkanShaderModuleHandle vertShaderModule = this->createShaderModule(vertShaderCode);
+	VulkanShaderModuleHandle fragShaderModule = this->createShaderModule(fragShaderCode);
 
 	/// Set up shader stage creation information
 	/// This describes which shader is used for which pipeline stage
@@ -633,10 +589,7 @@ bool Renderer::createGraphicsPipeline() {
 	/// We're not using any descriptor sets or push constants yet, so we'll leave these as default
 
 	VkPipelineLayout pipelineLayout;
-	if (vkCreatePipelineLayout(this->vulkanDevice->getDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
-		spdlog::error("Failed to create pipeline layout");
-		return false;
-	}
+	VK_CHECK(vkCreatePipelineLayout(this->vulkanDevice->getDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
 	this->pipelineLayout = VulkanPipelineLayoutHandle(pipelineLayout, [this](VkPipelineLayout pl) {
 		vkDestroyPipelineLayout(this->vulkanDevice->getDevice(), pl, nullptr);
@@ -660,20 +613,16 @@ bool Renderer::createGraphicsPipeline() {
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;  /// Used for pipeline derivatives, not used here
 
 	VkPipeline graphicsPipeline;
-	if (vkCreateGraphicsPipelines(this->vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
-		spdlog::error("Failed to create graphics pipeline");
-		return false;
-	}
+	VK_CHECK(vkCreateGraphicsPipelines(this->vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
 
 	this->graphicsPipeline = VulkanPipelineHandle(graphicsPipeline, [this](VkPipeline gp) {
 		vkDestroyPipeline(this->vulkanDevice->getDevice(), gp, nullptr);
 	});
 
 	spdlog::info("Graphics pipeline created successfully");
-	return true;
 }
 
-bool Renderer::recordCommandBuffers() {
+void Renderer::recordCommandBuffers() {
 	/// Resize command buffers vector to match the number of framebuffers
 	/// We need one command buffer for each swap chain image
 	this->commandBuffers.resize(this->swapChainFramebuffers.size());
@@ -688,10 +637,7 @@ bool Renderer::recordCommandBuffers() {
 	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
 
 	/// Allocate command buffers from the command pool
-	if (vkAllocateCommandBuffers(this->vulkanDevice->getDevice(), &allocInfo, this->commandBuffers.data()) != VK_SUCCESS) {
-		spdlog::error("Failed to allocate command buffers");
-		return false;
-	}
+	VK_CHECK(vkAllocateCommandBuffers(this->vulkanDevice->getDevice(), &allocInfo, this->commandBuffers.data()));
 
 	/// Record commands for each framebuffer
 	for (size_t i = 0; i < this->commandBuffers.size(); i++) {
@@ -701,10 +647,7 @@ bool Renderer::recordCommandBuffers() {
 		/// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT allows the command buffer to be resubmitted while it is also already pending execution
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
-		if (vkBeginCommandBuffer(this->commandBuffers[i], &beginInfo) != VK_SUCCESS) {
-			spdlog::error("Failed to begin recording command buffer");
-			return false;
-		}
+		VK_CHECK(vkBeginCommandBuffer(this->commandBuffers[i], &beginInfo));
 
 		/// Begin the render pass
 		VkRenderPassBeginInfo renderPassInfo{};
@@ -742,12 +685,8 @@ bool Renderer::recordCommandBuffers() {
 		vkCmdEndRenderPass(this->commandBuffers[i]);
 
 		/// Finish recording the command buffer
-		if (vkEndCommandBuffer(this->commandBuffers[i]) != VK_SUCCESS) {
-			spdlog::error("Failed to record command buffer");
-			return false;
-		}
+		VK_CHECK(vkEndCommandBuffer(this->commandBuffers[i]));
 	}
 
 	spdlog::info("Command buffers recorded successfully");
-	return true;
 }
