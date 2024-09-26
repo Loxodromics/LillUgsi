@@ -53,10 +53,12 @@ bool Renderer::initialize(SDL_Window* window) {
 	}
 
 	/// Create logical device
-	this->vulkanDevice = std::make_unique<VulkanDevice>();
-	std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	if (!this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions)) {
-		spdlog::error("Failed to create logical device: {}", this->vulkanDevice->getLastError());
+	try {
+		this->vulkanDevice = std::make_unique<VulkanDevice>();
+		std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+		this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions);
+	} catch (const VulkanException& e) {
+		spdlog::error("Failed to initialize Vulkan device: {}", e.what());
 		return false;
 	}
 

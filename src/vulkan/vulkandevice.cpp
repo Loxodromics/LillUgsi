@@ -8,16 +8,13 @@ VulkanDevice::VulkanDevice()
 	, graphicsQueueFamilyIndex(UINT32_MAX) {
 }
 
-bool VulkanDevice::initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) {
+void VulkanDevice::initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) {
 	uint32_t presentFamily;
-	if (!this->findQueueFamilies(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily)) {
-		return false;
-	}
-
-	return this->createLogicalDevice(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily, requiredExtensions);
+	this->findQueueFamilies(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily);
+	this->createLogicalDevice(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily, requiredExtensions);
 }
 
-bool VulkanDevice::findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily) {
+void VulkanDevice::findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily) {
 	uint32_t queueFamilyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
@@ -37,14 +34,11 @@ bool VulkanDevice::findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& 
 	}
 
 	if (graphicsFamily == UINT32_MAX || presentFamily == UINT32_MAX) {
-		this->setLastError("Failed to find suitable queue families");
-		return false;
+		throw VulkanException(VK_ERROR_FEATURE_NOT_PRESENT, "Failed to find suitable queue families", __FUNCTION__, __FILE__, __LINE__);
 	}
-
-	return true;
 }
 
-bool VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions) {
+void VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions) {
 	/// Specify the queues to be created
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	std::set<uint32_t> uniqueQueueFamilies = {graphicsFamily, presentFamily};
@@ -72,10 +66,7 @@ bool VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
 	VkDevice device;
-	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
-		this->setLastError("Failed to create logical device");
-		return false;
-	}
+	VK_CHECK(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device));
 
 	/// Wrap the device in our RAII wrapper
 	this->deviceHandle = VulkanDeviceHandle(device, [](VkDevice d) { vkDestroyDevice(d, nullptr); });
@@ -85,10 +76,4 @@ bool VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t
 	vkGetDeviceQueue(device, presentFamily, 0, &this->presentQueue);
 
 	spdlog::info("Logical device created successfully");
-	return true;
-}
-
-void VulkanDevice::setLastError(const std::string& error) {
-	this->lastError = error;
-	spdlog::error(error);
 }

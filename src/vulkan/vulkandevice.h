@@ -1,8 +1,8 @@
 #pragma once
 
 #include "vulkanwrappers.h"
+#include "vulkanexception.h"
 #include <vector>
-#include <string>
 
 class VulkanDevice {
 public:
@@ -10,7 +10,7 @@ public:
 	~VulkanDevice() = default;
 
 	/// Initialize the Vulkan logical device
-	bool initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions);
+	void initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions);
 
 	/// Get the logical device handle
 	VkDevice getDevice() const { return this->deviceHandle.get(); }
@@ -23,9 +23,6 @@ public:
 
 	/// Get the graphics queue family index
 	uint32_t getGraphicsQueueFamilyIndex() const { return this->graphicsQueueFamilyIndex; }
-
-	/// Get the last error message
-	const std::string& getLastError() const { return this->lastError; }
 
 private:
 	/// Wrapper for the Vulkan logical device
@@ -40,15 +37,9 @@ private:
 	/// Graphics queue family index
 	uint32_t graphicsQueueFamilyIndex;
 
-	/// Last error message
-	std::string lastError;
-
 	/// Find queue families that support graphics and present operations
-	bool findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily);
+	void findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily);
 
 	/// Create logical device and retrieve queue handles
-	bool createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions);
-
-	/// Set the last error message
-	void setLastError(const std::string& error);
+	void createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions);
 };
