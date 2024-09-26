@@ -208,10 +208,12 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		/// Recreate swap chain
 		this->width = newWidth;
 		this->height = newHeight;
-	/// Recreate render pass (if necessary)
-	/// Note: In most cases, you don't need to recreate the render pass,
-	/// but if your render pass configuration depends on the swap chain format,
-	/// you might need to recreate it here.
+
+		/// Recreate render pass (if necessary)
+		/// Note: In most cases, we don't need to recreate the render pass,
+		/// but if our render pass configuration depends on the swap chain format,
+		/// we might need to recreate it here.
+
 		this->createSwapChain();
 
 		/// Recreate framebuffers
@@ -231,12 +233,6 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		spdlog::error("Error during swap chain recreation: {}", e.what());
 		return false;
 	}
-}
-
-bool Renderer::isSwapChainAdequate() const {
-	/// TODO: Implement proper swap chain adequacy check
-	/// This will be expanded in future tasks
-	return this->vulkanSwapchain != nullptr;
 }
 
 void Renderer::initializeVulkan() {

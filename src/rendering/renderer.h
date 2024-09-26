@@ -13,6 +13,7 @@ public:
 	Renderer();
 	~Renderer();
 
+	/// Create and initialize the VulkanDevice
 	void createLogicalDevice();
 
 	/// Initialize the renderer with the given SDL window
@@ -26,9 +27,6 @@ public:
 
 	/// Recreate the swap chain (e.g., after window resize)
 	bool recreateSwapChain(uint32_t newWidth, uint32_t newHeight);
-
-	/// Check if the swap chain is compatible with the current window
-	bool isSwapChainAdequate() const;
 
 private:
 	/// Initialize Vulkan-specific components
