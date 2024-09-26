@@ -56,6 +56,15 @@ private:
 	/// Clean up existing framebuffers
 	void cleanupFramebuffers();
 
+	/// Create shader modules
+	VulkanShaderModuleHandle createShaderModule(const std::vector<char>& code);
+
+	/// Set up the graphics pipeline
+	bool createGraphicsPipeline();
+
+	/// Record command buffers
+	bool recordCommandBuffers();
+
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
@@ -65,6 +74,10 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers; /// Command buffers for recording drawing commands
 	VulkanRenderPassHandle renderPass; /// Handle for the render pass
 	std::vector<VulkanFramebufferHandle> swapChainFramebuffers; /// Vector to store framebuffer handles
+
+	/// Graphics pipeline
+	VulkanPipelineLayoutHandle pipelineLayout;
+	VulkanPipelineHandle graphicsPipeline;
 
 	uint32_t width;
 	uint32_t height;

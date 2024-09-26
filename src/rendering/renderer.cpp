@@ -1,6 +1,26 @@
 #include "renderer.h"
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
+#include <fstream>
+
+/// Helper function to read a file
+static std::vector<char> readFile(const std::string& filename) {
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		throw std::runtime_error("Failed to open file: " + filename);
+	}
+
+	size_t fileSize = (size_t) file.tellg();
+	std::vector<char> buffer(fileSize);
+
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+
+	file.close();
+
+	return buffer;
+}
 
 Renderer::Renderer()
 	: physicalDevice(VK_NULL_HANDLE)
@@ -65,6 +85,16 @@ bool Renderer::initialize(SDL_Window* window) {
 		return false;
 	}
 
+	if (!this->createGraphicsPipeline()) {
+		spdlog::error("Failed to create graphics pipeline");
+		return false;
+	}
+
+	if (!this->recordCommandBuffers()) {
+		spdlog::error("Failed to record command buffers");
+		return false;
+	}
+
 	return true;
 }
 
@@ -82,6 +112,10 @@ void Renderer::cleanup() {
 	}
 
 	/// Clean up resources in reverse order of creation
+	/// Clean up graphics pipeline
+	this->graphicsPipeline.reset();
+	this->pipelineLayout.reset();
+
 	/// Clean up framebuffers
 	this->cleanupFramebuffers();
 
@@ -122,8 +156,32 @@ void Renderer::cleanup() {
 }
 
 void Renderer::drawFrame() {
-	/// TODO: Implement actual frame drawing
-	/// This will be expanded in future tasks
+	// TODO: Implement synchronization primitives (semaphores and fences)
+	//       This is a simplified version and won't work correctly without proper synchronization
+
+	uint32_t imageIndex;
+	VkSwapchainKHR swapChain = this->vulkanSwapchain->getSwapChain();
+	vkAcquireNextImageKHR(this->vulkanDevice->getDevice(), swapChain, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &imageIndex);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &this->commandBuffers[imageIndex];
+
+	vkQueueSubmit(this->vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapChain;
+	presentInfo.pImageIndices = &imageIndex;
+
+	vkQueuePresentKHR(this->vulkanDevice->getPresentQueue(), &presentInfo);
+
+	// TODO: Implement proper frame synchronization
+	vkQueueWaitIdle(this->vulkanDevice->getPresentQueue());
 }
 
 bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
@@ -392,4 +450,251 @@ bool Renderer::createFramebuffers() {
 void Renderer::cleanupFramebuffers() {
 	this->swapChainFramebuffers.clear();
 	spdlog::info("Framebuffers cleaned up");
+}
+
+VulkanShaderModuleHandle Renderer::createShaderModule(const std::vector<char>& code) {
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size();
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(this->vulkanDevice->getDevice(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+		spdlog::error("Failed to create shader module");
+		return VulkanShaderModuleHandle();
+	}
+
+	return VulkanShaderModuleHandle(shaderModule, [this](VkShaderModule sm) {
+		vkDestroyShaderModule(this->vulkanDevice->getDevice(), sm, nullptr);
+	});
+}
+
+bool Renderer::createGraphicsPipeline() {
+	/// Read shader files
+	/// Shader code is precompiled into SPIR-V format using glslc
+	auto vertShaderCode = readFile("shaders/vert.spv");
+	auto fragShaderCode = readFile("shaders/frag.spv");
+
+	/// Create shader modules
+	/// Shader modules are a thin wrapper around the shader bytecode
+	VulkanShaderModuleHandle vertShaderModule = createShaderModule(vertShaderCode);
+	VulkanShaderModuleHandle fragShaderModule = createShaderModule(fragShaderCode);
+
+	if (!vertShaderModule.isValid() || !fragShaderModule.isValid()) {
+		spdlog::error("Failed to create shader modules");
+		return false;
+	}
+
+	/// Set up shader stage creation information
+	/// This describes which shader is used for which pipeline stage
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;  /// This is the vertex shader stage
+	vertShaderStageInfo.module = vertShaderModule.get();
+	vertShaderStageInfo.pName = "main";  /// The entry point of the shader
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;  /// This is the fragment shader stage
+	fragShaderStageInfo.module = fragShaderModule.get();
+	fragShaderStageInfo.pName = "main";  /// The entry point of the shader
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+	/// Vertex input state
+	/// Describes the format of the vertex data that will be passed to the vertex shader
+	/// For now, we're not using any vertex input (hard-coded triangle in vertex shader)
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexBindingDescriptionCount = 0;
+	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+	/// Input assembly state
+	/// Describes how to assemble vertices into primitives
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;  /// Treat each three vertices as a triangle
+	inputAssembly.primitiveRestartEnable = VK_FALSE;  /// Don't use primitive restart
+
+	/// Viewport and scissor
+	/// The viewport describes the region of the framebuffer that the output will be rendered to
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(this->vulkanSwapchain->getSwapChainExtent().width);
+	viewport.height = static_cast<float>(this->vulkanSwapchain->getSwapChainExtent().height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	/// The scissor rectangles define in which regions pixels will actually be stored
+	/// Any pixels outside the scissor rectangles will be discarded
+	VkRect2D scissor{};
+	scissor.offset = {0, 0};
+	scissor.extent = this->vulkanSwapchain->getSwapChainExtent();
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissor;
+
+	/// Rasterizer
+	/// The rasterizer takes the geometry that is shaped by the vertices from the vertex shader
+	/// and turns it into fragments to be colored by the fragment shader
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;  /// Don't clamp fragments to near and far planes
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;  /// Don't discard all primitives before rasterization stage
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;  /// Fill the area of the polygon with fragments
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;  /// Cull back faces
+	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;  /// Specify vertex order for faces to be considered front-facing
+	rasterizer.depthBiasEnable = VK_FALSE;  /// Don't use depth bias
+
+	/// Multisampling
+	/// This is one of the ways to perform anti-aliasing
+	/// We're not using it now, so we'll just disable it
+	VkPipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	/// Color blending
+	/// After a fragment shader has returned a color, it needs to be combined with the color
+	/// that is already in the framebuffer. This is called color blending.
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.blendEnable = VK_FALSE;  /// Disable blending for now
+
+	VkPipelineColorBlendStateCreateInfo colorBlending{};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
+
+	/// Pipeline layout
+	/// Specifies the uniform values and push constants that can be used in shaders
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	/// We're not using any descriptor sets or push constants yet, so we'll leave these as default
+
+	VkPipelineLayout pipelineLayout;
+	if (vkCreatePipelineLayout(this->vulkanDevice->getDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+		spdlog::error("Failed to create pipeline layout");
+		return false;
+	}
+
+	this->pipelineLayout = VulkanPipelineLayoutHandle(pipelineLayout, [this](VkPipelineLayout pl) {
+		vkDestroyPipelineLayout(this->vulkanDevice->getDevice(), pl, nullptr);
+	});
+
+	/// Create the graphics pipeline
+	/// This brings together all of the structures we've created so far
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;  /// Vertex and fragment shader stages
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.layout = this->pipelineLayout.get();
+	pipelineInfo.renderPass = this->renderPass.get();
+	pipelineInfo.subpass = 0;  /// Index of the subpass in the render pass where this pipeline will be used
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;  /// Used for pipeline derivatives, not used here
+
+	VkPipeline graphicsPipeline;
+	if (vkCreateGraphicsPipelines(this->vulkanDevice->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+		spdlog::error("Failed to create graphics pipeline");
+		return false;
+	}
+
+	this->graphicsPipeline = VulkanPipelineHandle(graphicsPipeline, [this](VkPipeline gp) {
+		vkDestroyPipeline(this->vulkanDevice->getDevice(), gp, nullptr);
+	});
+
+	spdlog::info("Graphics pipeline created successfully");
+	return true;
+}
+
+bool Renderer::recordCommandBuffers() {
+	/// Resize command buffers vector to match the number of framebuffers
+	/// We need one command buffer for each swap chain image
+	this->commandBuffers.resize(this->swapChainFramebuffers.size());
+
+	/// Set up command buffer allocation info
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = this->commandPool.get();
+	/// Primary command buffers can be submitted directly to queues
+	/// Secondary command buffers can only be called from primary command buffers
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
+
+	/// Allocate command buffers from the command pool
+	if (vkAllocateCommandBuffers(this->vulkanDevice->getDevice(), &allocInfo, this->commandBuffers.data()) != VK_SUCCESS) {
+		spdlog::error("Failed to allocate command buffers");
+		return false;
+	}
+
+	/// Record commands for each framebuffer
+	for (size_t i = 0; i < this->commandBuffers.size(); i++) {
+		/// Start command buffer recording
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		/// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT allows the command buffer to be resubmitted while it is also already pending execution
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
+		if (vkBeginCommandBuffer(this->commandBuffers[i], &beginInfo) != VK_SUCCESS) {
+			spdlog::error("Failed to begin recording command buffer");
+			return false;
+		}
+
+		/// Begin the render pass
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = this->renderPass.get();
+		renderPassInfo.framebuffer = this->swapChainFramebuffers[i].get();
+		/// Define the render area, typically the size of the framebuffer
+		renderPassInfo.renderArea.offset = {0, 0};
+		renderPassInfo.renderArea.extent = this->vulkanSwapchain->getSwapChainExtent();
+
+		/// Define clear values for the attachments
+		/// This is the color the screen will be cleared to at the start of the render pass
+		VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};  // Black with 100% opacity
+		renderPassInfo.clearValueCount = 1;
+		renderPassInfo.pClearValues = &clearColor;
+
+		/// Begin the render pass
+		/// VK_SUBPASS_CONTENTS_INLINE means the render pass commands will be embedded in the primary command buffer
+		/// and no secondary command buffers will be executed
+		vkCmdBeginRenderPass(this->commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		/// Bind the graphics pipeline
+		vkCmdBindPipeline(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphicsPipeline.get());
+
+		/// Draw command
+		/// vkCmdDraw parameters:
+		/// 1. Command buffer
+		/// 2. Vertex count - we have 3 vertices for our triangle
+		/// 3. Instance count - used for instanced rendering, we just have 1 instance
+		/// 4. First vertex - offset into the vertex buffer, starts at 0
+		/// 5. First instance - used for instanced rendering, starts at 0
+		vkCmdDraw(this->commandBuffers[i], 3, 1, 0, 0);
+
+		/// End the render pass
+		vkCmdEndRenderPass(this->commandBuffers[i]);
+
+		/// Finish recording the command buffer
+		if (vkEndCommandBuffer(this->commandBuffers[i]) != VK_SUCCESS) {
+			spdlog::error("Failed to record command buffer");
+			return false;
+		}
+	}
+
+	spdlog::info("Command buffers recorded successfully");
+	return true;
 }

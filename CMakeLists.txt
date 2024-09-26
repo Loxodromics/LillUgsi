@@ -32,10 +32,9 @@ target_link_libraries(LillUgsi
 		Vulkan::Vulkan
 )
 
-# Shader compilation (you'll need to implement this later)
-# add_custom_target(Shaders
-#     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
-#     COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/Simple.vert -o ${CMAKE_BINARY_DIR}/shaders/Simple.vert.spv
-#     COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/Simple.frag -o ${CMAKE_BINARY_DIR}/shaders/Simple.frag.spv
-# )
-# add_dependencies(LillUgsi Shaders)
+add_custom_target(Shaders
+	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vert.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/vert.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/frag.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/frag.spv
+)
+add_dependencies(LillUgsi Shaders)

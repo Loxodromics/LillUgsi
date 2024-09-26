@@ -17,13 +17,13 @@ using VulkanSwapchainHandle = VulkanHandle<VkSwapchainKHR, std::function<void(Vk
 using VulkanSurfaceHandle = VulkanHandle<VkSurfaceKHR, PFN_vkDestroySurfaceKHR>;
 
 /// Type alias for VkShaderModule wrapper
-using VulkanShaderModuleHandle = VulkanHandle<VkShaderModule, PFN_vkDestroyShaderModule>;
+using VulkanShaderModuleHandle = VulkanHandle<VkShaderModule, std::function<void(VkShaderModule)>>;
 
 /// Type alias for VkPipeline wrapper
-using VulkanPipelineHandle = VulkanHandle<VkPipeline, PFN_vkDestroyPipeline>;
+using VulkanPipelineHandle = VulkanHandle<VkPipeline, std::function<void(VkPipeline)>>;
 
 /// Type alias for VkPipelineLayout wrapper
-using VulkanPipelineLayoutHandle = VulkanHandle<VkPipelineLayout, PFN_vkDestroyPipelineLayout>;
+using VulkanPipelineLayoutHandle = VulkanHandle<VkPipelineLayout, std::function<void(VkPipelineLayout)>>;
 
 /// Type alias for VkRenderPass wrapper
 using VulkanRenderPassHandle = VulkanHandle<VkRenderPass, std::function<void(VkRenderPass)>>;
