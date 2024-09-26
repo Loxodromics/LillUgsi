@@ -2,6 +2,7 @@
 
 #include "vulkanwrappers.h"
 #include <vector>
+#include <string>
 
 class VulkanSwapchain {
 public:
@@ -26,6 +27,9 @@ public:
 	/// Get the swap chain extent
 	VkExtent2D getSwapChainExtent() const { return this->swapChainExtent; }
 
+	/// Get the last error message
+	const std::string& getLastError() const { return this->lastError; }
+
 private:
 	/// Wrapper for the Vulkan swap chain
 	VulkanSwapchainHandle swapChainHandle;
@@ -42,6 +46,9 @@ private:
 	/// Swap chain extent
 	VkExtent2D swapChainExtent;
 
+	/// Last error message
+	std::string lastError;
+
 	/// Choose the surface format for the swap chain
 	VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 
@@ -53,4 +60,7 @@ private:
 
 	/// Create image views for the swap chain images
 	bool createImageViews(VkDevice device);
+
+	/// Set the last error message
+	void setLastError(const std::string& error);
 };

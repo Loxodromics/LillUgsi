@@ -2,7 +2,10 @@
 #include <spdlog/spdlog.h>
 #include <set>
 
-VulkanDevice::VulkanDevice() : graphicsQueue(VK_NULL_HANDLE), presentQueue(VK_NULL_HANDLE) {
+VulkanDevice::VulkanDevice()
+	: graphicsQueue(VK_NULL_HANDLE)
+	, presentQueue(VK_NULL_HANDLE)
+	, graphicsQueueFamilyIndex(UINT32_MAX) {
 }
 
 bool VulkanDevice::initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) {
@@ -22,18 +25,23 @@ bool VulkanDevice::findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& 
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
 	/// Find a queue family that supports graphics operations
+	graphicsFamily = UINT32_MAX;
+	presentFamily = UINT32_MAX;
 	for (uint32_t i = 0; i < queueFamilyCount; i++) {
 		if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			graphicsFamily = i;
+			/// For simplicity, we'll use the same queue for present operations
+			presentFamily = i;
 			break;
 		}
 	}
 
-	/// For simplicity, we'll use the same queue for present operations
-	/// In a more advanced implementation, you might want to find a dedicated present queue
-	presentFamily = graphicsFamily;
+	if (graphicsFamily == UINT32_MAX || presentFamily == UINT32_MAX) {
+		this->setLastError("Failed to find suitable queue families");
+		return false;
+	}
 
-	return (graphicsFamily != UINT32_MAX && presentFamily != UINT32_MAX);
+	return true;
 }
 
 bool VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions) {
@@ -65,7 +73,7 @@ bool VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t
 
 	VkDevice device;
 	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
-		spdlog::error("Failed to create logical device");
+		this->setLastError("Failed to create logical device");
 		return false;
 	}
 
@@ -76,5 +84,11 @@ bool VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t
 	vkGetDeviceQueue(device, graphicsFamily, 0, &this->graphicsQueue);
 	vkGetDeviceQueue(device, presentFamily, 0, &this->presentQueue);
 
+	spdlog::info("Logical device created successfully");
 	return true;
+}
+
+void VulkanDevice::setLastError(const std::string& error) {
+	this->lastError = error;
+	spdlog::error(error);
 }

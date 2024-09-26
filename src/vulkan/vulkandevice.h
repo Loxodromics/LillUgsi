@@ -2,6 +2,7 @@
 
 #include "vulkanwrappers.h"
 #include <vector>
+#include <string>
 
 class VulkanDevice {
 public:
@@ -20,7 +21,11 @@ public:
 	/// Get the present queue
 	VkQueue getPresentQueue() const { return this->presentQueue; }
 
+	/// Get the graphics queue family index
 	uint32_t getGraphicsQueueFamilyIndex() const { return this->graphicsQueueFamilyIndex; }
+
+	/// Get the last error message
+	const std::string& getLastError() const { return this->lastError; }
 
 private:
 	/// Wrapper for the Vulkan logical device
@@ -32,11 +37,18 @@ private:
 	/// Present queue
 	VkQueue presentQueue;
 
+	/// Graphics queue family index
 	uint32_t graphicsQueueFamilyIndex;
+
+	/// Last error message
+	std::string lastError;
 
 	/// Find queue families that support graphics and present operations
 	bool findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily);
 
 	/// Create logical device and retrieve queue handles
 	bool createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions);
+
+	/// Set the last error message
+	void setLastError(const std::string& error);
 };

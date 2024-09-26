@@ -15,7 +15,6 @@ add_executable(LillUgsi
 		src/main.cpp
 #		src/core/application.cpp
 		src/vulkan/vulkaninstance.cpp
-		src/vulkan/vulkanwrappers.cpp
 		src/Core/application.cpp
 		src/vulkan/vulkandevice.h
 		src/vulkan/vulkandevice.cpp

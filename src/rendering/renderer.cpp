@@ -56,7 +56,7 @@ bool Renderer::initialize(SDL_Window* window) {
 	this->vulkanDevice = std::make_unique<VulkanDevice>();
 	std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	if (!this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions)) {
-		spdlog::error("Failed to create logical device");
+		spdlog::error("Failed to create logical device: {}", this->vulkanDevice->getLastError());
 		return false;
 	}
 
@@ -338,7 +338,11 @@ VkPhysicalDevice Renderer::pickPhysicalDevice() {
 
 bool Renderer::createSwapChain() {
 	this->vulkanSwapchain = std::make_unique<VulkanSwapchain>();
-	return this->vulkanSwapchain->initialize(this->physicalDevice, this->vulkanDevice->getDevice(), this->surface, this->width, this->height);
+	if (!this->vulkanSwapchain->initialize(this->physicalDevice, this->vulkanDevice->getDevice(), this->surface, this->width, this->height)) {
+		spdlog::error("Failed to initialize Vulkan swapchain: {}", this->vulkanSwapchain->getLastError());
+		return false;
+	}
+	return true;
 }
 
 bool Renderer::createCommandPool() {
