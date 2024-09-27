@@ -55,6 +55,7 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->createFramebuffers();
 		this->createGraphicsPipeline();
 		this->recordCommandBuffers();
+		this->vulkanBuffer = std::make_unique<VulkanBuffer>(this->vulkanDevice->getDevice(), this->physicalDevice);
 
 		return true;
 	}
@@ -82,6 +83,15 @@ void Renderer::cleanup() {
 	}
 
 	/// Clean up resources in reverse order of creation
+	/// Clean up buffers
+	this->vulkanBuffer.reset();
+	if (this->cameraBuffer != VK_NULL_HANDLE) {
+		vkDestroyBuffer(this->vulkanDevice->getDevice(), this->cameraBuffer, nullptr);
+	}
+	if (this->cameraBufferMemory != VK_NULL_HANDLE) {
+		vkFreeMemory(this->vulkanDevice->getDevice(), this->cameraBufferMemory, nullptr);
+	}
+
 	/// Clean up graphics pipeline
 	this->graphicsPipeline.reset();
 	this->pipelineLayout.reset();
@@ -671,3 +681,87 @@ void Renderer::recordCommandBuffers() {
 
 	spdlog::info("Command buffers recorded successfully");
 }
+
+void Renderer::createCameraUniformBuffer() {
+	VkDeviceSize bufferSize = sizeof(CameraUBO);
+
+	/// Create a staging buffer for initial data transfer
+	VulkanBufferHandle stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	try {
+		/// Create staging buffer
+		this->vulkanBuffer->createBuffer(
+			bufferSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer,
+			stagingBufferMemory
+		);
+
+		/// Create the actual uniform buffer
+		this->vulkanBuffer->createBuffer(
+			bufferSize,
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			this->cameraBuffer,
+			this->cameraBufferMemory
+		);
+
+		/// Initialize buffer with identity matrices
+		CameraUBO initialData{};
+		initialData.view = glm::mat4(1.0f);
+		initialData.projection = glm::mat4(1.0f);
+
+		/// Copy initial data to staging buffer
+		void* data;
+		VK_CHECK(vkMapMemory(this->vulkanDevice->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data));
+		memcpy(data, &initialData, bufferSize);
+		vkUnmapMemory(this->vulkanDevice->getDevice(), stagingBufferMemory);
+
+		/// Copy data from staging buffer to uniform buffer
+		this->vulkanBuffer->copyBuffer(
+			this->commandPool.get(),
+			this->vulkanDevice->getGraphicsQueue(),
+			stagingBuffer.get(),
+			this->cameraBuffer.get(),
+			bufferSize
+		);
+
+		/// Clean up staging buffer
+		vkDestroyBuffer(this->vulkanDevice->getDevice(), stagingBuffer.get(), nullptr);
+		vkFreeMemory(this->vulkanDevice->getDevice(), stagingBufferMemory, nullptr);
+
+	} catch (const VulkanException& e) {
+		/// Clean up any resources that were created before the exception
+		if (stagingBuffer.get() != VK_NULL_HANDLE) {
+			vkDestroyBuffer(this->vulkanDevice->getDevice(), stagingBuffer.get(), nullptr);
+		}
+		if (stagingBufferMemory != VK_NULL_HANDLE) {
+			vkFreeMemory(this->vulkanDevice->getDevice(), stagingBufferMemory, nullptr);
+		}
+		throw; /// Re-throw the exception after cleanup
+	}
+
+	spdlog::info("Camera uniform buffer created successfully");
+}
+
+void Renderer::updateCameraUniformBuffer() {
+	/// This method will be called each frame to update the camera data
+	/// For now, we'll just use identity matrices
+	CameraUBO ubo{};
+	ubo.view = glm::mat4(1.0f);
+	ubo.projection = glm::mat4(1.0f);
+
+	/// When we implement the camera class, we'll update these matrices like this:
+	/// ubo.view = this->camera->getViewMatrix();
+	/// ubo.projection = this->camera->getProjectionMatrix();
+
+	/// Copy the new data to the uniform buffer
+	void* data;
+	VK_CHECK(vkMapMemory(this->vulkanDevice->getDevice(), this->cameraBufferMemory, 0, sizeof(ubo), 0, &data));
+	memcpy(data, &ubo, sizeof(ubo));
+	vkUnmapMemory(this->vulkanDevice->getDevice(), this->cameraBufferMemory);
+}
+
+

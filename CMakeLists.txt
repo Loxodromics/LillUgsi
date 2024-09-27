@@ -9,6 +9,7 @@ set(Vulkan_DIR "/Users/philipp/VulkanSDK/1.3.216.0/macOS")
 
 find_package(Vulkan REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(glm REQUIRED)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
 add_executable(LillUgsi
@@ -20,6 +21,7 @@ add_executable(LillUgsi
 		src/vulkan/vulkandevice.cpp
 		src/vulkan/vulkanswapchain.cpp
 		src/rendering/renderer.cpp
+		src/vulkan/vulkanbuffer.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
@@ -29,6 +31,7 @@ target_link_libraries(LillUgsi
 		SDL3::SDL3
 		spdlog::spdlog
 		Vulkan::Vulkan
+		glm::glm
 )
 
 add_custom_target(Shaders

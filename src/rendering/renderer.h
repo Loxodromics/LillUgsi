@@ -1,10 +1,13 @@
 #pragma once
 
 #include "vulkan/vulkaninstance.h"
+#include "vulkan/vulkanbuffer.h"
 #include "vulkan/vulkandevice.h"
 #include "vulkan/vulkanswapchain.h"
 #include "vulkan/vulkanwrappers.h"
 #include <SDL3/SDL.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include <vector>
 
@@ -29,6 +32,12 @@ public:
 	bool recreateSwapChain(uint32_t newWidth, uint32_t newHeight);
 
 private:
+	/// Struct to hold camera data for GPU
+	struct CameraUBO {
+		glm::mat4 view;
+		glm::mat4 projection;
+	};
+
 	/// Initialize Vulkan-specific components
 	void initializeVulkan();
 
@@ -65,6 +74,17 @@ private:
 	/// Record command buffers
 	void recordCommandBuffers();
 
+	/// Buffer to hold camera data
+	VulkanBufferHandle cameraBuffer;
+
+	/// Memory for the camera buffer
+	VkDeviceMemory cameraBufferMemory;
+
+	/// Create the camera uniform buffer
+	void createCameraUniformBuffer();
+
+	/// Update the camera uniform buffer with current camera data
+	void updateCameraUniformBuffer();
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
@@ -74,6 +94,7 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers; /// Command buffers for recording drawing commands
 	VulkanRenderPassHandle renderPass; /// Handle for the render pass
 	std::vector<VulkanFramebufferHandle> swapChainFramebuffers; /// Vector to store framebuffer handles
+	std::unique_ptr<VulkanBuffer> vulkanBuffer;
 
 	/// Graphics pipeline
 	VulkanPipelineLayoutHandle pipelineLayout;
@@ -83,4 +104,5 @@ private:
 	uint32_t height;
 
 	bool isCleanedUp;
+
 };

@@ -41,7 +41,7 @@ using VulkanSemaphoreHandle = VulkanHandle<VkSemaphore, PFN_vkDestroySemaphore>;
 using VulkanFenceHandle = VulkanHandle<VkFence, PFN_vkDestroyFence>;
 
 /// Type alias for VkBuffer wrapper
-using VulkanBufferHandle = VulkanHandle<VkBuffer, PFN_vkDestroyBuffer>;
+using VulkanBufferHandle = VulkanHandle<VkBuffer, std::function<void(VkBuffer)>>;
 
 /// Type alias for VkImage wrapper
 using VulkanImageHandle = VulkanHandle<VkImage, PFN_vkDestroyImage>;
