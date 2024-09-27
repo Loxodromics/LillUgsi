@@ -14,7 +14,6 @@ add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
 add_executable(LillUgsi
 		src/main.cpp
-#		src/core/application.cpp
 		src/vulkan/vulkaninstance.cpp
 		src/Core/application.cpp
 		src/vulkan/vulkandevice.h
@@ -22,6 +21,8 @@ add_executable(LillUgsi
 		src/vulkan/vulkanswapchain.cpp
 		src/rendering/renderer.cpp
 		src/vulkan/vulkanbuffer.cpp
+		src/rendering/camera.cpp
+		src/rendering/editorcamera.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
