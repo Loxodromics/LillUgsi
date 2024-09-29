@@ -11,6 +11,11 @@
 #include <memory>
 #include <vector>
 
+struct Vertex {
+	glm::vec3 pos;
+	glm::vec3 color;
+};
+
 class Renderer {
 public:
 	Renderer();
@@ -83,8 +88,13 @@ private:
 	/// Create the camera uniform buffer
 	void createCameraUniformBuffer();
 
+	void createIndexBuffer();
+	void createVertexBuffer();
+
 	/// Update the camera uniform buffer with current camera data
 	void updateCameraUniformBuffer();
+	void initializeGeometry();
+
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
@@ -95,7 +105,14 @@ private:
 	VulkanRenderPassHandle renderPass; /// Handle for the render pass
 	std::vector<VulkanFramebufferHandle> swapChainFramebuffers; /// Vector to store framebuffer handles
 	std::unique_ptr<VulkanBuffer> vulkanBuffer;
+	VulkanBufferHandle vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
+	VulkanBufferHandle indexBuffer;
+	VkDeviceMemory indexBufferMemory;
+	std::vector<Vertex> vertices;
 
+	/// Index data
+	std::vector<uint16_t> indices;
 	/// Graphics pipeline
 	VulkanPipelineLayoutHandle pipelineLayout;
 	VulkanPipelineHandle graphicsPipeline;

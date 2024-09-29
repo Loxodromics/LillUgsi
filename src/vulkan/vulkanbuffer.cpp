@@ -13,38 +13,34 @@ void VulkanBuffer::createBuffer(
 	VulkanBufferHandle& buffer,
 	VkDeviceMemory& bufferMemory
 ) {
-	/// Buffer creation info
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size = size;
 	bufferInfo.usage = usage;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	/// Create the buffer
 	VkBuffer newBuffer;
 	VK_CHECK(vkCreateBuffer(this->device, &bufferInfo, nullptr, &newBuffer));
 
-	/// Get memory requirements
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(this->device, newBuffer, &memRequirements);
 
-	/// Allocate memory for the buffer
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits, properties);
 
 	VK_CHECK(vkAllocateMemory(this->device, &allocInfo, nullptr, &bufferMemory));
-
-	/// Bind the buffer to the allocated memory
 	VK_CHECK(vkBindBufferMemory(this->device, newBuffer, bufferMemory, 0));
 
-	/// Create the VulkanBufferHandle
-	buffer = VulkanBufferHandle(newBuffer, [this](VkBuffer b) {
-		vkDestroyBuffer(this->device, b, nullptr);
+	buffer = VulkanBufferHandle(newBuffer, [this, &bufferMemory](VkBuffer b) {
+		if (b != VK_NULL_HANDLE) {
+			spdlog::debug("Destroying buffer: {}", (void*)b);
+			vkDestroyBuffer(this->device, b, nullptr);
+		}
 	});
 
-	spdlog::info("Buffer created successfully. Size: {}, Usage: {}", size, usage);
+	spdlog::info("Buffer created successfully. Size: {}, Usage: {}, Handle: {}", size, usage, (void*)newBuffer);
 }
 
 void VulkanBuffer::copyBuffer(

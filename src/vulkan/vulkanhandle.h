@@ -8,51 +8,39 @@ template<typename T, typename Deleter>
 class VulkanHandle {
 public:
 	VulkanHandle() : handle(VK_NULL_HANDLE), deleter(nullptr) {}
-
 	VulkanHandle(T handle, Deleter deleter) : handle(handle), deleter(deleter) {}
 
-	/// Move constructor
+	// Disable copying
+	VulkanHandle(const VulkanHandle&) = delete;
+	VulkanHandle& operator=(const VulkanHandle&) = delete;
+
+	// Enable moving
 	VulkanHandle(VulkanHandle&& other) noexcept : handle(other.handle), deleter(std::move(other.deleter)) {
 		other.handle = VK_NULL_HANDLE;
 	}
-
-	/// Move assignment operator
 	VulkanHandle& operator=(VulkanHandle&& other) noexcept {
 		if (this != &other) {
-			this->reset();
-			this->handle = other.handle;
-			this->deleter = std::move(other.deleter);
+			reset();
+			handle = other.handle;
+			deleter = std::move(other.deleter);
 			other.handle = VK_NULL_HANDLE;
 		}
 		return *this;
 	}
 
-	/// Destructor
-	~VulkanHandle() {
-		this->reset();
-	}
+	~VulkanHandle() { reset(); }
 
-	/// Reset the handle, cleaning up the resource if necessary
 	void reset(T newHandle = VK_NULL_HANDLE, Deleter newDeleter = nullptr) {
-		if (this->handle != VK_NULL_HANDLE && this->deleter) {
-			this->deleter(this->handle);
+		if (handle != VK_NULL_HANDLE && deleter) {
+			deleter(handle);
 		}
-		this->handle = newHandle;
-		this->deleter = newDeleter;
+		handle = newHandle;
+		deleter = newDeleter;
 	}
 
-	/// Get the raw handle
-	T get() const { return this->handle; }
-
-	/// Check if the handle is valid
-	bool isValid() const { return this->handle != VK_NULL_HANDLE; }
-
-	/// Implicit conversion to T
-	operator T() const { return this->handle; }
-
-	/// Deleted copy constructor and assignment operator to enforce move semantics
-	VulkanHandle(const VulkanHandle&) = delete;
-	VulkanHandle& operator=(const VulkanHandle&) = delete;
+	T get() const { return handle; }
+	bool isValid() const { return handle != VK_NULL_HANDLE; }
+	operator T() const { return handle; }
 
 private:
 	T handle;
