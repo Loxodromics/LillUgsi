@@ -86,18 +86,14 @@ void Renderer::cleanup() {
 
 	/// Clean up resources in reverse order of creation
 	/// Clean up buffers
-	if (vertexBuffer) {
-		vkDestroyBuffer(this->vulkanDevice->getDevice(), vertexBuffer.get(), nullptr);
+	if (this->vertexBuffer) {
+		this->vertexBuffer.reset();
 	}
-	if (vertexBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->vulkanDevice->getDevice(), vertexBufferMemory, nullptr);
+	if (this->vertexBufferMemory != VK_NULL_HANDLE) {
+		vkFreeMemory(this->vulkanDevice->getDevice(), this->vertexBufferMemory, nullptr);
+		this->vertexBufferMemory = VK_NULL_HANDLE;
 	}
-	// if (indexBuffer) {
-	// 	vkDestroyBuffer(this->vulkanDevice->getDevice(), indexBuffer.get(), nullptr);
-	// }
-	// if (indexBufferMemory != VK_NULL_HANDLE) {
-	// 	vkFreeMemory(this->vulkanDevice->getDevice(), indexBufferMemory, nullptr);
-	// }
+
 	if (this->indexBuffer) {
 		this->indexBuffer.reset();
 	}
@@ -105,6 +101,7 @@ void Renderer::cleanup() {
 		vkFreeMemory(this->vulkanDevice->getDevice(), this->indexBufferMemory, nullptr);
 		this->indexBufferMemory = VK_NULL_HANDLE;
 	}
+
 	this->vulkanBuffer.reset();
 	if (this->cameraBuffer != VK_NULL_HANDLE) {
 		vkDestroyBuffer(this->vulkanDevice->getDevice(), this->cameraBuffer, nullptr);
