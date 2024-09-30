@@ -79,12 +79,6 @@ private:
 	/// Record command buffers
 	void recordCommandBuffers();
 
-	/// Buffer to hold camera data
-	VulkanBufferHandle cameraBuffer;
-
-	/// Memory for the camera buffer
-	VkDeviceMemory cameraBufferMemory;
-
 	/// Create the camera uniform buffer
 	void createCameraUniformBuffer();
 
@@ -110,6 +104,8 @@ private:
 	VulkanBufferHandle indexBuffer;
 	VkDeviceMemory indexBufferMemory;
 	std::vector<Vertex> vertices;
+	VulkanBufferHandle cameraBuffer; 	/// Buffer to hold camera uniform data
+	VkDeviceMemory cameraBufferMemory;
 
 	/// Index data
 	std::vector<uint16_t> indices;
