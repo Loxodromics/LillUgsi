@@ -5,6 +5,7 @@
 #include "vulkan/vulkandevice.h"
 #include "vulkan/vulkanswapchain.h"
 #include "vulkan/vulkanwrappers.h"
+#include "rendering/editorcamera.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -35,6 +36,17 @@ public:
 
 	/// Recreate the swap chain (e.g., after window resize)
 	bool recreateSwapChain(uint32_t newWidth, uint32_t newHeight);
+
+	/// Get a pointer to the camera
+	/// This allows other parts of the application to interact with the camera
+	/// @return A pointer to the EditorCamera
+	EditorCamera* getCamera() { return this->camera.get(); }
+
+	/// Handle input events for the camera
+	/// This method should be called for each relevant SDL event
+	/// @param window The SDL window, needed for mouse capture
+	/// @param event The SDL event to process
+	void handleCameraInput(SDL_Window* window, const SDL_Event& event);
 
 private:
 	/// Struct to hold camera data for GPU
@@ -122,6 +134,10 @@ private:
 
 	uint32_t width;
 	uint32_t height;
+
+	/// The camera used for rendering the scene
+	/// We use a unique_ptr for automatic memory management and to allow for easy replacement if needed
+	std::unique_ptr<EditorCamera> camera;
 
 	bool isCleanedUp;
 

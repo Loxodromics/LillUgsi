@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 #include <fstream>
@@ -28,6 +29,9 @@ Renderer::Renderer()
 	, width(0)
 	, height(0)
 	, isCleanedUp(false) {
+	/// Initialize the camera with a default position
+	/// We place the camera slightly back and up to view the scene
+	this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 2.0f, 5.0f));
 }
 
 Renderer::~Renderer() {
@@ -63,6 +67,11 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->createDescriptorSets();
 		this->createGraphicsPipeline();
 		this->recordCommandBuffers();
+
+		/// Set up the camera's aspect ratio based on the window size
+		/// This ensures the initial view is correct
+		float aspectRatio = static_cast<float>(this->width) / static_cast<float>(this->height);
+		this->camera->getProjectionMatrix(aspectRatio);
 		return true;
 	}
 	catch (const VulkanException& e) {
@@ -175,7 +184,8 @@ void Renderer::drawFrame() {
 		spdlog::error("No command buffers available for drawing");
 		return;
 	}
-
+	/// Update the camera uniform buffer before rendering
+	/// This ensures that the latest camera position and orientation are used for this frame
 	this->updateCameraUniformBuffer();
 
 	uint32_t imageIndex;
@@ -788,11 +798,15 @@ void Renderer::createCameraUniformBuffer() {
 }
 
 void Renderer::updateCameraUniformBuffer() {
-	/// This method will be called each frame to update the camera data
-	/// For now, we'll just use identity matrices
+	/// Update the camera's state
+	/// This should be called each frame to ensure smooth camera movement
+	this->camera->update(0.016f);  // Assuming 60 FPS, you might want to use actual delta time
+
 	CameraUBO ubo{};
-	ubo.view = glm::mat4(1.0f);
-	ubo.projection = glm::mat4(1.0f);
+	ubo.view = this->camera->getViewMatrix();
+	ubo.projection =
+		this->camera->getProjectionMatrix(this->vulkanSwapchain->getSwapChainExtent().width /
+										  static_cast<float>(this->vulkanSwapchain->getSwapChainExtent().height));
 
 	/// When we implement the camera class, we'll update these matrices like this:
 	/// ubo.view = this->camera->getViewMatrix();
@@ -1033,4 +1047,10 @@ void Renderer::createDescriptorSets() {
 	}
 
 	spdlog::info("Descriptor sets created and updated successfully");
+}
+
+void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
+	/// Delegate input handling to the camera
+	/// This keeps the camera logic encapsulated within the EditorCamera class
+	this->camera->handleInput(window, event);
 }

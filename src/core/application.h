@@ -20,8 +20,14 @@ public:
 	void cleanup();
 
 private:
-	/// Handle SDL events
+	/// Handle input events
+	/// This method processes SDL events and updates the application state accordingly
 	void handleEvents();
+
+	/// Handle camera-specific input
+	/// This method delegates camera input to the renderer
+	/// @param event The SDL event to process
+	void handleCameraInput(const SDL_Event& event);
 
 	/// Perform rendering
 	void render();
