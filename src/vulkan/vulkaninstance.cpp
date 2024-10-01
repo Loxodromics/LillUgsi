@@ -4,8 +4,10 @@
 VulkanInstance::VulkanInstance() {
 	/// Initialize validation layers for debug builds
 	#ifdef NDEBUG
+		spdlog::info("enableValidationLayers");
 		this->enableValidationLayers = true;
 	#else
+	spdlog::info("disableValidationLayers");
 		this->enableValidationLayers = false;
 	#endif
 
@@ -28,8 +30,15 @@ bool VulkanInstance::initialize(const std::vector<const char*>& requiredExtensio
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_0;
 
-	/// Combine required extensions with validation layer extensions if enabled
+	/// Combine required extensions with additional necessary extensions
 	auto extensions = requiredExtensions;
+
+	/// Add VK_KHR_get_physical_device_properties2 extension
+	/// This extension is required for VK_KHR_portability_subset, which we may need on macOS
+	/// We add it here to ensure it's available if we need to use VK_KHR_portability_subset later
+	extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+
+	/// Add debug utils extension if validation layers are enabled
 	if (this->enableValidationLayers) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
@@ -41,9 +50,7 @@ bool VulkanInstance::initialize(const std::vector<const char*>& requiredExtensio
 	createInfo.ppEnabledExtensionNames = extensions.data();
 	createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-	createInfo.ppEnabledExtensionNames = extensions.data();
-
+	/// Enable validation layers if requested
 	if (this->enableValidationLayers) {
 		createInfo.enabledLayerCount = static_cast<uint32_t>(this->validationLayers.size());
 		createInfo.ppEnabledLayerNames = this->validationLayers.data();
@@ -51,6 +58,7 @@ bool VulkanInstance::initialize(const std::vector<const char*>& requiredExtensio
 		createInfo.enabledLayerCount = 0;
 	}
 
+	/// Create the Vulkan instance
 	VkResult result = this->instanceWrapper.create(&createInfo);
 	if (result != VK_SUCCESS) {
 		this->lastError = "Failed to create Vulkan instance. Error code: " + std::to_string(result);

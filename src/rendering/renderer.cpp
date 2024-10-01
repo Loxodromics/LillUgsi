@@ -40,7 +40,10 @@ Renderer::~Renderer() {
 
 void Renderer::createLogicalDevice() {
 	this->vulkanDevice = std::make_unique<VulkanDevice>();
-	std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	std::vector<const char*> deviceExtensions = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+		"VK_KHR_portability_subset"
+	};
 	this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions);
 }
 

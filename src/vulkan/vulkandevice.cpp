@@ -9,9 +9,45 @@ VulkanDevice::VulkanDevice()
 }
 
 void VulkanDevice::initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) {
+
+	/// Find queue families that support graphics and present operations
 	uint32_t presentFamily;
 	this->findQueueFamilies(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily);
-	this->createLogicalDevice(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily, requiredExtensions);
+
+	/// Start with the required extensions
+	std::vector<const char*> deviceExtensions = requiredExtensions;
+
+	/// Check if VK_KHR_portability_subset is supported
+	/// We need to do this because on some platforms (particularly macOS),
+	/// this extension is necessary for Vulkan compatibility
+	uint32_t extensionCount;
+	vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, availableExtensions.data());
+
+	bool portabilitySubsetSupported = false;
+	for (const auto& extension : availableExtensions) {
+		if (strcmp(extension.extensionName, "VK_KHR_portability_subset") == 0) {
+			portabilitySubsetSupported = true;
+			break;
+		}
+	}
+
+	/// If VK_KHR_portability_subset is supported, add it to our list of extensions
+	/// This ensures compatibility on platforms that require it (like macOS)
+	if (portabilitySubsetSupported) {
+		deviceExtensions.push_back("VK_KHR_portability_subset");
+		spdlog::info("VK_KHR_portability_subset extension enabled");
+	}
+
+	/// Log the extensions we're going to enable
+	spdlog::info("Enabling the following device extensions:");
+	for (const auto& extension : deviceExtensions) {
+		spdlog::info("  {}", extension);
+	}
+
+	/// Create the logical device
+	this->createLogicalDevice(physicalDevice, this->graphicsQueueFamilyIndex, presentFamily, deviceExtensions);
 }
 
 void VulkanDevice::findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& graphicsFamily, uint32_t& presentFamily) {
