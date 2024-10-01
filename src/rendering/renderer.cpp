@@ -58,6 +58,9 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->createCameraUniformBuffer();
 		this->createRenderPass();
 		this->createFramebuffers();
+		this->createDescriptorSetLayout();
+		this->createDescriptorPool();
+		this->createDescriptorSets();
 		this->createGraphicsPipeline();
 		this->recordCommandBuffers();
 		return true;
@@ -85,6 +88,15 @@ void Renderer::cleanup() {
 		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
 	}
 	/// Clean up resources in reverse order of creation
+	/// Clean up the descriptor pool and layout
+	if (this->descriptorPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(this->vulkanDevice->getDevice(), this->descriptorPool, nullptr);
+		this->descriptorPool = VK_NULL_HANDLE;
+	}
+	if (this->descriptorSetLayout != VK_NULL_HANDLE) {
+		vkDestroyDescriptorSetLayout(this->vulkanDevice->getDevice(), this->descriptorSetLayout, nullptr);
+		this->descriptorSetLayout = VK_NULL_HANDLE;
+	}
 	/// Clean up buffers
 	/// Clean up camera buffer
 	if (this->cameraBuffer) {
@@ -619,11 +631,15 @@ void Renderer::createGraphicsPipeline() {
 	colorBlending.attachmentCount = 1;
 	colorBlending.pAttachments = &colorBlendAttachment;
 
-	/// Pipeline layout
-	/// Specifies the uniform values and push constants that can be used in shaders
+	/// Set up the pipeline layout
+	/// This describes the descriptor sets that will be used by the pipeline
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	/// We're not using any descriptor sets or push constants yet, so we'll leave these as default
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &this->descriptorSetLayout;
+	/// We're not using any push constants, so we'll leave these as default
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
 	VkPipelineLayout pipelineLayout;
 	VK_CHECK(vkCreatePipelineLayout(this->vulkanDevice->getDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout));
@@ -631,6 +647,7 @@ void Renderer::createGraphicsPipeline() {
 	this->pipelineLayout = VulkanPipelineLayoutHandle(pipelineLayout, [this](VkPipelineLayout pl) {
 		vkDestroyPipelineLayout(this->vulkanDevice->getDevice(), pl, nullptr);
 	});
+
 
 	/// Create the graphics pipeline
 	/// This brings together all of the structures we've created so far
@@ -709,6 +726,10 @@ void Renderer::recordCommandBuffers() {
 
 		/// Bind the graphics pipeline
 		vkCmdBindPipeline(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphicsPipeline.get());
+
+		/// Bind the descriptor set for this frame
+		/// This makes the uniform buffer accessible to the shaders
+		vkCmdBindDescriptorSets(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipelineLayout.get(), 0, 1, &this->descriptorSets[i], 0, nullptr);
 
 		/// Bind vertex buffer
 		VkBuffer vertexBuffers[] = {this->vertexBuffer.get()};
@@ -931,4 +952,85 @@ void Renderer::initializeGeometry() {
 	indices = {
 		0, 1, 2, 2, 3, 0
 	};
+}
+
+void Renderer::createDescriptorSetLayout() {
+	/// Define how the uniform buffer will be accessed in the shader
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0; /// Corresponds to the binding in the shader
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1; /// We only have one uniform buffer
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; /// This uniform buffer is used in the vertex shader
+	uboLayoutBinding.pImmutableSamplers = nullptr; /// Only relevant for image sampling, which we're not doing here
+
+	/// Create the descriptor set layout
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1; /// We only have one binding
+	layoutInfo.pBindings = &uboLayoutBinding;
+
+	/// Create the descriptor set layout
+	/// This defines the interface between the shader and the uniform buffer
+	VK_CHECK(vkCreateDescriptorSetLayout(this->vulkanDevice->getDevice(), &layoutInfo, nullptr, &this->descriptorSetLayout));
+
+	spdlog::info("Descriptor set layout created successfully");
+}
+
+void Renderer::createDescriptorPool() {
+	/// Define the types of descriptors we'll be allocating
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSize.descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size()); /// One uniform buffer per frame in flight
+
+	/// Create the descriptor pool
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = 1; /// We only have one type of descriptor
+	poolInfo.pPoolSizes = &poolSize;
+	/// Set the maximum number of descriptor sets that can be allocated
+	poolInfo.maxSets = static_cast<uint32_t>(this->swapChainFramebuffers.size());
+
+	/// Create the descriptor pool
+	/// This pool will be used to allocate the descriptor sets
+	VK_CHECK(vkCreateDescriptorPool(this->vulkanDevice->getDevice(), &poolInfo, nullptr, &this->descriptorPool));
+
+	spdlog::info("Descriptor pool created successfully");
+}
+
+void Renderer::createDescriptorSets() {
+	/// Prepare to allocate one descriptor set for each frame in flight
+	std::vector<VkDescriptorSetLayout> layouts(this->swapChainFramebuffers.size(), this->descriptorSetLayout);
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = this->descriptorPool;
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
+	allocInfo.pSetLayouts = layouts.data();
+
+	/// Allocate the descriptor sets
+	this->descriptorSets.resize(this->swapChainFramebuffers.size());
+	VK_CHECK(vkAllocateDescriptorSets(this->vulkanDevice->getDevice(), &allocInfo, this->descriptorSets.data()));
+
+	/// Update each descriptor set with the uniform buffer info
+	for (size_t i = 0; i < this->swapChainFramebuffers.size(); i++) {
+		/// Describe the uniform buffer to Vulkan
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = this->cameraBuffer.get();
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(CameraUBO);
+
+		/// Prepare to write the descriptor set
+		VkWriteDescriptorSet descriptorWrite{};
+		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite.dstSet = this->descriptorSets[i];
+		descriptorWrite.dstBinding = 0; /// Corresponds to the binding in the shader
+		descriptorWrite.dstArrayElement = 0; /// We're not using an array of descriptors
+		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrite.descriptorCount = 1;
+		descriptorWrite.pBufferInfo = &bufferInfo;
+
+		/// Update the descriptor set
+		vkUpdateDescriptorSets(this->vulkanDevice->getDevice(), 1, &descriptorWrite, 0, nullptr);
+	}
+
+	spdlog::info("Descriptor sets created and updated successfully");
 }

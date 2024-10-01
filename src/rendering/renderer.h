@@ -89,6 +89,10 @@ private:
 	void updateCameraUniformBuffer();
 	void initializeGeometry();
 
+	void createDescriptorSetLayout();
+	void createDescriptorPool();
+	void createDescriptorSets();
+
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
@@ -106,6 +110,9 @@ private:
 	std::vector<Vertex> vertices;
 	VulkanBufferHandle cameraBuffer; 	/// Buffer to hold camera uniform data
 	VkDeviceMemory cameraBufferMemory;
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
 
 	/// Index data
 	std::vector<uint16_t> indices;
