@@ -4,6 +4,12 @@ project(LillUgsi VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(ENABLE_NDEBUG "Enable NDEBUG macro" OFF)
+
+if(ENABLE_NDEBUG)
+	add_compile_definitions(NDEBUG)
+endif()
+
 # Set the path to your Vulkan SDK
 set(Vulkan_DIR "/Users/philipp/VulkanSDK/1.3.216.0/macOS")
 
