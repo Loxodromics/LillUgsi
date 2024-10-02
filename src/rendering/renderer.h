@@ -105,6 +105,12 @@ private:
 	void createDescriptorPool();
 	void createDescriptorSets();
 
+	/// Create synchronization objects for frame rendering
+	void createSyncObjects();
+
+	/// Clean up synchronization objects
+	void cleanupSyncObjects();
+
 	std::unique_ptr<VulkanInstance> vulkanInstance;
 	std::unique_ptr<VulkanDevice> vulkanDevice;
 	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
@@ -125,6 +131,9 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
+	VkSemaphore imageAvailableSemaphore;
+	VkSemaphore renderFinishedSemaphore;
+	VkFence inFlightFence;
 
 	/// Index data
 	std::vector<uint16_t> indices;

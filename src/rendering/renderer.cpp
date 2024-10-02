@@ -70,6 +70,7 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->createDescriptorSets();
 		this->createGraphicsPipeline();
 		this->recordCommandBuffers();
+		this->createSyncObjects();
 
 		/// Set up the camera's aspect ratio based on the window size
 		/// This ensures the initial view is correct
@@ -100,6 +101,7 @@ void Renderer::cleanup() {
 		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
 	}
 	/// Clean up resources in reverse order of creation
+	this->cleanupSyncObjects();
 	/// Clean up the descriptor pool and layout
 	if (this->descriptorPool != VK_NULL_HANDLE) {
 		vkDestroyDescriptorPool(this->vulkanDevice->getDevice(), this->descriptorPool, nullptr);
@@ -181,65 +183,77 @@ void Renderer::cleanup() {
 }
 
 void Renderer::drawFrame() {
-	// TODO: Implement synchronization primitives (semaphores and fences)
-	//       This is a simplified version and won't work correctly without proper synchronization
-	if (this->commandBuffers.empty()) {
-		spdlog::error("No command buffers available for drawing");
-		return;
-	}
-	/// Update the camera uniform buffer before rendering
-	/// This ensures that the latest camera position and orientation are used for this frame
-	this->updateCameraUniformBuffer();
+	/// Wait for the previous frame to finish
+	/// This ensures that we're not using resources that may still be in use by the GPU
+	VK_CHECK(vkWaitForFences(this->vulkanDevice->getDevice(), 1, &this->inFlightFence, VK_TRUE, UINT64_MAX));
 
+	/// Reset the fence to the unsignaled state for use in the current frame
+	VK_CHECK(vkResetFences(this->vulkanDevice->getDevice(), 1, &this->inFlightFence));
+
+	/// Acquire an image from the swap chain
 	uint32_t imageIndex;
 	VkResult result = vkAcquireNextImageKHR(
 		this->vulkanDevice->getDevice(),
 		this->vulkanSwapchain->getSwapChain(),
-		UINT64_MAX,
-		VK_NULL_HANDLE,
+		UINT64_MAX, /// Disable timeout
+		this->imageAvailableSemaphore, /// Semaphore to signal when the image is available
 		VK_NULL_HANDLE,
 		&imageIndex
 	);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-		// Swap chain is out of date (e.g., after a resize)
-		// Recreate swap chain and return early
+		/// Swap chain is out of date (e.g., after a resize)
+		/// Recreate swap chain and return early
 		this->recreateSwapChain(this->width, this->height);
 		return;
 	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-		spdlog::error("Failed to acquire swap chain image");
-		return;
+		throw VulkanException(result, "Failed to acquire swap chain image", __FUNCTION__, __FILE__, __LINE__);
 	}
 
+	/// Update uniform buffer with current camera data
+	this->updateCameraUniformBuffer();
+
+	/// Set up the submit info struct
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	/// Configure pipeline stage flags
+	/// We want to wait on the color attachment output stage before we start writing colors
+	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &this->imageAvailableSemaphore;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+	/// Set up the command buffer to submit
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &this->commandBuffers[imageIndex];
 
-	result = vkQueueSubmit(this->vulkanDevice->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-	if (result != VK_SUCCESS) {
-		spdlog::error("Failed to submit draw command buffer");
-		return;
-	}
+	/// Set up the semaphore to signal when rendering is finished
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &this->renderFinishedSemaphore;
 
+	/// Submit the command buffer
+	VK_CHECK(vkQueueSubmit(this->vulkanDevice->getGraphicsQueue(), 1, &submitInfo, this->inFlightFence));
+
+	/// Set up the present info struct
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.swapchainCount = 1;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &this->renderFinishedSemaphore;
+
 	VkSwapchainKHR swapChains[] = {this->vulkanSwapchain->getSwapChain()};
+	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &imageIndex;
 
+	/// Present the image to the screen
 	result = vkQueuePresentKHR(this->vulkanDevice->getPresentQueue(), &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
 		this->recreateSwapChain(this->width, this->height);
 	} else if (result != VK_SUCCESS) {
-		spdlog::error("Failed to present swap chain image");
+		throw VulkanException(result, "Failed to present swap chain image", __FUNCTION__, __FILE__, __LINE__);
 	}
-
-	// TODO: Implement proper frame synchronization
-	// Wait for the GPU to finish its work
-	vkQueueWaitIdle(this->vulkanDevice->getPresentQueue());
 }
 
 bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
@@ -1056,4 +1070,36 @@ void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
 	/// Delegate input handling to the camera
 	/// This keeps the camera logic encapsulated within the EditorCamera class
 	this->camera->handleInput(window, event);
+}
+
+void Renderer::createSyncObjects() {
+	/// Create semaphores and fence for frame synchronization
+	/// Semaphores are used to coordinate operations within the GPU command queue
+	/// Fences are used to synchronize the CPU with the GPU
+
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	/// Create the fence in a signaled state so that the first frame doesn't wait indefinitely
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	/// Create semaphores and fence
+	VK_CHECK(vkCreateSemaphore(this->vulkanDevice->getDevice(), &semaphoreInfo, nullptr, &this->imageAvailableSemaphore));
+	VK_CHECK(vkCreateSemaphore(this->vulkanDevice->getDevice(), &semaphoreInfo, nullptr, &this->renderFinishedSemaphore));
+	VK_CHECK(vkCreateFence(this->vulkanDevice->getDevice(), &fenceInfo, nullptr, &this->inFlightFence));
+
+	spdlog::info("Synchronization objects created successfully");
+}
+
+void Renderer::cleanupSyncObjects() {
+	/// Clean up synchronization objects
+	/// This should be called during the Renderer's cleanup process
+
+	vkDestroySemaphore(this->vulkanDevice->getDevice(), this->renderFinishedSemaphore, nullptr);
+	vkDestroySemaphore(this->vulkanDevice->getDevice(), this->imageAvailableSemaphore, nullptr);
+	vkDestroyFence(this->vulkanDevice->getDevice(), this->inFlightFence, nullptr);
+
+	spdlog::info("Synchronization objects cleaned up");
 }
