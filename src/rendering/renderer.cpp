@@ -56,19 +56,19 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->physicalDevice = this->pickPhysicalDevice();
 		this->createLogicalDevice();
 		this->createSwapChain();
+		this->createRenderPass();
+		this->createFramebuffers();
 		this->createCommandPool();
-		this->createCommandBuffers();
 		this->initializeGeometry();
 		this->vulkanBuffer = std::make_unique<VulkanBuffer>(this->vulkanDevice->getDevice(), this->physicalDevice);
 		this->createVertexBuffer();
 		this->createIndexBuffer();
 		this->createCameraUniformBuffer();
-		this->createRenderPass();
-		this->createFramebuffers();
 		this->createDescriptorSetLayout();
 		this->createDescriptorPool();
 		this->createDescriptorSets();
 		this->createGraphicsPipeline();
+		this->createCommandBuffers();
 		this->recordCommandBuffers();
 		this->createSyncObjects();
 
@@ -100,9 +100,22 @@ void Renderer::cleanup() {
 	if (this->vulkanDevice) {
 		vkDeviceWaitIdle(this->vulkanDevice->getDevice());
 	}
+
 	/// Clean up resources in reverse order of creation
 	this->cleanupSyncObjects();
-	/// Clean up the descriptor pool and layout
+
+	/// Free command buffers
+	if (this->vulkanDevice && this->commandPool) {
+		vkFreeCommandBuffers(this->vulkanDevice->getDevice(), this->commandPool.get(),
+			static_cast<uint32_t>(this->commandBuffers.size()), this->commandBuffers.data());
+	}
+	this->commandBuffers.clear();
+
+	/// Clean up graphics pipeline
+	this->graphicsPipeline.reset();
+	this->pipelineLayout.reset();
+
+	/// Clean up descriptor pool and layout
 	if (this->descriptorPool != VK_NULL_HANDLE) {
 		vkDestroyDescriptorPool(this->vulkanDevice->getDevice(), this->descriptorPool, nullptr);
 		this->descriptorPool = VK_NULL_HANDLE;
@@ -111,8 +124,8 @@ void Renderer::cleanup() {
 		vkDestroyDescriptorSetLayout(this->vulkanDevice->getDevice(), this->descriptorSetLayout, nullptr);
 		this->descriptorSetLayout = VK_NULL_HANDLE;
 	}
-	/// Clean up buffers
-	/// Clean up camera buffer
+
+	/// Clean up uniform buffers
 	if (this->cameraBuffer) {
 		this->cameraBuffer.reset();
 	}
@@ -121,6 +134,7 @@ void Renderer::cleanup() {
 		this->cameraBufferMemory = VK_NULL_HANDLE;
 	}
 
+	/// Clean up vertex and index buffers
 	if (this->vertexBuffer) {
 		this->vertexBuffer.reset();
 	}
@@ -128,7 +142,6 @@ void Renderer::cleanup() {
 		vkFreeMemory(this->vulkanDevice->getDevice(), this->vertexBufferMemory, nullptr);
 		this->vertexBufferMemory = VK_NULL_HANDLE;
 	}
-
 	if (this->indexBuffer) {
 		this->indexBuffer.reset();
 	}
@@ -139,28 +152,11 @@ void Renderer::cleanup() {
 
 	this->vulkanBuffer.reset();
 
-	/// Clean up graphics pipeline
-	this->graphicsPipeline.reset();
-	this->pipelineLayout.reset();
-
 	/// Clean up framebuffers
 	this->cleanupFramebuffers();
 
 	/// Clean up render pass
 	this->renderPass.reset();
-
-	/// Free command buffers
-	if (this->vulkanDevice) {
-		if (this->commandPool) {
-			vkFreeCommandBuffers(this->vulkanDevice->getDevice(), this->commandPool.get(),
-				static_cast<uint32_t>(this->commandBuffers.size()), this->commandBuffers.data());
-		} else {
-			spdlog::warn("Attempting to free command buffers, but command pool is null");
-		}
-	} else {
-		spdlog::warn("Attempting to free command buffers, but device is null");
-	}
-	this->commandBuffers.clear();
 
 	/// Reset command pool
 	this->commandPool.reset();
