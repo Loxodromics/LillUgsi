@@ -136,14 +136,12 @@ void VulkanContext::createLogicalDevice() {
 	/// VK_KHR_SWAPCHAIN_EXTENSION_NAME is required for creating a swap chain
 	/// "VK_KHR_portability_subset" is required on some platforms (e.g., macOS) for Vulkan compatibility
 	std::vector<const char*> deviceExtensions = {
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-		"VK_KHR_portability_subset"
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
 	/// Initialize the logical device with the selected physical device and required extensions
 	this->vulkanDevice->initialize(this->physicalDevice, deviceExtensions);
 
-	spdlog::info("Logical device created successfully");
 }
 
 void VulkanContext::createSwapChain(uint32_t width, uint32_t height) {
