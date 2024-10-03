@@ -1,9 +1,10 @@
 #include "vulkanbuffer.h"
 #include <spdlog/spdlog.h>
 
+namespace lillugsi::vulkan {
 VulkanBuffer::VulkanBuffer(VkDevice device, VkPhysicalDevice physicalDevice)
 	: device(device)
-	, physicalDevice(physicalDevice) {
+	  , physicalDevice(physicalDevice) {
 }
 
 void VulkanBuffer::createBuffer(
@@ -103,4 +104,5 @@ uint32_t VulkanBuffer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags
 	}
 
 	throw VulkanException(VK_ERROR_FEATURE_NOT_PRESENT, "Failed to find suitable memory type", __FUNCTION__, __FILE__, __LINE__);
+}
 }

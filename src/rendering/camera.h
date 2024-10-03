@@ -6,6 +6,7 @@
 /// Base class for all camera implementations
 /// This class provides the common interface and properties for different camera types
 /// It uses quaternions for rotation to avoid gimbal lock and enable smooth interpolation
+namespace lillugsi::rendering {
 class Camera {
 public:
 	/// Virtual destructor to ensure proper cleanup of derived classes
@@ -81,3 +82,4 @@ protected:
 	/// Get the camera's right vector
 	glm::vec3 getRight() const { return this->orientation * glm::vec3(1.0f, 0.0f, 0.0f); }
 };
+}

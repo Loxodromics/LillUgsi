@@ -2,12 +2,13 @@
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 
+namespace lillugsi::core {
 Application::Application(const std::string& appName, uint32_t width, uint32_t height)
 	: appName(appName)
-	, width(width)
-	, height(height)
-	, window(nullptr)
-	, isRunning(false) {
+	  , width(width)
+	  , height(height)
+	  , window(nullptr)
+	  , isRunning(false) {
 }
 
 Application::~Application() {
@@ -35,7 +36,7 @@ bool Application::initialize() {
 	}
 
 	/// Create and initialize the renderer
-	this->renderer = std::make_unique<Renderer>();
+	this->renderer = std::make_unique<lillugsi::rendering::Renderer>();
 	if (!this->renderer->initialize(this->window)) {
 		spdlog::error("Failed to initialize the renderer");
 		return false;
@@ -59,20 +60,20 @@ void Application::handleEvents() {
 		switch (event.type) {
 			case SDL_EVENT_QUIT:
 				this->isRunning = false;
-			break;
+				break;
 			case SDL_EVENT_WINDOW_RESIZED:
 				this->framebufferResized = true;
-			break;
+				break;
 			case SDL_EVENT_KEY_DOWN:
 			case SDL_EVENT_KEY_UP:
 			case SDL_EVENT_MOUSE_MOTION:
 			case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			case SDL_EVENT_MOUSE_BUTTON_UP:
 				/// Handle camera input for events not handled by the main application
-				/// This allows the camera to respond to mouse and keyboard input
+			/// This allows the camera to respond to mouse and keyboard input
 				this->handleCameraInput(event);
 
-			break;
+				break;
 			default:
 				break;
 		}
@@ -109,8 +110,10 @@ void Application::cleanup() {
 
 void Application::handleCameraInput(const SDL_Event& event) {
 	/// Delegate camera input handling to the renderer
-	/// This keeps the camera logic within the rendering system
+/// This keeps the camera logic within the rendering system
 	if (this->renderer) {
 		this->renderer->handleCameraInput(this->window, event);
 	}
+}
+
 }

@@ -2,10 +2,11 @@
 #include <spdlog/spdlog.h>
 #include <set>
 
+namespace lillugsi::vulkan {
 VulkanDevice::VulkanDevice()
 	: graphicsQueue(VK_NULL_HANDLE)
-	, presentQueue(VK_NULL_HANDLE)
-	, graphicsQueueFamilyIndex(UINT32_MAX) {
+	  , presentQueue(VK_NULL_HANDLE)
+	  , graphicsQueueFamilyIndex(UINT32_MAX) {
 }
 
 void VulkanDevice::initialize(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) {
@@ -112,4 +113,5 @@ void VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t
 	vkGetDeviceQueue(device, presentFamily, 0, &this->presentQueue);
 
 	spdlog::info("Logical device created successfully");
+}
 }

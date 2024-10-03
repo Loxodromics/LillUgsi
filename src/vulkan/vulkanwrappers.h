@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.h>
 #include <functional>
 
+namespace lillugsi::vulkan {
 /// Type alias for VkInstance wrapper
 using VulkanInstanceHandle = VulkanHandle<VkInstance, std::function<void(VkInstance)>>;
 
@@ -66,3 +67,5 @@ VkResult createVulkanDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreat
 
 /// Function to create a VkSwapchainKHR with proper error handling
 VkResult createVulkanSwapchain(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VulkanSwapchainHandle& swapchain);
+
+}

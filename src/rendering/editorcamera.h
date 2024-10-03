@@ -7,6 +7,7 @@
 /// Editor-style camera class
 /// This camera allows for free movement in 3D space, controlled by mouse and keyboard input
 /// It's suitable for 3D editing applications or first-person-style navigation
+namespace lillugsi::rendering {
 class EditorCamera : public Camera {
 public:
 	/// Constructor
@@ -60,3 +61,4 @@ private:
 
 	glm::vec3 velocity; /// Current velocity of the camera
 };
+}

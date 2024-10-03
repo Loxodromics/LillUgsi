@@ -9,7 +9,7 @@ int main(int argc, char* argv[]) {
 		spdlog::info("Starting Vulkan Learning Renderer");
 
 		/// Create and initialize the application
-		Application app("Vulkan Learning Renderer", 800, 600);
+		lillugsi::core::Application app("Vulkan Learning Renderer", 800, 600);
 
 		if (!app.initialize()) {
 			spdlog::error("Failed to initialize the application");

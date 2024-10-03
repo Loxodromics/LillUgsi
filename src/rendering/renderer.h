@@ -12,6 +12,7 @@
 #include <memory>
 #include <vector>
 
+namespace lillugsi::rendering {
 struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 color;
@@ -38,14 +39,14 @@ public:
 	bool recreateSwapChain(uint32_t newWidth, uint32_t newHeight);
 
 	/// Get a pointer to the camera
-	/// This allows other parts of the application to interact with the camera
-	/// @return A pointer to the EditorCamera
+/// This allows other parts of the application to interact with the camera
+/// @return A pointer to the EditorCamera
 	EditorCamera* getCamera() { return this->camera.get(); }
 
 	/// Handle input events for the camera
-	/// This method should be called for each relevant SDL event
-	/// @param window The SDL window, needed for mouse capture
-	/// @param event The SDL event to process
+/// This method should be called for each relevant SDL event
+/// @param window The SDL window, needed for mouse capture
+/// @param event The SDL event to process
 	void handleCameraInput(SDL_Window* window, const SDL_Event& event);
 
 private:
@@ -83,7 +84,7 @@ private:
 	void cleanupFramebuffers();
 
 	/// Create shader modules
-	VulkanShaderModuleHandle createShaderModule(const std::vector<char>& code);
+	vulkan::VulkanShaderModuleHandle createShaderModule(const std::vector<char>& code);
 
 	/// Set up the graphics pipeline
 	void createGraphicsPipeline();
@@ -111,22 +112,22 @@ private:
 	/// Clean up synchronization objects
 	void cleanupSyncObjects();
 
-	std::unique_ptr<VulkanInstance> vulkanInstance;
-	std::unique_ptr<VulkanDevice> vulkanDevice;
-	std::unique_ptr<VulkanSwapchain> vulkanSwapchain;
+	std::unique_ptr<vulkan::VulkanInstance> vulkanInstance;
+	std::unique_ptr<vulkan::VulkanDevice> vulkanDevice;
+	std::unique_ptr<vulkan::VulkanSwapchain> vulkanSwapchain;
 	VkPhysicalDevice physicalDevice;
 	VkSurfaceKHR surface;
-	VulkanCommandPoolHandle commandPool; /// Command pool for allocating command buffers
+	vulkan::VulkanCommandPoolHandle commandPool; /// Command pool for allocating command buffers
 	std::vector<VkCommandBuffer> commandBuffers; /// Command buffers for recording drawing commands
-	VulkanRenderPassHandle renderPass; /// Handle for the render pass
-	std::vector<VulkanFramebufferHandle> swapChainFramebuffers; /// Vector to store framebuffer handles
-	std::unique_ptr<VulkanBuffer> vulkanBuffer;
-	VulkanBufferHandle vertexBuffer;
+	vulkan::VulkanRenderPassHandle renderPass; /// Handle for the render pass
+	std::vector<vulkan::VulkanFramebufferHandle> swapChainFramebuffers; /// Vector to store framebuffer handles
+	std::unique_ptr<vulkan::VulkanBuffer> vulkanBuffer;
+	vulkan::VulkanBufferHandle vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
-	VulkanBufferHandle indexBuffer;
+	vulkan::VulkanBufferHandle indexBuffer;
 	VkDeviceMemory indexBufferMemory;
 	std::vector<Vertex> vertices;
-	VulkanBufferHandle cameraBuffer; 	/// Buffer to hold camera uniform data
+	vulkan::VulkanBufferHandle cameraBuffer; 	/// Buffer to hold camera uniform data
 	VkDeviceMemory cameraBufferMemory;
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
@@ -138,16 +139,17 @@ private:
 	/// Index data
 	std::vector<uint16_t> indices;
 	/// Graphics pipeline
-	VulkanPipelineLayoutHandle pipelineLayout;
-	VulkanPipelineHandle graphicsPipeline;
+	vulkan::VulkanPipelineLayoutHandle pipelineLayout;
+	vulkan::VulkanPipelineHandle graphicsPipeline;
 
 	uint32_t width;
 	uint32_t height;
 
 	/// The camera used for rendering the scene
-	/// We use a unique_ptr for automatic memory management and to allow for easy replacement if needed
+/// We use a unique_ptr for automatic memory management and to allow for easy replacement if needed
 	std::unique_ptr<EditorCamera> camera;
 
 	bool isCleanedUp;
 
 };
+}

@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 #include <functional>
 
+namespace lillugsi::vulkan {
 /// Template class for RAII management of Vulkan objects
 template<typename T, typename Deleter>
 class VulkanHandle {
@@ -65,3 +66,4 @@ public:
 		return result;
 	}
 };
+}

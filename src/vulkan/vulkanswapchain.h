@@ -4,6 +4,7 @@
 #include "vulkanexception.h"
 #include <vector>
 
+namespace lillugsi::vulkan {
 class VulkanSwapchain {
 public:
 	VulkanSwapchain();
@@ -55,3 +56,4 @@ private:
 	/// Create image views for the swap chain images
 	void createImageViews(VkDevice device);
 };
+}

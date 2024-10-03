@@ -2,9 +2,10 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 
+namespace lillugsi::vulkan {
 VulkanSwapchain::VulkanSwapchain()
 	: swapChainImageFormat(VK_FORMAT_UNDEFINED)
-	, swapChainExtent{0, 0} {
+	  , swapChainExtent{0, 0} {
 }
 
 void VulkanSwapchain::initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface, uint32_t width, uint32_t height) {
@@ -140,4 +141,6 @@ void VulkanSwapchain::createImageViews(VkDevice device) {
 	}
 
 	spdlog::info("Image views created successfully");
+}
+
 }

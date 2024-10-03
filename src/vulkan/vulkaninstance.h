@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 
+namespace lillugsi::vulkan {
 class VulkanInstance {
 public:
 	VulkanInstance();
@@ -38,3 +39,4 @@ private:
 
 	std::string lastError;
 };
+}

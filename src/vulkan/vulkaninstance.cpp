@@ -1,15 +1,16 @@
 #include "vulkaninstance.h"
 #include <spdlog/spdlog.h>
 
+namespace lillugsi::vulkan {
 VulkanInstance::VulkanInstance() {
 	/// Initialize validation layers for debug builds
-	#ifdef NDEBUG
-		spdlog::info("enableValidationLayers");
-		this->enableValidationLayers = true;
-	#else
+#ifdef NDEBUG
+	spdlog::info("enableValidationLayers");
+	this->enableValidationLayers = true;
+#else
 	spdlog::info("disableValidationLayers");
 		this->enableValidationLayers = false;
-	#endif
+#endif
 
 	this->validationLayers = {"VK_LAYER_KHRONOS_validation"};
 }
@@ -103,4 +104,5 @@ void VulkanInstance::setupDebugMessenger() {
 	/// Implementation of debug messenger setup
 	/// This is a placeholder and should be implemented properly
 	spdlog::info("Setting up debug messenger");
+}
 }

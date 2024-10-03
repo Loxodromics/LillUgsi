@@ -4,6 +4,7 @@
 #include "vulkanexception.h"
 #include <vector>
 
+namespace lillugsi::vulkan {
 class VulkanDevice {
 public:
 	VulkanDevice();
@@ -43,3 +44,4 @@ private:
 	/// Create logical device and retrieve queue handles
 	void createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions);
 };
+}

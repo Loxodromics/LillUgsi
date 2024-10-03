@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 
+namespace lillugsi::core {
 class Application {
 public:
 	Application(const std::string& appName, uint32_t width, uint32_t height);
@@ -21,12 +22,12 @@ public:
 
 private:
 	/// Handle input events
-	/// This method processes SDL events and updates the application state accordingly
+/// This method processes SDL events and updates the application state accordingly
 	void handleEvents();
 
 	/// Handle camera-specific input
-	/// This method delegates camera input to the renderer
-	/// @param event The SDL event to process
+/// This method delegates camera input to the renderer
+/// @param event The SDL event to process
 	void handleCameraInput(const SDL_Event& event);
 
 	/// Perform rendering
@@ -37,8 +38,9 @@ private:
 	uint32_t height;
 
 	SDL_Window* window;
-	std::unique_ptr<Renderer> renderer;
+	std::unique_ptr<lillugsi::rendering::Renderer> renderer;
 
 	bool isRunning;
 	bool framebufferResized;
 };
+}
