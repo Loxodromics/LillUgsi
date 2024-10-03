@@ -145,6 +145,7 @@ void Renderer::cleanup() {
 	/// Clean up graphics pipeline
 	this->graphicsPipeline.reset();
 	this->pipelineLayout.reset();
+	this->pipelineManager->cleanup();
 
 	/// Clean up descriptor pool and layout
 	if (this->descriptorPool != VK_NULL_HANDLE) {
@@ -483,49 +484,31 @@ vulkan::VulkanShaderModuleHandle Renderer::createShaderModule(const std::vector<
 	});
 }
 
-void Renderer::createGraphicsPipeline() {
-	/// Read shader files
-/// Shader code is precompiled into SPIR-V format using glslc
-	auto vertShaderCode = readFile("shaders/vert.spv");
-	auto fragShaderCode = readFile("shaders/frag.spv");
+void Renderer::createGraphicsPipeline()
+{
+	/// Initialize the PipelineManager
+	/// This manager will handle the creation and management of our graphics pipelines
+	this->pipelineManager = std::make_unique<vulkan::PipelineManager>(
+		this->vulkanContext->getDevice()->getDevice(),
+		this->renderPass.get()
+	);
 
-	/// Create shader modules
-/// Shader modules are a thin wrapper around the shader bytecode
-	vulkan::VulkanShaderModuleHandle vertShaderModule = this->createShaderModule(vertShaderCode);
-	vulkan::VulkanShaderModuleHandle fragShaderModule = this->createShaderModule(fragShaderCode);
-
-	/// Set up shader stage creation information
-/// This describes which shader is used for which pipeline stage
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;  /// This is the vertex shader stage
-	vertShaderStageInfo.module = vertShaderModule.get();
-	vertShaderStageInfo.pName = "main";  /// The entry point of the shader
-
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;  /// This is the fragment shader stage
-	fragShaderStageInfo.module = fragShaderModule.get();
-	fragShaderStageInfo.pName = "main";  /// The entry point of the shader
-
-	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
-
-	/// Vertex input state
-/// This describes the format of the vertex data that will be passed to the vertex shader
+	/// Define the vertex input binding
+	/// This describes how to interpret the vertex data that will be input to the vertex shader
 	VkVertexInputBindingDescription bindingDescription{};
-	bindingDescription.binding = 0; /// We're using a single vertex buffer, so we use binding 0
-	bindingDescription.stride = sizeof(Vertex); /// Size of each vertex
-	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; /// Move to the next data entry after each vertex
+	bindingDescription.binding = 0; // We're using a single vertex buffer, so we use binding 0
+	bindingDescription.stride = sizeof(Vertex); // Size of each vertex
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Move to the next data entry after each vertex
 
-	/// Attribute descriptions
-/// These describe how to extract vertex attributes from the vertex buffer data
+	/// Define the vertex attribute descriptions
+	/// These describe how to extract vertex attributes from the vertex buffer data
 	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
 
 	/// Position attribute
-	attributeDescriptions[0].binding = 0; /// Which binding the per-vertex data comes from
-	attributeDescriptions[0].location = 0; /// Location in the vertex shader
-	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; /// Format of the attribute (vec3)
-	attributeDescriptions[0].offset = offsetof(Vertex, pos); /// Offset of the attribute in the vertex struct
+	attributeDescriptions[0].binding = 0; // Which binding the per-vertex data comes from
+	attributeDescriptions[0].location = 0; // Location in the vertex shader
+	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // Format of the attribute (vec3)
+	attributeDescriptions[0].offset = offsetof(Vertex, pos); // Offset of the attribute in the vertex struct
 
 	/// Color attribute
 	attributeDescriptions[1].binding = 0;
@@ -533,127 +516,36 @@ void Renderer::createGraphicsPipeline() {
 	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 	attributeDescriptions[1].offset = offsetof(Vertex, color);
 
-	/// Vertex input state create info
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+	/// Create the graphics pipeline using the PipelineManager
+	/// This encapsulates all the complex pipeline creation logic in the PipelineManager
+	this->graphicsPipeline = this->pipelineManager->createGraphicsPipeline(
+		"mainPipeline",
+		"shaders/vert.spv",
+		"shaders/frag.spv",
+		bindingDescription,
+		std::vector<VkVertexInputAttributeDescription>(attributeDescriptions.begin(), attributeDescriptions.end()),
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		this->vulkanContext->getSwapChain()->getSwapChainExtent().width,
+		this->vulkanContext->getSwapChain()->getSwapChainExtent().height,
+		this->descriptorSetLayout  /// Pass the descriptor set layout
+	);
 
-	/// Input assembly state
-/// Describes how to assemble vertices into primitives
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;  /// Treat each three vertices as a triangle
-	inputAssembly.primitiveRestartEnable = VK_FALSE;  /// Don't use primitive restart
+	/// Retrieve the pipeline layout
+	this->pipelineLayout = this->pipelineManager->getPipelineLayout("mainPipeline");
 
-	/// Viewport and scissor
-/// The viewport describes the region of the framebuffer that the output will be rendered to
-	VkViewport viewport{};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().width);
-	viewport.height = static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().height);
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	/// The scissor rectangles define in which regions pixels will actually be stored
-/// Any pixels outside the scissor rectangles will be discarded
-	VkRect2D scissor{};
-	scissor.offset = {0, 0};
-	scissor.extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
-
-	VkPipelineViewportStateCreateInfo viewportState{};
-	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = &viewport;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = &scissor;
-
-	/// Rasterizer
-/// The rasterizer takes the geometry that is shaped by the vertices from the vertex shader
-/// and turns it into fragments to be colored by the fragment shader
-	VkPipelineRasterizationStateCreateInfo rasterizer{};
-	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizer.depthClampEnable = VK_FALSE;  /// Don't clamp fragments to near and far planes
-	rasterizer.rasterizerDiscardEnable = VK_FALSE;  /// Don't discard all primitives before rasterization stage
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;  /// Fill the area of the polygon with fragments
-	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;  /// Cull back faces
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;  /// Specify vertex order for faces to be considered front-facing
-	rasterizer.depthBiasEnable = VK_FALSE;  /// Don't use depth bias
-
-	/// Multisampling
-/// This is one of the ways to perform anti-aliasing
-/// We're not using it now, so we'll just disable it
-	VkPipelineMultisampleStateCreateInfo multisampling{};
-	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-	/// Color blending
-/// After a fragment shader has returned a color, it needs to be combined with the color
-/// that is already in the framebuffer. This is called color blending.
-	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	colorBlendAttachment.blendEnable = VK_FALSE;  /// Disable blending for now
-
-	VkPipelineColorBlendStateCreateInfo colorBlending{};
-	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.logicOpEnable = VK_FALSE;
-	colorBlending.attachmentCount = 1;
-	colorBlending.pAttachments = &colorBlendAttachment;
-
-	/// Set up the pipeline layout
-/// This describes the descriptor sets that will be used by the pipeline
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &this->descriptorSetLayout;
-	/// We're not using any push constants, so we'll leave these as default
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-
-	VkPipelineLayout pipelineLayout;
-	VK_CHECK(vkCreatePipelineLayout(this->vulkanContext->getDevice()->getDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout));
-
-	this->pipelineLayout = vulkan::VulkanPipelineLayoutHandle(pipelineLayout, [this](VkPipelineLayout pl) {
-		vkDestroyPipelineLayout(this->vulkanContext->getDevice()->getDevice(), pl, nullptr);
-	});
-
-
-	/// Create the graphics pipeline
-/// This brings together all of the structures we've created so far
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.stageCount = 2;  /// Vertex and fragment shader stages
-	pipelineInfo.pStages = shaderStages;
-	pipelineInfo.pVertexInputState = &vertexInputInfo;
-	pipelineInfo.pInputAssemblyState = &inputAssembly;
-	pipelineInfo.pViewportState = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizer;
-	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pColorBlendState = &colorBlending;
-	pipelineInfo.layout = this->pipelineLayout.get();
-	pipelineInfo.renderPass = this->renderPass.get();
-	pipelineInfo.subpass = 0;  /// Index of the subpass in the render pass where this pipeline will be used
-	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;  /// Used for pipeline derivatives, not used here
-
-	VkPipeline graphicsPipeline;
-	VK_CHECK(vkCreateGraphicsPipelines(this->vulkanContext->getDevice()->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
-
-	/// Wrap the pipeline in our RAII wrapper
-	this->graphicsPipeline = vulkan::VulkanPipelineHandle(graphicsPipeline, [this](VkPipeline gp) {
-		vkDestroyPipeline(this->vulkanContext->getDevice()->getDevice(), gp, nullptr);
-	});
-
-	spdlog::info("Graphics pipeline created successfully");
+	if (!this->graphicsPipeline || !this->pipelineLayout) {
+		throw vulkan::VulkanException(VK_ERROR_INITIALIZATION_FAILED, "Failed to create graphics pipeline or retrieve pipeline layout", __FUNCTION__, __FILE__, __LINE__);
+	}
+	
+	/// At this point, we have successfully created a graphics pipeline and retrieved its layout
+	/// The pipeline is ready to be used for rendering
+	/// The pipeline layout can be used when binding descriptor sets or push constants
+	spdlog::info("Graphics pipeline and layout created successfully");
 }
 
 void Renderer::recordCommandBuffers() {
 	/// Resize command buffers vector to match the number of framebuffers
-/// We need one command buffer for each swap chain image
+	/// We need one command buffer for each swap chain image
 	this->commandBuffers.resize(this->swapChainFramebuffers.size());
 
 	/// Set up command buffer allocation info
@@ -661,7 +553,7 @@ void Renderer::recordCommandBuffers() {
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = this->commandPool.get();
 	/// Primary command buffers can be submitted directly to queues
-/// Secondary command buffers can only be called from primary command buffers
+	/// Secondary command buffers can only be called from primary command buffers
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
 
@@ -688,22 +580,30 @@ void Renderer::recordCommandBuffers() {
 		renderPassInfo.renderArea.extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
 
 		/// Define clear values for the attachments
-	/// This is the color the screen will be cleared to at the start of the render pass
+		/// This is the color the screen will be cleared to at the start of the render pass
 		VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};  // Black with 100% opacity
 		renderPassInfo.clearValueCount = 1;
 		renderPassInfo.pClearValues = &clearColor;
 
 		/// Begin the render pass
-	/// VK_SUBPASS_CONTENTS_INLINE means the render pass commands will be embedded in the primary command buffer
-	/// and no secondary command buffers will be executed
+		/// VK_SUBPASS_CONTENTS_INLINE means the render pass commands will be embedded in the primary command buffer
+		/// and no secondary command buffers will be executed
 		vkCmdBeginRenderPass(this->commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		/// Bind the graphics pipeline
-		vkCmdBindPipeline(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphicsPipeline.get());
+		vkCmdBindPipeline(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphicsPipeline->get());
 
 		/// Bind the descriptor set for this frame
-	/// This makes the uniform buffer accessible to the shaders
-		vkCmdBindDescriptorSets(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipelineLayout.get(), 0, 1, &this->descriptorSets[i], 0, nullptr);
+		vkCmdBindDescriptorSets(
+			this->commandBuffers[i],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			this->pipelineLayout->get(),
+			0,
+			1,
+			&this->descriptorSets[i],
+			0,
+			nullptr
+		);
 
 		/// Bind vertex buffer
 		VkBuffer vertexBuffers[] = {this->vertexBuffer.get()};
@@ -714,13 +614,13 @@ void Renderer::recordCommandBuffers() {
 		vkCmdBindIndexBuffer(this->commandBuffers[i], this->indexBuffer.get(), 0, VK_INDEX_TYPE_UINT16);
 
 		/// Draw command
-	/// vkCmdDrawIndexed parameters:
-	/// 1. Command buffer
-	/// 2. Index count - number of indices to draw
-	/// 3. Instance count - used for instanced rendering, we just have 1 instance
-	/// 4. First index - offset into the index buffer, starts at 0
-	/// 5. Vertex offset - used as a bias to the vertex index, 0 in our case
-	/// 6. First instance - used for instanced rendering, starts at 0
+		/// vkCmdDrawIndexed parameters:
+		/// 1. Command buffer
+		/// 2. Index count - number of indices to draw
+		/// 3. Instance count - used for instanced rendering, we just have 1 instance
+		/// 4. First index - offset into the index buffer, starts at 0
+		/// 5. Vertex offset - used as a bias to the vertex index, 0 in our case
+		/// 6. First instance - used for instanced rendering, starts at 0
 		vkCmdDrawIndexed(this->commandBuffers[i], static_cast<uint32_t>(this->indices.size()), 1, 0, 0, 0);
 
 		/// End the render pass
@@ -737,8 +637,8 @@ void Renderer::createCameraUniformBuffer() {
 	VkDeviceSize bufferSize = sizeof(CameraUBO);
 
 	/// Create the uniform buffer
-/// Use VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-/// to ensure the buffer is accessible by the CPU and automatically synchronized
+	/// Use VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+	/// to ensure the buffer is accessible by the CPU and automatically synchronized
 	this->vulkanBuffer->createBuffer(
 		bufferSize,
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -763,7 +663,7 @@ void Renderer::createCameraUniformBuffer() {
 
 void Renderer::updateCameraUniformBuffer() {
 	/// Update the camera's state
-/// This should be called each frame to ensure smooth camera movement
+	/// This should be called each frame to ensure smooth camera movement
 	this->camera->update(0.016f);  // Assuming 60 FPS, you might want to use actual delta time
 
 	CameraUBO ubo{};
@@ -771,10 +671,6 @@ void Renderer::updateCameraUniformBuffer() {
 	ubo.projection =
 			this->camera->getProjectionMatrix(this->vulkanContext->getSwapChain()->getSwapChainExtent().width /
 											  static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().height));
-
-	/// When we implement the camera class, we'll update these matrices like this:
-/// ubo.view = this->camera->getViewMatrix();
-/// ubo.projection = this->camera->getProjectionMatrix();
 
 	/// Copy the new data to the uniform buffer
 	void* data;
@@ -788,16 +684,16 @@ void Renderer::createVertexBuffer() {
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
 	/// We use a staging buffer for several reasons:
-/// 1. It allows us to use a memory type that is host visible (CPU can write to it)
-/// 2. We can then transfer this to a device local memory, which is faster for the GPU to read from
-/// This two-step process is often faster than using a buffer that is both host visible and device local,
-/// especially on discrete GPUs where device local memory is separate from system memory
+	/// 1. It allows us to use a memory type that is host visible (CPU can write to it)
+	/// 2. We can then transfer this to a device local memory, which is faster for the GPU to read from
+	/// This two-step process is often faster than using a buffer that is both host visible and device local,
+	/// especially on discrete GPUs where device local memory is separate from system memory
 	vulkan::VulkanBufferHandle stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 
 	/// Create a staging buffer that is host visible and host coherent
-/// Host visible allows us to map it to CPU memory
-/// Host coherent means we don't need to explicitly flush writes to the GPU
+	/// Host visible allows us to map it to CPU memory
+	/// Host coherent means we don't need to explicitly flush writes to the GPU
 	this->vulkanBuffer->createBuffer(
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,  /// This buffer will be used as the source in a memory transfer operation
@@ -807,21 +703,21 @@ void Renderer::createVertexBuffer() {
 	);
 
 	/// Map the staging buffer to CPU memory
-/// This allows us to write our vertex data directly to the buffer
+	/// This allows us to write our vertex data directly to the buffer
 	void* data;
 	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data));
 
 	/// Copy our vertex data to the mapped memory
-/// memcpy is used here for simplicity, but for larger data sets or more complex scenarios,
-/// we might want to consider more sophisticated methods of populating our vertex buffer
+	/// memcpy is used here for simplicity, but for larger data sets or more complex scenarios,
+	/// we might want to consider more sophisticated methods of populating our vertex buffer
 	memcpy(data, vertices.data(), (size_t) bufferSize);
 
 	/// Unmap the memory
-/// We don't need to call vkFlushMappedMemoryRanges because we used a coherent memory type
+	/// We don't need to call vkFlushMappedMemoryRanges because we used a coherent memory type
 	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory);
 
 	/// Now create the actual vertex buffer
-/// This buffer will be in device local memory, which is ideal for the GPU to read from
+	/// This buffer will be in device local memory, which is ideal for the GPU to read from
 	this->vulkanBuffer->createBuffer(
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,  /// This buffer will be the destination of a transfer and used as a vertex buffer
@@ -831,7 +727,7 @@ void Renderer::createVertexBuffer() {
 	);
 
 	/// Copy the data from the staging buffer to the vertex buffer
-/// This transfers the data from host visible memory to device local memory
+	/// This transfers the data from host visible memory to device local memory
 	this->vulkanBuffer->copyBuffer(
 		this->commandPool.get(),
 		this->vulkanContext->getDevice()->getGraphicsQueue(),
@@ -841,31 +737,31 @@ void Renderer::createVertexBuffer() {
 	);
 
 	/// Clean up the staging buffer and its memory
-/// It's important to do this explicitly to ensure proper resource management
-/// The staging buffer was only needed to transfer the data to the device local vertex buffer
+	/// It's important to do this explicitly to ensure proper resource management
+	/// The staging buffer was only needed to transfer the data to the device local vertex buffer
 	stagingBuffer.reset();
 	vkFreeMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, nullptr);
 
 	/// Note: We keep the vertex buffer (this->vertexBuffer) around because we'll need it for rendering
-/// It will be cleaned up in the Renderer's cleanup method
+	/// It will be cleaned up in the Renderer's cleanup method
 
 	spdlog::info("Vertex buffer created successfully. Size: {}", bufferSize);
 }
 
 void Renderer::createIndexBuffer() {
 	/// Calculate the size of the index buffer
-/// This is the total size of all indices in bytes
+	/// This is the total size of all indices in bytes
 	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
 	/// We use a staging buffer for the same reasons as in createVertexBuffer:
-/// 1. It allows us to use CPU-accessible memory for initial data transfer
-/// 2. We can then move this data to high-performance GPU memory
-/// This two-step process is often more efficient, especially on discrete GPUs
+	/// 1. It allows us to use CPU-accessible memory for initial data transfer
+	/// 2. We can then move this data to high-performance GPU memory
+	/// This two-step process is often more efficient, especially on discrete GPUs
 	vulkan::VulkanBufferHandle stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 
 	/// Create a staging buffer that is host visible and host coherent
-/// Host visible allows CPU to write to it, host coherent avoids manual flushing
+		/// Host visible allows CPU to write to it, host coherent avoids manual flushing
 	this->vulkanBuffer->createBuffer(
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,  /// This buffer will be the source in a memory transfer
@@ -879,16 +775,16 @@ void Renderer::createIndexBuffer() {
 	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data));
 
 	/// Copy our index data to the mapped memory
-/// For larger datasets, you might want to consider using a more sophisticated
-/// method of populating your buffer
+	/// For larger datasets, you might want to consider using a more sophisticated
+	/// method of populating your buffer
 	memcpy(data, indices.data(), (size_t) bufferSize);
 
 	/// Unmap the memory
-/// No need to manually flush due to the coherent memory type
+	/// No need to manually flush due to the coherent memory type
 	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory);
 
 	/// Create the actual index buffer
-/// This will reside in device local memory for optimal GPU performance
+	/// This will reside in device local memory for optimal GPU performance
 	this->vulkanBuffer->createBuffer(
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,  /// Will be the destination of a transfer and used as an index buffer
@@ -898,7 +794,7 @@ void Renderer::createIndexBuffer() {
 	);
 
 	/// Transfer the data from the staging buffer to the index buffer
-/// This moves the data from CPU-accessible memory to high-performance GPU memory
+		/// This moves the data from CPU-accessible memory to high-performance GPU memory
 	this->vulkanBuffer->copyBuffer(
 		this->commandPool.get(),
 		this->vulkanContext->getDevice()->getGraphicsQueue(),
@@ -908,13 +804,13 @@ void Renderer::createIndexBuffer() {
 	);
 
 	/// Clean up the staging buffer and its memory
-/// This step is crucial for proper resource management
-/// The staging buffer has served its purpose and is no longer needed
+	/// This step is crucial for proper resource management
+	/// The staging buffer has served its purpose and is no longer needed
 	stagingBuffer.reset();
 	vkFreeMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, nullptr);
 
 	/// Note: We keep the index buffer (this->indexBuffer) as it will be used for rendering
-/// It will be properly cleaned up in the Renderer's cleanup method
+	/// It will be properly cleaned up in the Renderer's cleanup method
 
 	spdlog::info("Index buffer created successfully. Size: {}", bufferSize);
 }
@@ -948,7 +844,7 @@ void Renderer::createDescriptorSetLayout() {
 	layoutInfo.pBindings = &uboLayoutBinding;
 
 	/// Create the descriptor set layout
-/// This defines the interface between the shader and the uniform buffer
+	/// This defines the interface between the shader and the uniform buffer
 	VK_CHECK(vkCreateDescriptorSetLayout(this->vulkanContext->getDevice()->getDevice(), &layoutInfo, nullptr, &this->descriptorSetLayout));
 
 	spdlog::info("Descriptor set layout created successfully");
@@ -969,7 +865,7 @@ void Renderer::createDescriptorPool() {
 	poolInfo.maxSets = static_cast<uint32_t>(this->swapChainFramebuffers.size());
 
 	/// Create the descriptor pool
-/// This pool will be used to allocate the descriptor sets
+	/// This pool will be used to allocate the descriptor sets
 	VK_CHECK(vkCreateDescriptorPool(this->vulkanContext->getDevice()->getDevice(), &poolInfo, nullptr, &this->descriptorPool));
 
 	spdlog::info("Descriptor pool created successfully");
@@ -1015,14 +911,14 @@ void Renderer::createDescriptorSets() {
 
 void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
 	/// Delegate input handling to the camera
-/// This keeps the camera logic encapsulated within the EditorCamera class
+	/// This keeps the camera logic encapsulated within the EditorCamera class
 	this->camera->handleInput(window, event);
 }
 
 void Renderer::createSyncObjects() {
 	/// Create semaphores and fence for frame synchronization
-/// Semaphores are used to coordinate operations within the GPU command queue
-/// Fences are used to synchronize the CPU with the GPU
+	/// Semaphores are used to coordinate operations within the GPU command queue
+	/// Fences are used to synchronize the CPU with the GPU
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1042,7 +938,7 @@ void Renderer::createSyncObjects() {
 
 void Renderer::cleanupSyncObjects() {
 	/// Clean up synchronization objects
-/// This should be called during the Renderer's cleanup process
+	/// This should be called during the Renderer's cleanup process
 
 	vkDestroySemaphore(this->vulkanContext->getDevice()->getDevice(), this->renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(this->vulkanContext->getDevice()->getDevice(), this->imageAvailableSemaphore, nullptr);

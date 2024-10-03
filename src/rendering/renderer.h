@@ -4,6 +4,7 @@
 #include "vulkan/vulkancontext.h"
 #include "vulkan/vulkanbuffer.h"
 #include "vulkan/vulkanwrappers.h"
+#include "vulkan/pipelinemanager.h"
 #include "rendering/editorcamera.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
@@ -132,8 +133,9 @@ private:
 	std::vector<uint16_t> indices;
 
 	/// Graphics pipeline
-	vulkan::VulkanPipelineLayoutHandle pipelineLayout;
-	vulkan::VulkanPipelineHandle graphicsPipeline;
+	std::shared_ptr<vulkan::VulkanPipelineHandle> graphicsPipeline;
+	std::shared_ptr<vulkan::VulkanPipelineLayoutHandle> pipelineLayout;
+	std::unique_ptr<vulkan::PipelineManager> pipelineManager;
 
 	/// Window dimensions
 	uint32_t width;

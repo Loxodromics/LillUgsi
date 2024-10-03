@@ -30,6 +30,7 @@ add_executable(LillUgsi
 		src/rendering/camera.cpp
 		src/rendering/editorcamera.cpp
 		src/vulkan/vulkancontext.cpp
+		src/vulkan/pipelinemanager.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
