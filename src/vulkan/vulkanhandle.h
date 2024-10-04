@@ -42,6 +42,7 @@ public:
 	T get() const { return handle; }
 	bool isValid() const { return handle != VK_NULL_HANDLE; }
 	operator T() const { return handle; }
+	const Deleter& getDeleter() const { return deleter; }
 
 private:
 	T handle;

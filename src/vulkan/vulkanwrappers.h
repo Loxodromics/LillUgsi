@@ -45,7 +45,7 @@ using VulkanFenceHandle = VulkanHandle<VkFence, PFN_vkDestroyFence>;
 using VulkanBufferHandle = VulkanHandle<VkBuffer, std::function<void(VkBuffer)>>;
 
 /// Type alias for VkImage wrapper
-using VulkanImageHandle = VulkanHandle<VkImage, PFN_vkDestroyImage>;
+using VulkanImageHandle = VulkanHandle<VkImage, std::function<void(VkImage)>>;
 
 /// Type alias for VkImageView wrapper
 using VulkanImageViewHandle = VulkanHandle<VkImageView, std::function<void(VkImageView)>>;
