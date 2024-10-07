@@ -1,8 +1,10 @@
 #include "renderer.h"
+#include "rendering/cubemesh.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 #include <fstream>
+#include <vulkan/resourcemanager.h>
 
 /// Helper function to read a file
 static std::vector<char> readFile(const std::string& filename) {
@@ -39,10 +41,13 @@ Renderer::~Renderer() {
 	this->cleanup();
 }
 
-bool Renderer::initialize(SDL_Window* window) {
-	try {
+bool Renderer::initialize(SDL_Window* window)
+{
+	try
+	{
 		/// Initialize Vulkan context
-		if (!this->vulkanContext->initialize(window)) {
+		if (!this->vulkanContext->initialize(window))
+		{
 			spdlog::error("Failed to initialize Vulkan context");
 			return false;
 		}
@@ -59,21 +64,28 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Create command pool
 		this->createCommandPool();
 
-		/// Initialize geometry
-		this->initializeGeometry();
+		/// Initialize MeshManager
+		this->meshManager = std::make_unique<MeshManager>(
+			this->vulkanContext->getDevice()->getDevice(),
+			this->vulkanContext->getPhysicalDevice(),
+			this->vulkanContext->getDevice()->getGraphicsQueue(),
+			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex()
+		);
 
-		/// Create Vulkan buffer utility
+		/// Add a cube mesh
+		auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+		spdlog::info("Created cube mesh with {} vertices and {} indices",
+		             cubeMesh->getVertices().size(), cubeMesh->getIndices().size());
+		this->addMesh(std::move(cubeMesh));
+
+		/// Create buffers for all meshes
+		this->createMeshBuffers();
+
+		/// Initialize VulkanBuffer
 		this->vulkanBuffer = std::make_unique<vulkan::VulkanBuffer>(
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice()
 		);
-
-		/// Create vertex buffer
-		this->createVertexBuffer();
-
-		/// Create index buffer
-		this->createIndexBuffer();
-
 		/// Create camera uniform buffer
 		this->createCameraUniformBuffer();
 
@@ -102,7 +114,6 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 2.0f, 5.0f));
 
 		/// Set up the camera's aspect ratio based on the window size
-		/// This ensures the initial view is correct
 		float aspectRatio = static_cast<float>(this->width) / static_cast<float>(this->height);
 		this->camera->getProjectionMatrix(aspectRatio);
 
@@ -166,32 +177,21 @@ void Renderer::cleanup() {
 		this->cameraBufferMemory = VK_NULL_HANDLE;
 	}
 
-	/// Clean up vertex and index buffers
-	if (this->vertexBuffer) {
-		this->vertexBuffer.reset();
-	}
-	if (this->vertexBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->vulkanContext->getDevice()->getDevice(), this->vertexBufferMemory, nullptr);
-		this->vertexBufferMemory = VK_NULL_HANDLE;
-	}
-	if (this->indexBuffer) {
-		this->indexBuffer.reset();
-	}
-	if (this->indexBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->vulkanContext->getDevice()->getDevice(), this->indexBufferMemory, nullptr);
-		this->indexBufferMemory = VK_NULL_HANDLE;
-	}
-
 	this->vulkanBuffer.reset();
+
+	this->vertexBuffers.clear();
+	this->indexBuffers.clear();
+
+	this->meshManager->cleanup();
+
+	/// Reset command pool
+	this->commandPool.reset();
 
 	/// Clean up framebuffers
 	this->cleanupFramebuffers();
 
 	/// Clean up render pass
 	this->renderPass.reset();
-
-	/// Reset command pool
-	this->commandPool.reset();
 
 	/// Clean up Vulkan context (this will handle swap chain, device, and instance cleanup)
 	this->vulkanContext.reset();
@@ -343,7 +343,7 @@ void Renderer::createCommandPool() {
 		vkDestroyCommandPool(this->vulkanContext->getDevice()->getDevice(), pool, nullptr);
 	});
 
-	spdlog::info("Command pool created successfully");
+	spdlog::info("Command pool {} created successfully", (long)this->commandPool.get());
 }
 
 void Renderer::createCommandBuffers() {
@@ -496,25 +496,31 @@ void Renderer::createGraphicsPipeline()
 	/// Define the vertex input binding
 	/// This describes how to interpret the vertex data that will be input to the vertex shader
 	VkVertexInputBindingDescription bindingDescription{};
-	bindingDescription.binding = 0; // We're using a single vertex buffer, so we use binding 0
-	bindingDescription.stride = sizeof(Vertex); // Size of each vertex
-	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Move to the next data entry after each vertex
+	bindingDescription.binding = 0; /// We're using a single vertex buffer, so we use binding 0
+	bindingDescription.stride = sizeof(Vertex); /// Size of each vertex
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; /// Move to the next data entry after each vertex
 
 	/// Define the vertex attribute descriptions
 	/// These describe how to extract vertex attributes from the vertex buffer data
-	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
 	/// Position attribute
-	attributeDescriptions[0].binding = 0; // Which binding the per-vertex data comes from
-	attributeDescriptions[0].location = 0; // Location in the vertex shader
-	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // Format of the attribute (vec3)
-	attributeDescriptions[0].offset = offsetof(Vertex, pos); // Offset of the attribute in the vertex struct
+	attributeDescriptions[0].binding = 0; /// Which binding the per-vertex data comes from
+	attributeDescriptions[0].location = 0; /// Location in the vertex shader
+	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; /// Format of the attribute (vec3)
+	attributeDescriptions[0].offset = offsetof(Vertex, position); /// Offset of the attribute in the vertex struct
 
-	/// Color attribute
+	/// Normal attribute
 	attributeDescriptions[1].binding = 0;
 	attributeDescriptions[1].location = 1;
 	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[1].offset = offsetof(Vertex, color);
+	attributeDescriptions[1].offset = offsetof(Vertex, normal);
+
+	/// Color attribute
+	attributeDescriptions[2].binding = 0;
+	attributeDescriptions[2].location = 2;
+	attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[2].offset = offsetof(Vertex, color);
 
 	/// Create the graphics pipeline using the PipelineManager
 	/// This encapsulates all the complex pipeline creation logic in the PipelineManager
@@ -605,24 +611,29 @@ void Renderer::recordCommandBuffers() {
 			nullptr
 		);
 
-		/// Bind vertex buffer
-		VkBuffer vertexBuffers[] = {this->vertexBuffer.get()};
-		VkDeviceSize offsets[] = {0};
-		vkCmdBindVertexBuffers(this->commandBuffers[i], 0, 1, vertexBuffers, offsets);
+		for (size_t meshIndex = 0; meshIndex < this->meshes.size(); ++meshIndex) {
+			if (meshIndex < this->vertexBuffers.size() && meshIndex < this->indexBuffers.size()) {
+				/// Bind vertex buffer
+				VkBuffer vertexBuffers[] = {this->vertexBuffers[meshIndex].get()};
+				VkDeviceSize offsets[] = {0};
+				vkCmdBindVertexBuffers(this->commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
-		/// Bind index buffer
-		vkCmdBindIndexBuffer(this->commandBuffers[i], this->indexBuffer.get(), 0, VK_INDEX_TYPE_UINT16);
+				/// Bind index buffer
+				vkCmdBindIndexBuffer(this->commandBuffers[i], this->indexBuffers[meshIndex].get(), 0, VK_INDEX_TYPE_UINT32);
 
-		/// Draw command
-		/// vkCmdDrawIndexed parameters:
-		/// 1. Command buffer
-		/// 2. Index count - number of indices to draw
-		/// 3. Instance count - used for instanced rendering, we just have 1 instance
-		/// 4. First index - offset into the index buffer, starts at 0
-		/// 5. Vertex offset - used as a bias to the vertex index, 0 in our case
-		/// 6. First instance - used for instanced rendering, starts at 0
-		vkCmdDrawIndexed(this->commandBuffers[i], static_cast<uint32_t>(this->indices.size()), 1, 0, 0, 0);
-
+				/// Draw command
+				/// vkCmdDrawIndexed parameters:
+				/// 1. Command buffer
+				/// 2. Index count - number of indices to draw
+				/// 3. Instance count - used for instanced rendering, we just have 1 instance
+				/// 4. First index - offset into the index buffer, starts at 0
+				/// 5. Vertex offset - used as a bias to the vertex index, 0 in our case
+				/// 6. First instance - used for instanced rendering, starts at 0
+				vkCmdDrawIndexed(this->commandBuffers[i], static_cast<uint32_t>(this->meshes[meshIndex]->getIndices().size()), 1, 0, 0, 0);
+			} else {
+				spdlog::warn("Skipping draw for mesh {} due to missing buffers", meshIndex);
+			}
+		}
 		/// End the render pass
 		vkCmdEndRenderPass(this->commandBuffers[i]);
 
@@ -664,7 +675,7 @@ void Renderer::createCameraUniformBuffer() {
 void Renderer::updateCameraUniformBuffer() {
 	/// Update the camera's state
 	/// This should be called each frame to ensure smooth camera movement
-	this->camera->update(0.016f);  // Assuming 60 FPS, you might want to use actual delta time
+	this->camera->update(0.016f);  /// Assuming 60 FPS, we might want to use actual delta time
 
 	CameraUBO ubo{};
 	ubo.view = this->camera->getViewMatrix();
@@ -677,155 +688,6 @@ void Renderer::updateCameraUniformBuffer() {
 	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(), this->cameraBufferMemory, 0, sizeof(ubo), 0, &data));
 	memcpy(data, &ubo, sizeof(ubo));
 	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(), this->cameraBufferMemory);
-}
-
-void Renderer::createVertexBuffer() {
-	/// Calculate the size of the buffer we need
-	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-
-	/// We use a staging buffer for several reasons:
-	/// 1. It allows us to use a memory type that is host visible (CPU can write to it)
-	/// 2. We can then transfer this to a device local memory, which is faster for the GPU to read from
-	/// This two-step process is often faster than using a buffer that is both host visible and device local,
-	/// especially on discrete GPUs where device local memory is separate from system memory
-	vulkan::VulkanBufferHandle stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
-	/// Create a staging buffer that is host visible and host coherent
-	/// Host visible allows us to map it to CPU memory
-	/// Host coherent means we don't need to explicitly flush writes to the GPU
-	this->vulkanBuffer->createBuffer(
-		bufferSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,  /// This buffer will be used as the source in a memory transfer operation
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		stagingBuffer,
-		stagingBufferMemory
-	);
-
-	/// Map the staging buffer to CPU memory
-	/// This allows us to write our vertex data directly to the buffer
-	void* data;
-	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data));
-
-	/// Copy our vertex data to the mapped memory
-	/// memcpy is used here for simplicity, but for larger data sets or more complex scenarios,
-	/// we might want to consider more sophisticated methods of populating our vertex buffer
-	memcpy(data, vertices.data(), (size_t) bufferSize);
-
-	/// Unmap the memory
-	/// We don't need to call vkFlushMappedMemoryRanges because we used a coherent memory type
-	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory);
-
-	/// Now create the actual vertex buffer
-	/// This buffer will be in device local memory, which is ideal for the GPU to read from
-	this->vulkanBuffer->createBuffer(
-		bufferSize,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,  /// This buffer will be the destination of a transfer and used as a vertex buffer
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,  /// Device local memory is the fastest memory type for the GPU
-		this->vertexBuffer,
-		this->vertexBufferMemory
-	);
-
-	/// Copy the data from the staging buffer to the vertex buffer
-	/// This transfers the data from host visible memory to device local memory
-	this->vulkanBuffer->copyBuffer(
-		this->commandPool.get(),
-		this->vulkanContext->getDevice()->getGraphicsQueue(),
-		stagingBuffer.get(),
-		this->vertexBuffer.get(),
-		bufferSize
-	);
-
-	/// Clean up the staging buffer and its memory
-	/// It's important to do this explicitly to ensure proper resource management
-	/// The staging buffer was only needed to transfer the data to the device local vertex buffer
-	stagingBuffer.reset();
-	vkFreeMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, nullptr);
-
-	/// Note: We keep the vertex buffer (this->vertexBuffer) around because we'll need it for rendering
-	/// It will be cleaned up in the Renderer's cleanup method
-
-	spdlog::info("Vertex buffer created successfully. Size: {}", bufferSize);
-}
-
-void Renderer::createIndexBuffer() {
-	/// Calculate the size of the index buffer
-	/// This is the total size of all indices in bytes
-	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-	/// We use a staging buffer for the same reasons as in createVertexBuffer:
-	/// 1. It allows us to use CPU-accessible memory for initial data transfer
-	/// 2. We can then move this data to high-performance GPU memory
-	/// This two-step process is often more efficient, especially on discrete GPUs
-	vulkan::VulkanBufferHandle stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
-	/// Create a staging buffer that is host visible and host coherent
-		/// Host visible allows CPU to write to it, host coherent avoids manual flushing
-	this->vulkanBuffer->createBuffer(
-		bufferSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,  /// This buffer will be the source in a memory transfer
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		stagingBuffer,
-		stagingBufferMemory
-	);
-
-	/// Map the staging buffer memory to a CPU accessible pointer
-	void* data;
-	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data));
-
-	/// Copy our index data to the mapped memory
-	/// For larger datasets, you might want to consider using a more sophisticated
-	/// method of populating your buffer
-	memcpy(data, indices.data(), (size_t) bufferSize);
-
-	/// Unmap the memory
-	/// No need to manually flush due to the coherent memory type
-	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory);
-
-	/// Create the actual index buffer
-	/// This will reside in device local memory for optimal GPU performance
-	this->vulkanBuffer->createBuffer(
-		bufferSize,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,  /// Will be the destination of a transfer and used as an index buffer
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,  /// Device local memory is fastest for GPU read operations
-		this->indexBuffer,
-		this->indexBufferMemory
-	);
-
-	/// Transfer the data from the staging buffer to the index buffer
-		/// This moves the data from CPU-accessible memory to high-performance GPU memory
-	this->vulkanBuffer->copyBuffer(
-		this->commandPool.get(),
-		this->vulkanContext->getDevice()->getGraphicsQueue(),
-		stagingBuffer.get(),
-		this->indexBuffer.get(),
-		bufferSize
-	);
-
-	/// Clean up the staging buffer and its memory
-	/// This step is crucial for proper resource management
-	/// The staging buffer has served its purpose and is no longer needed
-	stagingBuffer.reset();
-	vkFreeMemory(this->vulkanContext->getDevice()->getDevice(), stagingBufferMemory, nullptr);
-
-	/// Note: We keep the index buffer (this->indexBuffer) as it will be used for rendering
-	/// It will be properly cleaned up in the Renderer's cleanup method
-
-	spdlog::info("Index buffer created successfully. Size: {}", bufferSize);
-}
-
-void Renderer::initializeGeometry() {
-	vertices = {
-		{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-		{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-		{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}}
-	};
-
-	indices = {
-		0, 1, 2, 2, 3, 0
-	};
 }
 
 void Renderer::createDescriptorSetLayout() {
@@ -945,6 +807,27 @@ void Renderer::cleanupSyncObjects() {
 	vkDestroyFence(this->vulkanContext->getDevice()->getDevice(), this->inFlightFence, nullptr);
 
 	spdlog::info("Synchronization objects cleaned up");
+}
+
+void Renderer::addMesh(std::unique_ptr<Mesh> mesh) {
+	this->meshes.push_back(std::move(mesh));
+}
+
+void Renderer::createMeshBuffers() {
+	for (const auto& mesh : this->meshes) {
+		auto vertexBuffer = this->meshManager->createVertexBuffer(*mesh);
+		if (vertexBuffer.isValid()) {
+			this->vertexBuffers.push_back(std::move(vertexBuffer));
+		}
+
+		auto indexBuffer = this->meshManager->createIndexBuffer(*mesh);
+		if (indexBuffer.isValid()) {
+			this->indexBuffers.push_back(std::move(indexBuffer));
+		}
+	}
+
+	spdlog::info("Created {} vertex buffers and {} index buffers",
+				 this->vertexBuffers.size(), this->indexBuffers.size());
 }
 
 }

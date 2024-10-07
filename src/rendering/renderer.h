@@ -6,18 +6,14 @@
 #include "vulkan/vulkanwrappers.h"
 #include "vulkan/pipelinemanager.h"
 #include "rendering/editorcamera.h"
+#include "rendering/mesh.h"
+#include "rendering/meshmananger.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
 
 namespace lillugsi::rendering {
-
-/// Vertex structure defining the format of our vertex data
-struct Vertex {
-	glm::vec3 pos;
-	glm::vec3 color;
-};
 
 /// Main renderer class responsible for managing the rendering pipeline
 class Renderer {
@@ -100,17 +96,6 @@ private:
 	/// Vulkan buffer utility
 	std::unique_ptr<vulkan::VulkanBuffer> vulkanBuffer;
 
-	/// Vertex buffer
-	vulkan::VulkanBufferHandle vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
-
-	/// Index buffer
-	vulkan::VulkanBufferHandle indexBuffer;
-	VkDeviceMemory indexBufferMemory;
-
-	/// Vertex data
-	std::vector<Vertex> vertices;
-
 	/// Buffer to hold camera uniform data
 	vulkan::VulkanBufferHandle cameraBuffer;
 	VkDeviceMemory cameraBufferMemory;
@@ -129,13 +114,31 @@ private:
 	VkSemaphore renderFinishedSemaphore;
 	VkFence inFlightFence;
 
-	/// Index data
-	std::vector<uint16_t> indices;
-
 	/// Graphics pipeline
 	std::shared_ptr<vulkan::VulkanPipelineHandle> graphicsPipeline;
 	std::shared_ptr<vulkan::VulkanPipelineLayoutHandle> pipelineLayout;
 	std::unique_ptr<vulkan::PipelineManager> pipelineManager;
+
+	/// MeshManager for creating and managing meshes
+	std::unique_ptr<MeshManager> meshManager;
+
+	/// Vector to store meshes
+	std::vector<std::unique_ptr<Mesh>> meshes;
+
+	/// Vector to store vertex buffers for each mesh
+	std::vector<vulkan::VulkanBufferHandle> vertexBuffers;
+
+	/// Vector to store index buffers for each mesh
+	std::vector<vulkan::VulkanBufferHandle> indexBuffers;
+
+	/// Vector to store all buffers so we can properly destroy them
+	std::vector<vulkan::VulkanBufferHandle> createdBuffers;
+
+	/// Method to add a mesh to the renderer
+	void addMesh(std::unique_ptr<Mesh> mesh);
+
+	/// Method to create buffer for all meshes
+	void createMeshBuffers();
 
 	/// Window dimensions
 	uint32_t width;
