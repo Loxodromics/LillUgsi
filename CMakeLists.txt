@@ -21,7 +21,7 @@ add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 add_executable(LillUgsi
 		src/main.cpp
 		src/vulkan/vulkaninstance.cpp
-		src/Core/application.cpp
+		src/core/application.cpp
 		src/vulkan/vulkandevice.h
 		src/vulkan/vulkandevice.cpp
 		src/vulkan/vulkanswapchain.cpp
@@ -31,7 +31,6 @@ add_executable(LillUgsi
 		src/rendering/editorcamera.cpp
 		src/vulkan/vulkancontext.cpp
 		src/vulkan/pipelinemanager.cpp
-		src/vulkan/resourcemanager.cpp
 		src/rendering/cubemesh.cpp
 		src/rendering/meshmananger.cpp
 )
