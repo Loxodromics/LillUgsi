@@ -5,6 +5,7 @@
 #include "vulkan/vulkanbuffer.h"
 #include "vulkan/vulkanwrappers.h"
 #include "vulkan/pipelinemanager.h"
+#include "vulkan/depthbuffer.h"
 #include "rendering/editorcamera.h"
 #include "rendering/mesh.h"
 #include "rendering/meshmananger.h"
@@ -77,6 +78,9 @@ private:
 	void createDescriptorSets();
 	void createSyncObjects();
 	void cleanupSyncObjects();
+	void addMesh(std::unique_ptr<Mesh> mesh);
+	void createMeshBuffers();
+	void initializeDepthBuffer();
 
 	/// Vulkan context managing Vulkan instance, device, and swap chain
 	std::unique_ptr<vulkan::VulkanContext> vulkanContext;
@@ -134,11 +138,9 @@ private:
 	/// Vector to store all buffers so we can properly destroy them
 	std::vector<vulkan::VulkanBufferHandle> createdBuffers;
 
-	/// Method to add a mesh to the renderer
-	void addMesh(std::unique_ptr<Mesh> mesh);
-
-	/// Method to create buffer for all meshes
-	void createMeshBuffers();
+	/// Depth buffer for z-testing
+	/// This allows for proper rendering of 3D scenes by ensuring objects are drawn in the correct order
+	std::unique_ptr<vulkan::DepthBuffer> depthBuffer;
 
 	/// Window dimensions
 	uint32_t width;

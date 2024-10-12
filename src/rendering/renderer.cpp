@@ -4,7 +4,6 @@
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 #include <fstream>
-#include <vulkan/resourcemanager.h>
 
 /// Helper function to read a file
 static std::vector<char> readFile(const std::string& filename) {
@@ -57,6 +56,9 @@ bool Renderer::initialize(SDL_Window* window)
 
 		/// Create render pass
 		this->createRenderPass();
+
+		/// Initialize depth buffer
+		this->initializeDepthBuffer();
 
 		/// Create framebuffers
 		this->createFramebuffers();
@@ -189,6 +191,9 @@ void Renderer::cleanup() {
 
 	/// Clean up framebuffers
 	this->cleanupFramebuffers();
+
+	/// Clean up depth buffer
+	this->depthBuffer.reset();
 
 	/// Clean up render pass
 	this->renderPass.reset();
@@ -828,6 +833,34 @@ void Renderer::createMeshBuffers() {
 
 	spdlog::info("Created {} vertex buffers and {} index buffers",
 				 this->vertexBuffers.size(), this->indexBuffers.size());
+}
+
+void Renderer::initializeDepthBuffer() {
+	/// We create the depth buffer after the swap chain is initialized
+	/// This ensures we have the correct dimensions for the depth buffer
+
+	/// Check if the Vulkan context and swap chain are initialized
+	if (!this->vulkanContext || !this->vulkanContext->getSwapChain()) {
+		throw vulkan::VulkanException(VK_ERROR_INITIALIZATION_FAILED,
+			"Attempted to initialize depth buffer before Vulkan context or swap chain",
+			__FUNCTION__, __FILE__, __LINE__);
+	}
+
+	/// Get the swap chain extent for depth buffer dimensions
+	VkExtent2D swapChainExtent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
+
+	/// Create the depth buffer
+	/// We use a unique_ptr for automatic memory management
+	this->depthBuffer = std::make_unique<vulkan::DepthBuffer>(
+		this->vulkanContext->getDevice()->getDevice(),
+		this->vulkanContext->getPhysicalDevice()
+	);
+
+	/// Initialize the depth buffer with the swap chain dimensions
+	/// This ensures the depth buffer matches the size of our render targets
+	this->depthBuffer->initialize(swapChainExtent.width, swapChainExtent.height);
+
+	spdlog::info("Depth buffer initialized successfully");
 }
 
 }

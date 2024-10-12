@@ -33,6 +33,7 @@ add_executable(LillUgsi
 		src/vulkan/pipelinemanager.cpp
 		src/rendering/cubemesh.cpp
 		src/rendering/meshmananger.cpp
+		src/vulkan/depthbuffer.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

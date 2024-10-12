@@ -59,6 +59,9 @@ using VulkanDescriptorSetLayoutHandle = VulkanHandle<VkDescriptorSetLayout, PFN_
 /// Type alias for VkDescriptorPool wrapper
 using VulkanDescriptorPoolHandle = VulkanHandle<VkDescriptorPool, PFN_vkDestroyDescriptorPool>;
 
+/// Type alias for VkDeviceMemory wrapper
+using VulkanDeviceMemoryHandle = VulkanHandle<VkDeviceMemory, std::function<void(VkDeviceMemory)>>;
+
 /// Function to create a VkInstance with proper error handling
 VkResult createVulkanInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VulkanInstanceHandle& instance);
 
