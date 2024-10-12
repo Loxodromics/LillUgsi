@@ -538,7 +538,8 @@ void Renderer::createGraphicsPipeline()
 		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		this->vulkanContext->getSwapChain()->getSwapChainExtent().width,
 		this->vulkanContext->getSwapChain()->getSwapChainExtent().height,
-		this->descriptorSetLayout  /// Pass the descriptor set layout
+		this->descriptorSetLayout,  /// Pass the descriptor set layout
+		true  /// Enable depth testing
 	);
 
 	/// Retrieve the pipeline layout
@@ -590,11 +591,14 @@ void Renderer::recordCommandBuffers() {
 		renderPassInfo.renderArea.offset = {0, 0};
 		renderPassInfo.renderArea.extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
 
-		/// Define clear values for the attachments
-		/// This is the color the screen will be cleared to at the start of the render pass
-		VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};  // Black with 100% opacity
-		renderPassInfo.clearValueCount = 1;
-		renderPassInfo.pClearValues = &clearColor;
+		/// Define clear values for color and depth attachments
+		/// We now need two clear values: one for color and one for depth
+		std::array<VkClearValue, 2> clearValues{};
+		clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};  /// Black with 100% opacity
+		clearValues[1].depthStencil = {1.0f, 0};  /// Furthest possible depth value
+
+		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		renderPassInfo.pClearValues = clearValues.data();
 
 		/// Begin the render pass
 		/// VK_SUBPASS_CONTENTS_INLINE means the render pass commands will be embedded in the primary command buffer
@@ -616,6 +620,7 @@ void Renderer::recordCommandBuffers() {
 			nullptr
 		);
 
+		/// Draw commands for each mesh
 		for (size_t meshIndex = 0; meshIndex < this->meshes.size(); ++meshIndex) {
 			if (meshIndex < this->vertexBuffers.size() && meshIndex < this->indexBuffers.size()) {
 				/// Bind vertex buffer
@@ -639,6 +644,7 @@ void Renderer::recordCommandBuffers() {
 				spdlog::warn("Skipping draw for mesh {} due to missing buffers", meshIndex);
 			}
 		}
+
 		/// End the render pass
 		vkCmdEndRenderPass(this->commandBuffers[i]);
 
@@ -646,7 +652,7 @@ void Renderer::recordCommandBuffers() {
 		VK_CHECK(vkEndCommandBuffer(this->commandBuffers[i]));
 	}
 
-	spdlog::info("Command buffers recorded successfully");
+	spdlog::info("Command buffers recorded successfully with depth clearing");
 }
 
 void Renderer::createCameraUniformBuffer() {

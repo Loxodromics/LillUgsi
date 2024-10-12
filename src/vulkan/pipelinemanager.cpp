@@ -19,7 +19,8 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	VkPrimitiveTopology topology,
 	uint32_t width,
 	uint32_t height,
-	VkDescriptorSetLayout descriptorSetLayout
+	VkDescriptorSetLayout descriptorSetLayout,
+	bool enableDepthTest
 ) {
 	/// Create shader modules from the provided shader paths
 	/// Shader modules contain the compiled SPIR-V code for the shaders
@@ -114,6 +115,15 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	colorBlending.attachmentCount = 1;
 	colorBlending.pAttachments = &colorBlendAttachment;
 
+	/// Configure depth and stencil state
+	VkPipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
+	depthStencil.depthWriteEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.stencilTestEnable = VK_FALSE;
+
 	/// Set up pipeline layout
 	/// This describes the resources that can be accessed by the pipeline
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -140,6 +150,7 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	pipelineInfo.pRasterizationState = &rasterizer;
 	pipelineInfo.pMultisampleState = &multisampling;
 	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.layout = pipelineLayout;
 	pipelineInfo.renderPass = this->renderPass;
 	pipelineInfo.subpass = 0;  // Index of the subpass in the render pass where this pipeline will be used
@@ -161,7 +172,8 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	});
 	this->pipelineLayouts[name] = layoutHandle;
 
-	spdlog::info("Graphics pipeline '{}' created successfully", name);
+	spdlog::info("Graphics pipeline '{}' created successfully with depth testing {}",
+		name, enableDepthTest ? "enabled" : "disabled");
 
 	return pipelineHandle;
 }
