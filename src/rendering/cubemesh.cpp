@@ -42,7 +42,7 @@ void CubeMesh::generateGeometry() {
 	for (int face = 0; face < 6; ++face) {
 		for (int i = 0; i < 4; ++i) {
 			Vertex vertex;
-			vertex.position = positions[CubeFaceIndices[face][i]];
+			vertex.position = positions[CubeFaceIndices[face][i]] + this->translation;
 			vertex.normal = normals[face];
 			vertex.color = this->faceColors[face];
 			this->vertices.push_back(vertex);

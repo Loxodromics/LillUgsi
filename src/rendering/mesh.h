@@ -35,9 +35,17 @@ public:
 	/// @return A const reference to the vector of indices
 	const std::vector<uint32_t>& getIndices() const { return this->indices; }
 
+	/// Set the translation of the mesh
+	void setTranslation(const glm::vec3& translation) {
+		this->translation = translation;
+		this->generateGeometry();
+	}
+
+
 protected:
 	std::vector<Vertex> vertices;    /// Storage for vertex data
 	std::vector<uint32_t> indices;   /// Storage for index data
+	glm::vec3 translation;
 };
 
 } /// namespace lillugsi::rendering
