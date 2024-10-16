@@ -88,26 +88,26 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	/// The rasterizer takes the geometry shaped by the vertices and turns it into fragments
 	VkPipelineRasterizationStateCreateInfo rasterizer{};
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizer.depthClampEnable = VK_FALSE;  // Don't clamp fragments to near and far planes
-	rasterizer.rasterizerDiscardEnable = VK_FALSE;  // Don't discard all primitives before rasterization stage
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;  // Fill the area of the polygon with fragments
+	rasterizer.depthClampEnable = VK_FALSE;  /// Don't clamp fragments to near and far planes
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;  /// Don't discard all primitives before rasterization stage
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;  /// Fill the area of the polygon with fragments
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;  // Cull back faces
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;  // Specify vertex order for faces to be considered front-facing
-	rasterizer.depthBiasEnable = VK_FALSE;  // Don't use depth bias
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;  /// Cull back faces
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;  /// Specify vertex order for faces to be considered front-facing
+	rasterizer.depthBiasEnable = VK_FALSE;  /// Don't use depth bias
 
 	/// Set up multisampling state
 	/// Multisampling is one of the ways to perform anti-aliasing
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;  // No multisampling, use 1 sample per pixel
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;  /// No multisampling, use 1 sample per pixel
 
 	/// Set up color blending
 	/// This describes how to combine colors in the framebuffer
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	colorBlendAttachment.blendEnable = VK_FALSE;  // No blending, overwrite existing color
+	colorBlendAttachment.blendEnable = VK_FALSE;  /// No blending, overwrite existing color
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -120,7 +120,7 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencil.depthTestEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
 	depthStencil.depthWriteEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS; /// 'LESS' means a fragment passes if its depth is less than the stored depth,
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
 

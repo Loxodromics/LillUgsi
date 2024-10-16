@@ -54,11 +54,11 @@ bool Renderer::initialize(SDL_Window* window)
 		/// Get window size
 		SDL_GetWindowSizeInPixels(window, reinterpret_cast<int*>(&this->width), reinterpret_cast<int*>(&this->height));
 
-		/// Create render pass
-		this->createRenderPass();
-
 		/// Initialize depth buffer
 		this->initializeDepthBuffer();
+
+		/// Create render pass
+		this->createRenderPass();
 
 		/// Create framebuffers
 		this->createFramebuffers();
@@ -77,7 +77,7 @@ bool Renderer::initialize(SDL_Window* window)
 		/// Add a cube mesh
 		auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
 		spdlog::info("Created cube mesh with {} vertices and {} indices",
-		             cubeMesh->getVertices().size(), cubeMesh->getIndices().size());
+					 cubeMesh->getVertices().size(), cubeMesh->getIndices().size());
 		this->addMesh(std::move(cubeMesh));
 
 		/// Create buffers for all meshes
@@ -373,52 +373,84 @@ void Renderer::createCommandBuffers() {
 }
 
 void Renderer::createRenderPass() {
-	/// VkAttachmentDescription: Describes a framebuffer attachment (e.g., color, depth, or stencil buffer).
-/// It defines how the attachment will be used throughout the render pass.
+	/// Color attachment description
+	/// This describes how the color buffer will be used throughout the render pass
 	VkAttachmentDescription colorAttachment{};
 	colorAttachment.format = this->vulkanContext->getSwapChain()->getSwapChainImageFormat();
 	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; /// No multisampling
-	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; /// Clear the attachment at the start of the render pass
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; /// Clear the color buffer at the start of the render pass
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; /// Store the result for later use (e.g., presentation)
-	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; /// We're not using stencil buffer
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; /// We're not using stencil buffer for color attachment
 	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; /// We don't care about the initial layout
 	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; /// The image will be presented in the swap chain
 
-	/// VkAttachmentReference: Describes how a specific attachment will be used in a subpass.
-/// It links the attachment description to a specific subpass.
+	/// Depth attachment description
+	/// This describes how the depth buffer will be used throughout the render pass
+	VkAttachmentDescription depthAttachment{};
+	depthAttachment.format = this->depthBuffer->getFormat(); /// Use the format from our DepthBuffer class
+	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT; /// No multisampling for depth buffer
+	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; /// Clear the depth buffer at the start of the render pass
+	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; /// We don't need to store depth data after rendering
+	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; /// We're not using stencil buffer
+	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; /// We don't care about the initial layout
+	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; /// Optimal layout for depth attachment
+
+	/// Attachment references
+	/// These link the attachment descriptions to the actual attachments used in the subpass
 	VkAttachmentReference colorAttachmentRef{};
-	colorAttachmentRef.attachment = 0; /// Index of the attachment in the attachment descriptions array
+	colorAttachmentRef.attachment = 0; /// Index of the color attachment in the attachment descriptions array
 	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; /// Layout to use during the subpass
 
-	/// VkSubpassDescription: Describes a single subpass in the render pass.
-/// A subpass is a set of rendering operations that can be executed together efficiently.
+	VkAttachmentReference depthAttachmentRef{};
+	depthAttachmentRef.attachment = 1; /// Index of the depth attachment in the attachment descriptions array
+	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; /// Layout to use during the subpass
+
+	/// Subpass description
+	/// This describes the structure of a subpass within the render pass
 	VkSubpassDescription subpass{};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; /// This is a graphics subpass
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentRef;
+	subpass.pDepthStencilAttachment = &depthAttachmentRef; /// Include depth attachment in the subpass
 
-	/// VkSubpassDependency: Defines dependencies between subpasses.
-/// This is crucial for handling synchronization between subpasses and with external operations.
-	VkSubpassDependency dependency{};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL; /// Dependency on operations outside the render pass
-	dependency.dstSubpass = 0; /// Our subpass index
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; /// Stage of the dependency in the source subpass
-	dependency.srcAccessMask = 0; /// No access in the source subpass
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; /// Stage of the dependency in the destination subpass
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; /// We'll be writing to the color attachment
+	/// Subpass dependencies
+	/// These define the dependencies between subpasses or with external operations
+	/// We need two dependencies: one for color and one for depth
+	std::array<VkSubpassDependency, 2> dependencies;
 
-	/// VkRenderPassCreateInfo: Aggregates all the information needed to create a render pass.
-/// It includes attachment descriptions, subpasses, and dependencies.
+	/// First dependency: Wait for color attachment output and depth testing before rendering
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL; /// Dependency on operations outside the render pass
+	dependencies[0].dstSubpass = 0; /// Our subpass index
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependencies[0].srcAccessMask = 0; /// No access in the source subpass
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+	/// Second dependency: Wait for rendering to finish before presenting
+	dependencies[1].srcSubpass = 0; /// Our subpass index
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL; /// Dependency on operations outside the render pass
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].dstAccessMask = 0; /// No access in the destination subpass
+
+	/// Combine attachments
+	std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+
+	/// Render pass create info
+	/// This aggregates all the information needed to create a render pass
 	VkRenderPassCreateInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = 1;
-	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
-	renderPassInfo.dependencyCount = 1;
-	renderPassInfo.pDependencies = &dependency;
+	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+	renderPassInfo.pDependencies = dependencies.data();
 
+	/// Create the render pass
 	VkRenderPass renderPass;
 	VK_CHECK(vkCreateRenderPass(this->vulkanContext->getDevice()->getDevice(), &renderPassInfo, nullptr, &renderPass));
 
@@ -427,29 +459,31 @@ void Renderer::createRenderPass() {
 		vkDestroyRenderPass(this->vulkanContext->getDevice()->getDevice(), rp, nullptr);
 	});
 
-	spdlog::info("Render pass created successfully");
+	spdlog::info("Render pass with color and depth attachments created successfully");
 }
 
 void Renderer::createFramebuffers() {
-	/// Framebuffers are the destination for the rendering operations.
-/// We create one framebuffer for each image view in the swap chain.
+	/// Framebuffers are the destination for the rendering operations
+	/// We create one framebuffer for each image view in the swap chain
 
 	/// Resize the framebuffer vector to match the number of swap chain images
 	this->swapChainFramebuffers.resize(this->vulkanContext->getSwapChain()->getSwapChainImageViews().size());
 
 	/// Iterate through each swap chain image view and create a framebuffer for it
 	for (size_t i = 0; i < this->vulkanContext->getSwapChain()->getSwapChainImageViews().size(); i++) {
-		/// We'll use only one attachment for now - the color attachment
-		VkImageView attachments[] = {
-			this->vulkanContext->getSwapChain()->getSwapChainImageViews()[i].get()
+		/// We'll use two attachments for each framebuffer: color and depth
+		/// The color attachment comes from the swap chain, while the depth attachment is shared
+		std::array<VkImageView, 2> attachments = {
+			this->vulkanContext->getSwapChain()->getSwapChainImageViews()[i].get(),
+			this->depthBuffer->getImageView()
 		};
 
 		/// Create the framebuffer create info structure
 		VkFramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.renderPass = this->renderPass.get(); /// The render pass this framebuffer is compatible with
-		framebufferInfo.attachmentCount = 1; /// Number of attachments (just color for now)
-		framebufferInfo.pAttachments = attachments; /// Pointer to the attachments array
+		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size()); /// Number of attachments (color and depth)
+		framebufferInfo.pAttachments = attachments.data(); /// Pointer to the attachments array
 		framebufferInfo.width = this->vulkanContext->getSwapChain()->getSwapChainExtent().width;
 		framebufferInfo.height = this->vulkanContext->getSwapChain()->getSwapChainExtent().height;
 		framebufferInfo.layers = 1; /// Number of layers in image arrays
@@ -464,7 +498,7 @@ void Renderer::createFramebuffers() {
 		});
 	}
 
-	spdlog::info("Created {} framebuffers successfully", this->swapChainFramebuffers.size());
+	spdlog::info("Created {} framebuffers with color and depth attachments successfully", this->swapChainFramebuffers.size());
 }
 
 void Renderer::cleanupFramebuffers() {
