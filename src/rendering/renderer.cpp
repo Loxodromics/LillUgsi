@@ -80,6 +80,13 @@ bool Renderer::initialize(SDL_Window* window)
 					 cubeMesh->getVertices().size(), cubeMesh->getIndices().size());
 		this->addMesh(std::move(cubeMesh));
 
+		/// Add a second cube mesh
+		auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
+		cubeMesh2->setTranslation(glm::vec3( 1.5f,  1.5f,  1.5f));
+		spdlog::info("Created cube mesh with {} vertices and {} indices",
+					 cubeMesh2->getVertices().size(), cubeMesh2->getIndices().size());
+		this->addMesh(std::move(cubeMesh2));
+
 		/// Create buffers for all meshes
 		this->createMeshBuffers();
 
