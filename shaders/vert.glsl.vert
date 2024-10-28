@@ -21,12 +21,11 @@ void main() {
 	gl_Position = ubo.proj * ubo.view * vec4(inPosition, 1.0);
 
 	/// Pass the color to the fragment shader
-	/// In a more complex shader, you might calculate lighting here
+	/// In a more complex shader, we might calculate lighting here
 	fragColor = inColor;
 
-	/// Optionally, we can reverse the depth value
-	/// This can improve depth precision in some cases
-//	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
+	/// For Reverse-Z, we invert the Z component
+	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 
 	/// visualize the depthbuffer
 //	fragColor = vec3(gl_Position.z, gl_Position.z, gl_Position.z);

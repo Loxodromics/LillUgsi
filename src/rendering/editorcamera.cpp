@@ -92,9 +92,17 @@ glm::mat4 EditorCamera::getViewMatrix() const {
 }
 
 glm::mat4 EditorCamera::getProjectionMatrix(float aspectRatio) const {
-	/// Use glm::perspective to create the projection matrix
-	/// This matrix transforms camera space to clip space
-	return glm::perspective(glm::radians(this->fov), aspectRatio, this->nearPlane, this->farPlane);
+	/// Create a perspective projection matrix using reversed near/far planes for Reverse-Z
+	/// When using Reverse-Z, we:
+	/// 1. Swap near and far planes to invert the depth range
+	/// 2. This provides better precision for distant objects because floating-point numbers
+	///    have more precision near 0, and with Reverse-Z, distant objects are near 0
+	/// @param fov Field of view in degrees
+	/// @param aspectRatio Width/height ratio of the viewport
+	/// @param nearPlane Distance to the near clipping plane
+	/// @param farPlane Distance to the far clipping plane
+	/// @return A perspective projection matrix configured for Reverse-Z
+	return glm::perspective(glm::radians(this->fov), aspectRatio, this->farPlane, this->nearPlane);
 }
 
 void EditorCamera::updateOrientation(float xoffset, float yoffset) {

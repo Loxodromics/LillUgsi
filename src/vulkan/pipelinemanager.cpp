@@ -115,13 +115,20 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	colorBlending.attachmentCount = 1;
 	colorBlending.pAttachments = &colorBlendAttachment;
 
-	/// Configure depth and stencil state
+	/// Configure depth and stencil state for Reverse-Z
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencil.depthTestEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
 	depthStencil.depthWriteEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS; /// 'LESS' means a fragment passes if its depth is less than the stored depth,
+
+	/// Use GREATER instead of LESS for Reverse-Z
+	/// In Reverse-Z, larger depth values are closer to the camera
+	/// This is the opposite of traditional depth testing
+	depthStencil.depthCompareOp = VK_COMPARE_OP_GREATER;
+
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.minDepthBounds = 0.0f; /// Not used when depthBoundsTestEnable is VK_FALSE
+	depthStencil.maxDepthBounds = 1.0f; /// Not used when depthBoundsTestEnable is VK_FALSE
 	depthStencil.stencilTestEnable = VK_FALSE;
 
 	/// Set up pipeline layout

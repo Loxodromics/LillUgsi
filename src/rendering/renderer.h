@@ -17,6 +17,26 @@
 namespace lillugsi::rendering {
 
 /// Main renderer class responsible for managing the rendering pipeline
+/// Depth testing configuration notes:
+/// This renderer uses Reverse-Z depth buffering for improved precision
+/// Key aspects of Reverse-Z:
+/// 1. Depth range is [1,0] instead of [0,1]
+/// 2. Near plane is at depth 1.0
+/// 3. Far plane is at depth 0.0
+/// 4. Depth comparison uses GREATER instead of LESS
+/// 5. Depth buffer is cleared to 0.0
+///
+/// Benefits:
+/// - Better floating-point precision for distant objects
+/// - Reduced Z-fighting artifacts
+/// - More natural distribution of depth precision
+///
+/// Implementation details:
+/// - Projection matrix swaps near/far planes
+/// - Vertex shader inverts Z component
+/// - Pipeline uses VK_COMPARE_OP_GREATER
+/// - Depth buffer cleared to 0.0
+
 class Renderer {
 public:
 	/// Constructor
