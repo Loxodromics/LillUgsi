@@ -434,6 +434,7 @@ void Renderer::createRenderPass() {
 	dependencies[0].srcAccessMask = 0; /// No access in the source subpass
 	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = 0; /// Not needed, we're doing straightforward rendering without any special case
 
 	/// Second dependency: Wait for rendering to finish before presenting
 	dependencies[1].srcSubpass = 0; /// Our subpass index
@@ -442,6 +443,7 @@ void Renderer::createRenderPass() {
 	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 	dependencies[1].dstAccessMask = 0; /// No access in the destination subpass
+	dependencies[1].dependencyFlags = 0; /// Not needed, we're doing straightforward rendering without any special case
 
 	/// Combine attachments
 	std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
