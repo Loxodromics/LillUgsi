@@ -80,9 +80,6 @@ void DepthBuffer::initialize(uint32_t width, uint32_t height) {
 	/// Bind the allocated memory to the depth image
 	VK_CHECK(vkBindImageMemory(this->device, this->image.get(), this->imageMemory.get(), 0));
 
-	/// Bind the allocated memory to the depth image
-	VK_CHECK(vkBindImageMemory(this->device, this->image.get(), this->imageMemory, 0));
-
 	/// Create the image view for the depth image
 	/// The image view is necessary to use the image as a framebuffer attachment
 	VkImageViewCreateInfo viewInfo{};
