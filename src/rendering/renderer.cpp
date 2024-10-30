@@ -541,6 +541,14 @@ void Renderer::createGraphicsPipeline()
 		this->renderPass.get()
 	);
 
+	/// Create a shader program for our graphics pipeline
+	/// ShaderProgram manages the lifecycle of both vertex and fragment shaders
+	auto shaderProgram = vulkan::ShaderProgram::createGraphicsProgram(
+		this->vulkanContext->getDevice()->getDevice(),
+		"shaders/vert.spv",
+		"shaders/frag.spv"
+	);
+
 	/// Define the vertex input binding
 	/// This describes how to interpret the vertex data that will be input to the vertex shader
 	VkVertexInputBindingDescription bindingDescription{};
@@ -574,8 +582,7 @@ void Renderer::createGraphicsPipeline()
 	/// This encapsulates all the complex pipeline creation logic in the PipelineManager
 	this->graphicsPipeline = this->pipelineManager->createGraphicsPipeline(
 		"mainPipeline",
-		"shaders/vert.spv",
-		"shaders/frag.spv",
+		std::move(shaderProgram),  /// Transfer ownership of the shader program
 		bindingDescription,
 		std::vector<VkVertexInputAttributeDescription>(attributeDescriptions.begin(), attributeDescriptions.end()),
 		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,

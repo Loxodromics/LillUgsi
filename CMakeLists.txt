@@ -34,6 +34,7 @@ add_executable(LillUgsi
 		src/rendering/meshmananger.cpp
 		src/vulkan/depthbuffer.cpp
 		src/vulkan/shadermodule.cpp
+		src/vulkan/shaderprogram.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

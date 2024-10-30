@@ -12,8 +12,7 @@ PipelineManager::PipelineManager(VkDevice device, VkRenderPass renderPass)
 
 std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	const std::string& name,
-	const std::string& vertShaderPath,
-	const std::string& fragShaderPath,
+	ShaderProgram&& shaderProgram,
 	const VkVertexInputBindingDescription& vertexBindingDescription,
 	const std::vector<VkVertexInputAttributeDescription>& vertexAttributeDescriptions,
 	VkPrimitiveTopology topology,
@@ -22,27 +21,14 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	VkDescriptorSetLayout descriptorSetLayout,
 	bool enableDepthTest
 ) {
-	/// Create shader modules for vertex and fragment shaders
-	/// We use ShaderModule's factory method to create the modules
-	/// The ShaderModule class handles SPIR-V loading and resource management
-	auto vertexShader = ShaderModule::fromSpirV(
-		this->device,
-		vertShaderPath,
-		VK_SHADER_STAGE_VERTEX_BIT
-	);
+	/// Store the shader program
+	/// We move the program into our storage to maintain ownership
+	/// Using insert_or_assign allows us to potentially update existing programs
+	this->shaderPrograms.insert_or_assign(name, std::move(shaderProgram));
 
-	auto fragmentShader = ShaderModule::fromSpirV(
-		this->device,
-		fragShaderPath,
-		VK_SHADER_STAGE_FRAGMENT_BIT
-	);
-
-	/// Get the shader stage create info from each shader module
-	/// This provides a clean interface for pipeline creation
-	VkPipelineShaderStageCreateInfo shaderStages[] = {
-		vertexShader.getStageCreateInfo(),
-		fragmentShader.getStageCreateInfo()
-	};
+	/// Get the shader stages from the program
+	/// The ShaderProgram handles all the stage creation and validation
+	auto shaderStages = this->shaderPrograms.at(name).getShaderStages();
 
 	/// Set up vertex input state
 	/// This describes the format of the vertex data that will be provided to the vertex shader
@@ -148,8 +134,8 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	/// This combines all the state we've defined above into a single create info structure
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.stageCount = 2;  // Vertex and fragment shader stages
-	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());  /// For now that always 2: Vertex and fragment shader stages
+	pipelineInfo.pStages = shaderStages.data();
 	pipelineInfo.pVertexInputState = &vertexInputInfo;
 	pipelineInfo.pInputAssemblyState = &inputAssembly;
 	pipelineInfo.pViewportState = &viewportState;
@@ -206,6 +192,9 @@ void PipelineManager::cleanup() {
 	/// Clean up all pipelines and pipeline layouts
 	this->pipelines.clear();
 	this->pipelineLayouts.clear();
+
+	/// Clean up shader programs
+	this->shaderPrograms.clear();
 
 	spdlog::info("All pipelines and pipeline layouts cleaned up");
 }

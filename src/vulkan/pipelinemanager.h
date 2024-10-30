@@ -2,7 +2,7 @@
 
 #include "vulkanwrappers.h"
 #include "vulkanexception.h"
-#include "shadermodule.h"
+#include "shaderprogram.h"
 #include <vulkan/vulkan.h>
 #include <string>
 #include <vector>
@@ -25,19 +25,18 @@ public:
 
 	/// Create a graphics pipeline
 	/// @param name A unique name for the pipeline
-	/// @param vertShaderPath Path to the vertex shader file
-	/// @param fragShaderPath Path to the fragment shader file
+	/// @param shaderProgram The shader program containing vertex and fragment shaders
 	/// @param vertexBindingDescription Vertex binding description
 	/// @param vertexAttributeDescriptions Vertex attribute descriptions
 	/// @param topology The primitive topology to use
 	/// @param width The width of the render area
 	/// @param height The height of the render area
 	/// @param descriptorSetLayout The descriptor set layout to use
+	/// @param enableDepthTest Whether to enable depth testing
 	/// @return A shared pointer to the created pipeline handle
 	std::shared_ptr<VulkanPipelineHandle> createGraphicsPipeline(
 		const std::string& name,
-		const std::string& vertShaderPath,
-		const std::string& fragShaderPath,
+		ShaderProgram&& shaderProgram,
 		const VkVertexInputBindingDescription& vertexBindingDescription,
 		const std::vector<VkVertexInputAttributeDescription>& vertexAttributeDescriptions,
 		VkPrimitiveTopology topology,
@@ -67,6 +66,10 @@ private:
 	/// This allows for shared ownership while keeping VulkanHandles move-only
 	std::unordered_map<std::string, std::shared_ptr<VulkanPipelineHandle>> pipelines;
 	std::unordered_map<std::string, std::shared_ptr<VulkanPipelineLayoutHandle>> pipelineLayouts;
+
+	/// Add storage for shader programs
+	/// This ensures shader programs live as long as the pipeline
+	std::unordered_map<std::string, ShaderProgram> shaderPrograms;
 };
 
 }
