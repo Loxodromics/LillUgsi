@@ -22,28 +22,27 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	VkDescriptorSetLayout descriptorSetLayout,
 	bool enableDepthTest
 ) {
-	/// Create shader modules from the provided shader paths
-	/// Shader modules contain the compiled SPIR-V code for the shaders
-	auto vertShaderModule = this->createShaderModule(vertShaderPath);
-	auto fragShaderModule = this->createShaderModule(fragShaderPath);
+	/// Create shader modules for vertex and fragment shaders
+	/// We use ShaderModule's factory method to create the modules
+	/// The ShaderModule class handles SPIR-V loading and resource management
+	auto vertexShader = ShaderModule::fromSpirV(
+		this->device,
+		vertShaderPath,
+		VK_SHADER_STAGE_VERTEX_BIT
+	);
 
-	/// Set up shader stage creation information
-	/// This describes how the shader modules should be used in the pipeline
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;  // This is a vertex shader
-	vertShaderStageInfo.module = vertShaderModule.get();
-	vertShaderStageInfo.pName = "main";  // The entry point of the shader
+	auto fragmentShader = ShaderModule::fromSpirV(
+		this->device,
+		fragShaderPath,
+		VK_SHADER_STAGE_FRAGMENT_BIT
+	);
 
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;  // This is a fragment shader
-	fragShaderStageInfo.module = fragShaderModule.get();
-	fragShaderStageInfo.pName = "main";  // The entry point of the shader
-
-	/// Combine both shader stages into an array
-	/// This array will be used when creating the pipeline to specify all shader stages
-	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+	/// Get the shader stage create info from each shader module
+	/// This provides a clean interface for pipeline creation
+	VkPipelineShaderStageCreateInfo shaderStages[] = {
+		vertexShader.getStageCreateInfo(),
+		fragmentShader.getStageCreateInfo()
+	};
 
 	/// Set up vertex input state
 	/// This describes the format of the vertex data that will be provided to the vertex shader
@@ -209,40 +208,6 @@ void PipelineManager::cleanup() {
 	this->pipelineLayouts.clear();
 
 	spdlog::info("All pipelines and pipeline layouts cleaned up");
-}
-
-VulkanShaderModuleHandle PipelineManager::createShaderModule(const std::string& shaderPath) {
-	auto code = this->readFile(shaderPath);
-
-	VkShaderModuleCreateInfo createInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	createInfo.codeSize = code.size();
-	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-	VkShaderModule shaderModule;
-	VK_CHECK(vkCreateShaderModule(this->device, &createInfo, nullptr, &shaderModule));
-
-	return VulkanShaderModuleHandle(shaderModule, [this](VkShaderModule sm) {
-		vkDestroyShaderModule(this->device, sm, nullptr);
-	});
-}
-
-std::vector<char> PipelineManager::readFile(const std::string& filename) {
-	std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-	if (!file.is_open()) {
-		throw VulkanException(VK_ERROR_INITIALIZATION_FAILED, "Failed to open file: " + filename, __FUNCTION__, __FILE__, __LINE__);
-	}
-
-	size_t fileSize = (size_t) file.tellg();
-	std::vector<char> buffer(fileSize);
-
-	file.seekg(0);
-	file.read(buffer.data(), fileSize);
-
-	file.close();
-
-	return buffer;
 }
 
 }

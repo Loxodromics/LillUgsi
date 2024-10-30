@@ -22,7 +22,6 @@ add_executable(LillUgsi
 		src/main.cpp
 		src/vulkan/vulkaninstance.cpp
 		src/core/application.cpp
-		src/vulkan/vulkandevice.h
 		src/vulkan/vulkandevice.cpp
 		src/vulkan/vulkanswapchain.cpp
 		src/rendering/renderer.cpp
@@ -34,6 +33,7 @@ add_executable(LillUgsi
 		src/rendering/cubemesh.cpp
 		src/rendering/meshmananger.cpp
 		src/vulkan/depthbuffer.cpp
+		src/vulkan/shadermodule.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

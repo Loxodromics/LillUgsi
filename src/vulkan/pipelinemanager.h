@@ -2,6 +2,7 @@
 
 #include "vulkanwrappers.h"
 #include "vulkanexception.h"
+#include "shadermodule.h"
 #include <vulkan/vulkan.h>
 #include <string>
 #include <vector>
@@ -60,16 +61,6 @@ public:
 	void cleanup();
 
 private:
-	/// Create a shader module from file
-	/// @param shaderPath Path to the shader file
-	/// @return A handle to the created shader module
-	VulkanShaderModuleHandle createShaderModule(const std::string& shaderPath);
-
-	/// Read a file into a vector of chars
-	/// @param filename The name of the file to read
-	/// @return A vector containing the file contents
-	std::vector<char> readFile(const std::string& filename);
-
 	VkDevice device;
 	VkRenderPass renderPass;
 	/// Store pipelines and pipeline layouts as shared pointers
