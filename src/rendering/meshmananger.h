@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mesh.h"
+#include "buffercache.h"
 #include "vulkan/buffer.h"
 #include "vulkan/vertexbuffer.h"
 #include "vulkan/indexbuffer.h"
@@ -24,7 +25,17 @@ public:
 	/// Create a mesh of the specified type
 	template<typename T>
 	std::unique_ptr<Mesh> createMesh() {
-		return std::make_unique<T>();
+		auto mesh = std::make_unique<T>();
+		mesh->generateGeometry();
+
+		/// Create or reuse buffers for this mesh
+		auto vertexBuffer = this->createVertexBufferNew(*mesh);
+		auto indexBuffer = this->createIndexBufferNew(*mesh);
+
+		/// Assign buffers to the mesh
+		mesh->setBuffers(std::move(vertexBuffer), std::move(indexBuffer));
+
+		return mesh;
 	}
 
 	/// Create a vertex buffer for a mesh (old method, marked for deprecation)
@@ -93,6 +104,7 @@ private:
 	VkQueue graphicsQueue;
 	VkCommandPool commandPool;
 	std::vector<vulkan::VulkanBufferHandle> createdBuffers;
+	std::unique_ptr<BufferCache> bufferCache; 	/// Buffer cache for reusing GPU buffers
 
 	/// Create a command pool for the graphics queue
 	/// @param graphicsQueueFamilyIndex Index of the graphics queue family

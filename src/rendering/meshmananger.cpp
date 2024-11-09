@@ -1,15 +1,13 @@
 #include "meshmananger.h"
 
 namespace lillugsi::rendering {
-MeshManager::MeshManager(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue graphicsQueue,
-                         uint32_t graphicsQueueFamilyIndex)
+MeshManager::MeshManager(VkDevice device, VkPhysicalDevice physicalDevice,
+	VkQueue graphicsQueue, uint32_t graphicsQueueFamilyIndex)
 	: device(device)
-	  , physicalDevice(physicalDevice)
-	  , graphicsQueue(graphicsQueue)
-	  , commandPool(VK_NULL_HANDLE)
-{
-	/// Create a command pool for the graphics queue family
-	/// This is necessary for allocating command buffers used in buffer copy operations
+	, physicalDevice(physicalDevice)
+	, graphicsQueue(graphicsQueue)
+	, commandPool(VK_NULL_HANDLE)
+	, bufferCache(std::make_unique<BufferCache>(device, physicalDevice)) {
 	this->createCommandPool(graphicsQueueFamilyIndex);
 }
 
@@ -27,13 +25,16 @@ MeshManager::~MeshManager()
 }
 
 void MeshManager::cleanup() {
+
+	this->bufferCache->cleanup();
+
 	/// Destroy all created buffers
-	createdBuffers.clear();
+	this->createdBuffers.clear();
 
 	/// Destroy the command pool
-	if (commandPool != VK_NULL_HANDLE) {
-		vkDestroyCommandPool(device, commandPool, nullptr);
-		commandPool = VK_NULL_HANDLE;
+	if (this->commandPool != VK_NULL_HANDLE) {
+		vkDestroyCommandPool(this->device, this->commandPool, nullptr);
+		this->commandPool = VK_NULL_HANDLE;
 		spdlog::info("MeshManager command pool destroyed");
 	}
 

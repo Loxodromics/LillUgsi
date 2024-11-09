@@ -1,39 +1,71 @@
 #pragma once
 
-#include "vulkan/vulkanexception.h"
+#include "vertex.h"
 #include <glm/glm.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <vector>
+#include <memory>
+
+namespace lillugsi::vulkan {
+class VertexBuffer;
+class IndexBuffer;
+}
+
 
 namespace lillugsi::rendering {
 
-/// Vertex structure defining the format of our vertex data
-/// This structure is crucial for defining how our mesh data is laid out in memory
-/// and how it should be interpreted by the GPU
-struct Vertex {
-	glm::vec3 position; /// The 3D position of the vertex
-	glm::vec3 normal;   /// The normal vector of the vertex, used for lighting calculations
-	glm::vec3 color;    /// The color of the vertex
-};
-
-/// Abstract base class for all mesh types
-/// This class provides a common interface for different types of meshes,
-/// allowing for polymorphic behavior in our renderer
 class Mesh {
 public:
+	/// Data structure containing everything needed to render this mesh
+	/// This structure is populated by prepareRenderData and used by the renderer
+	struct RenderData {
+		/// Transform data
+		glm::mat4 modelMatrix{1.0f};
+
+		/// Buffer handles
+		std::shared_ptr<vulkan::VertexBuffer> vertexBuffer;
+		std::shared_ptr<vulkan::IndexBuffer> indexBuffer;
+
+		/// Future expansion fields:
+		/// uint32_t materialIndex;  /// For material system
+		/// bool isTransparent;     /// For render sorting
+		/// float distanceToCamera; /// For LOD/culling
+	};
+
 	Mesh() = default;
 	virtual ~Mesh() = default;
 
-	/// Pure virtual function to generate geometry
-	/// Derived classes must implement this to define their specific geometry
+	/// Generate mesh geometry
+	/// This pure virtual function must be implemented by derived classes
+	/// to define their specific geometry
 	virtual void generateGeometry() = 0;
 
-	/// Getter for vertex data
+	/// Prepare render data for this mesh
+	/// This method populates a RenderData struct with everything needed to render the mesh
+	/// @param data Reference to RenderData struct to populate
+	virtual void prepareRenderData(RenderData& data) const {
+		data.modelMatrix = glm::translate(glm::mat4(1.0f), this->translation);
+		data.vertexBuffer = this->vertexBuffer;
+		data.indexBuffer = this->indexBuffer;
+	}
+
+	/// Get vertex data (used during buffer creation)
 	/// @return A const reference to the vector of vertices
 	const std::vector<Vertex>& getVertices() const { return this->vertices; }
 
-	/// Getter for index data
+	/// Get index data (used during buffer creation)
 	/// @return A const reference to the vector of indices
 	const std::vector<uint32_t>& getIndices() const { return this->indices; }
+
+	/// Set the mesh's GPU buffers
+	/// This is called by MeshManager after creating the buffers
+	/// @param vBuffer Vertex buffer for this mesh
+	/// @param iBuffer Index buffer for this mesh
+	void setBuffers(std::shared_ptr<vulkan::VertexBuffer> vBuffer,
+		std::shared_ptr<vulkan::IndexBuffer> iBuffer) {
+		this->vertexBuffer = std::move(vBuffer);
+		this->indexBuffer = std::move(iBuffer);
+	}
 
 	/// Set the translation of the mesh
 	void setTranslation(const glm::vec3& translation) {
@@ -41,11 +73,19 @@ public:
 		this->generateGeometry();
 	}
 
-
 protected:
-	std::vector<Vertex> vertices;    /// Storage for vertex data
-	std::vector<uint32_t> indices;   /// Storage for index data
-	glm::vec3 translation;
+	/// Vertex data stored in CPU memory
+	std::vector<Vertex> vertices;
+
+	/// Index data stored in CPU memory
+	std::vector<uint32_t> indices;
+
+	/// Translation vector for positioning the mesh
+	glm::vec3 translation{0.0f};
+
+	/// GPU buffers
+	std::shared_ptr<vulkan::VertexBuffer> vertexBuffer;
+	std::shared_ptr<vulkan::IndexBuffer> indexBuffer;
 };
 
 } /// namespace lillugsi::rendering
