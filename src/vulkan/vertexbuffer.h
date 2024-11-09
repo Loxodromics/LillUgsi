@@ -1,7 +1,7 @@
 #pragma once
 
 #include "buffer.h"
-#include "mesh.h"
+#include "rendering/mesh.h"
 #include <vector>
 
 namespace lillugsi::vulkan

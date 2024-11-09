@@ -230,4 +230,171 @@ void MeshManager::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSiz
 	spdlog::debug("Buffer copy operation completed successfully");
 }
 
+std::shared_ptr<vulkan::VertexBuffer> MeshManager::createVertexBufferNew(const Mesh& mesh) {
+	const auto& vertices = mesh.getVertices();
+	VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+
+	if (bufferSize == 0) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Attempted to create a vertex buffer with size 0",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create and populate a staging buffer
+	auto [stagingBuffer, stagingMemory] = createStagingBuffer(bufferSize, vertices.data());
+
+	/// Create a device-local buffer for the actual vertex data
+	auto [vertexBuffer, vertexMemory] = createDeviceLocalBuffer(
+		bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+	);
+
+	/// Copy data from staging buffer to vertex buffer
+	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+	/// Clean up staging buffer
+	vkDestroyBuffer(this->device, stagingBuffer, nullptr);
+	vkFreeMemory(this->device, stagingMemory, nullptr);
+
+	/// Create a VulkanBufferHandle for the vertex buffer
+	auto bufferHandle = vulkan::VulkanBufferHandle(vertexBuffer,
+		[this](VkBuffer buffer) {
+			vkDestroyBuffer(this->device, buffer, nullptr);
+		}
+	);
+
+	/// Create and return the VertexBuffer
+	return std::make_shared<vulkan::VertexBuffer>(
+		this->device,
+		vertexMemory,
+		std::move(bufferHandle),
+		bufferSize,
+		static_cast<uint32_t>(vertices.size()),
+		sizeof(Vertex)
+	);
+}
+
+std::shared_ptr<vulkan::IndexBuffer> MeshManager::createIndexBufferNew(const Mesh& mesh) {
+	const auto& indices = mesh.getIndices();
+	VkDeviceSize bufferSize = sizeof(uint32_t) * indices.size();
+
+	if (bufferSize == 0) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Attempted to create an index buffer with size 0",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create and populate a staging buffer
+	auto [stagingBuffer, stagingMemory] = createStagingBuffer(bufferSize, indices.data());
+
+	/// Create a device-local buffer for the actual index data
+	auto [indexBuffer, indexMemory] = createDeviceLocalBuffer(
+		bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+	);
+
+	/// Copy data from staging buffer to index buffer
+	copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+	/// Clean up staging buffer
+	vkDestroyBuffer(this->device, stagingBuffer, nullptr);
+	vkFreeMemory(this->device, stagingMemory, nullptr);
+
+	/// Create a VulkanBufferHandle for the index buffer
+	auto bufferHandle = vulkan::VulkanBufferHandle(indexBuffer,
+		[this](VkBuffer buffer) {
+			vkDestroyBuffer(this->device, buffer, nullptr);
+		}
+	);
+
+	/// Create and return the IndexBuffer
+	return std::make_shared<vulkan::IndexBuffer>(
+		this->device,
+		indexMemory,
+		std::move(bufferHandle),
+		bufferSize,
+		static_cast<uint32_t>(indices.size()),
+		VK_INDEX_TYPE_UINT32
+	);
+}
+
+std::tuple<VkBuffer, VkDeviceMemory> MeshManager::createStagingBuffer(VkDeviceSize size, const void* data) {
+	/// Create the staging buffer
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	VkBuffer stagingBuffer;
+	VK_CHECK(vkCreateBuffer(this->device, &bufferInfo, nullptr, &stagingBuffer));
+
+	/// Get memory requirements
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(this->device, stagingBuffer, &memRequirements);
+
+	/// Allocate memory for the staging buffer
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(
+		memRequirements.memoryTypeBits,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+	);
+
+	VkDeviceMemory stagingMemory;
+	VK_CHECK(vkAllocateMemory(this->device, &allocInfo, nullptr, &stagingMemory));
+
+	/// Bind buffer memory
+	VK_CHECK(vkBindBufferMemory(this->device, stagingBuffer, stagingMemory, 0));
+
+	/// Copy data to staging buffer
+	void* mappedMemory;
+	VK_CHECK(vkMapMemory(this->device, stagingMemory, 0, size, 0, &mappedMemory));
+	memcpy(mappedMemory, data, size);
+	vkUnmapMemory(this->device, stagingMemory);
+
+	return {stagingBuffer, stagingMemory};
+}
+
+std::tuple<VkBuffer, VkDeviceMemory> MeshManager::createDeviceLocalBuffer(
+	VkDeviceSize size,
+	VkBufferUsageFlags usage
+) {
+	/// Create the buffer
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT;  /// Enable transfer operations
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	VkBuffer buffer;
+	VK_CHECK(vkCreateBuffer(this->device, &bufferInfo, nullptr, &buffer));
+
+	/// Get memory requirements
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
+
+	/// Allocate device-local memory
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(
+		memRequirements.memoryTypeBits,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+	);
+
+	VkDeviceMemory bufferMemory;
+	VK_CHECK(vkAllocateMemory(this->device, &allocInfo, nullptr, &bufferMemory));
+
+	/// Bind buffer memory
+	VK_CHECK(vkBindBufferMemory(this->device, buffer, bufferMemory, 0));
+
+	return {buffer, bufferMemory};
+}
+
 } /// namespace lillugsi::rendering
