@@ -31,13 +31,12 @@ add_executable(LillUgsi
 		src/vulkan/vulkancontext.cpp
 		src/vulkan/pipelinemanager.cpp
 		src/rendering/cubemesh.cpp
-		src/rendering/meshmananger.cpp
+		src/rendering/meshmanager.cpp
 		src/vulkan/depthbuffer.cpp
 		src/vulkan/shadermodule.cpp
 		src/vulkan/shaderprogram.cpp
-		src/vulkan/buffer.h
-		src/vulkan/indexbuffer.h
-		src/vulkan/vertexbuffer.h
+
+		src/rendering/buffercache.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

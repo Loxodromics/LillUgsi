@@ -8,7 +8,7 @@
 #include "vulkan/depthbuffer.h"
 #include "rendering/editorcamera.h"
 #include "rendering/mesh.h"
-#include "rendering/meshmananger.h"
+#include "rendering/meshmanager.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <memory>
