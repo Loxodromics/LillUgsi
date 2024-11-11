@@ -1,14 +1,19 @@
 #include "cubemesh.h"
 #include <array>
+#include <spdlog/spdlog.h>
 
 namespace lillugsi::rendering {
 
-CubeMesh::CubeMesh(float sideLength) : sideLength(sideLength) {
-	this->faceColors = std::vector<glm::vec3>(DefaultColors.begin(), DefaultColors.end());
+CubeMesh::CubeMesh(float sideLength)
+	: sideLength(sideLength)
+	, faceColors(DefaultColors.begin(), DefaultColors.end()) {
+	spdlog::debug("Creating cube mesh with side length {}", sideLength);
 	this->generateGeometry();
 }
 
 void CubeMesh::generateGeometry() {
+	spdlog::debug("Generating cube mesh geometry");
+
 	/// Clear any existing data
 	this->vertices.clear();
 	this->indices.clear();
@@ -18,37 +23,29 @@ void CubeMesh::generateGeometry() {
 
 	/// Define the 8 vertices of the cube
 	std::array<glm::vec3, 8> positions = {
-		glm::vec3(-halfSide, -halfSide, -halfSide),
-		glm::vec3( halfSide, -halfSide, -halfSide),
-		glm::vec3( halfSide,  halfSide, -halfSide),
-		glm::vec3(-halfSide,  halfSide, -halfSide),
-		glm::vec3(-halfSide, -halfSide,  halfSide),
-		glm::vec3( halfSide, -halfSide,  halfSide),
-		glm::vec3( halfSide,  halfSide,  halfSide),
-		glm::vec3(-halfSide,  halfSide,  halfSide)
+		glm::vec3(-halfSide, -halfSide, -halfSide),  /// 0: left  bottom back
+		glm::vec3( halfSide, -halfSide, -halfSide),  /// 1: right bottom back
+		glm::vec3( halfSide,  halfSide, -halfSide),  /// 2: right top    back
+		glm::vec3(-halfSide,  halfSide, -halfSide),  /// 3: left  top    back
+		glm::vec3(-halfSide, -halfSide,  halfSide),  /// 4: left  bottom front
+		glm::vec3( halfSide, -halfSide,  halfSide),  /// 5: right bottom front
+		glm::vec3( halfSide,  halfSide,  halfSide),  /// 6: right top    front
+		glm::vec3(-halfSide,  halfSide,  halfSide)   /// 7: left  top    front
 	};
 
-	/// Define the normals for each face
-	std::array<glm::vec3, 6> normals = {
-		glm::vec3( 0.0f,  0.0f, -1.0f), /// Front
-		glm::vec3( 0.0f,  0.0f,  1.0f), /// Back
-		glm::vec3( 1.0f,  0.0f,  0.0f), /// Right
-		glm::vec3(-1.0f,  0.0f,  0.0f), /// Left
-		glm::vec3( 0.0f,  1.0f,  0.0f), /// Top
-		glm::vec3( 0.0f, -1.0f,  0.0f)  /// Bottom
-	};
+	spdlog::debug("Generating cube vertices and indices");
 
 	/// Generate vertices for each face
 	for (int face = 0; face < 6; ++face) {
 		for (int i = 0; i < 4; ++i) {
 			Vertex vertex;
 			vertex.position = positions[CubeFaceIndices[face][i]] + this->translation;
-			vertex.normal = normals[face];
+			vertex.normal = getFaceNormal(face);
 			vertex.color = this->faceColors[face];
 			this->vertices.push_back(vertex);
 		}
 
-		/// Generate indices for this face
+		/// Generate indices for this face (2 triangles)
 		uint32_t baseIndex = face * 4;
 		this->indices.push_back(baseIndex);
 		this->indices.push_back(baseIndex + 1);
@@ -57,6 +54,9 @@ void CubeMesh::generateGeometry() {
 		this->indices.push_back(baseIndex + 2);
 		this->indices.push_back(baseIndex + 3);
 	}
+
+	spdlog::debug("Cube mesh generated with {} vertices and {} indices",
+		this->vertices.size(), this->indices.size());
 }
 
 void CubeMesh::setFaceColors(const std::vector<glm::vec3>& colors) {

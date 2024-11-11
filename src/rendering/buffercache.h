@@ -8,6 +8,12 @@
 namespace lillugsi::rendering {
 
 /// BufferCache manages GPU buffer lifecycle and reuse
+/// Buffer life cycle:
+/// auto buffer = createBuffer(); // use_count = 1 (cache only)
+/// mesh1->setBuffer(buffer); // use_count = 2 (cache + mesh1)
+/// mesh1.reset(); // use_count = 1 (cache only) -> can be reused!
+/// mesh2->setBuffer (buffer); // use_count = 2 (cache + mesh2)
+///
 /// This class helps prevent duplicate buffer allocations and manages buffer memory
 /// It uses a bucketing system for flexible buffer reuse and ensures buffers are
 /// only reused when they're not actively being used by other meshes
@@ -37,11 +43,9 @@ public:
 
 	/// Clear all cached buffers
 	/// This should be called during cleanup or when resources need to be freed
-	void cleanup() {
-		this->vertexBuffers.clear();
-		this->indexBuffers.clear();
-		spdlog::info("Buffer cache cleared");
-	}
+	void cleanup();
+
+	bool hasActiveBuffers() const;
 
 private:
 	/// The logical device reference
@@ -70,13 +74,7 @@ private:
 	/// This rounds up to the next power of 2, starting from minimumBufferSize
 	/// @param size Requested buffer size in bytes
 	/// @return Bucket size that can accommodate the requested size
-	VkDeviceSize calculateBufferBucket(VkDeviceSize size) const {
-		VkDeviceSize bucket = this->minimumBufferSize;
-		while (bucket < size) {
-			bucket *= 2;
-		}
-		return bucket;
-	}
+	VkDeviceSize calculateBufferBucket(VkDeviceSize size) const;
 };
 
 } /// namespace lillugsi::rendering

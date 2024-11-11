@@ -25,6 +25,19 @@ private:
 
 	/// Default colors for the cube faces
 	static const std::array<glm::vec3, 6> DefaultColors;
+
+	/// Helper function to get face normal
+	glm::vec3 getFaceNormal(int face) const {
+		switch(face) {
+		case 0: return glm::vec3( 0.0f,  0.0f, -1.0f); /// Front
+		case 1: return glm::vec3( 0.0f,  0.0f,  1.0f); /// Back
+		case 2: return glm::vec3( 1.0f,  0.0f,  0.0f); /// Right
+		case 3: return glm::vec3(-1.0f,  0.0f,  0.0f); /// Left
+		case 4: return glm::vec3( 0.0f,  1.0f,  0.0f); /// Top
+		case 5: return glm::vec3( 0.0f, -1.0f,  0.0f); /// Bottom
+		default: return glm::vec3(0.0f);
+		}
+	}
 };
 
 } /// namespace lillugsi::rendering

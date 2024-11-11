@@ -87,9 +87,6 @@ bool Renderer::initialize(SDL_Window* window)
 					 cubeMesh2->getVertices().size(), cubeMesh2->getIndices().size());
 		this->addMesh(std::move(cubeMesh2));
 
-		/// Create buffers for all meshes
-		this->createMeshBuffers();
-
 		/// Initialize VulkanBuffer
 		this->vulkanBuffer = std::make_unique<vulkan::VulkanBuffer>(
 			this->vulkanContext->getDevice()->getDevice(),
@@ -188,10 +185,16 @@ void Renderer::cleanup() {
 
 	this->vulkanBuffer.reset();
 
-	this->vertexBuffers.clear();
-	this->indexBuffers.clear();
+	/// Clear meshes first as they hold buffer references
+	this->meshes.clear();
 
-	this->meshManager->cleanup();
+	/// Clean up mesh manager before other resources
+	/// This ensures buffers are destroyed before the device
+	if (this->meshManager) {
+		this->meshManager->cleanup();
+		this->meshManager.reset();
+	}
+
 
 	/// Reset command pool
 	this->commandPool.reset();
@@ -673,29 +676,23 @@ void Renderer::recordCommandBuffers() {
 			nullptr
 		);
 
-		/// Draw commands for each mesh
-		for (size_t meshIndex = 0; meshIndex < this->meshes.size(); ++meshIndex) {
-			if (meshIndex < this->vertexBuffers.size() && meshIndex < this->indexBuffers.size()) {
-				/// Bind vertex buffer
-				VkBuffer vertexBuffers[] = {this->vertexBuffers[meshIndex].get()};
-				VkDeviceSize offsets[] = {0};
-				vkCmdBindVertexBuffers(this->commandBuffers[i], 0, 1, vertexBuffers, offsets);
+		/// Draw each mesh in the scene
+		for (const auto& mesh : this->meshes) {
+			/// Get render data from the mesh
+			Mesh::RenderData renderData;
+			mesh->prepareRenderData(renderData);
 
-				/// Bind index buffer
-				vkCmdBindIndexBuffer(this->commandBuffers[i], this->indexBuffers[meshIndex].get(), 0, VK_INDEX_TYPE_UINT32);
+			/// Bind the vertex and index buffers
+			VkBuffer vertexBuffers[] = {renderData.vertexBuffer->get()};
+			VkDeviceSize offsets[] = {0};
+			vkCmdBindVertexBuffers(this->commandBuffers[i], 0, 1, vertexBuffers, offsets);
+			vkCmdBindIndexBuffer(this->commandBuffers[i], renderData.indexBuffer->get(), 0,
+							   VK_INDEX_TYPE_UINT32);
 
-				/// Draw command
-				/// vkCmdDrawIndexed parameters:
-				/// 1. Command buffer
-				/// 2. Index count - number of indices to draw
-				/// 3. Instance count - used for instanced rendering, we just have 1 instance
-				/// 4. First index - offset into the index buffer, starts at 0
-				/// 5. Vertex offset - used as a bias to the vertex index, 0 in our case
-				/// 6. First instance - used for instanced rendering, starts at 0
-				vkCmdDrawIndexed(this->commandBuffers[i], static_cast<uint32_t>(this->meshes[meshIndex]->getIndices().size()), 1, 0, 0, 0);
-			} else {
-				spdlog::warn("Skipping draw for mesh {} due to missing buffers", meshIndex);
-			}
+			/// Draw the mesh
+			vkCmdDrawIndexed(this->commandBuffers[i],
+						   renderData.indexBuffer->getIndexCount(),
+						   1, 0, 0, 0);
 		}
 
 		/// End the render pass
@@ -874,24 +871,14 @@ void Renderer::cleanupSyncObjects() {
 }
 
 void Renderer::addMesh(std::unique_ptr<Mesh> mesh) {
-	this->meshes.push_back(std::move(mesh));
-}
-
-void Renderer::createMeshBuffers() {
-	for (const auto& mesh : this->meshes) {
-		auto vertexBuffer = this->meshManager->createVertexBuffer(*mesh);
-		if (vertexBuffer.isValid()) {
-			this->vertexBuffers.push_back(std::move(vertexBuffer));
-		}
-
-		auto indexBuffer = this->meshManager->createIndexBuffer(*mesh);
-		if (indexBuffer.isValid()) {
-			this->indexBuffers.push_back(std::move(indexBuffer));
-		}
+	if (!mesh) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Attempted to add null mesh",
+			__FUNCTION__, __FILE__, __LINE__
+		);
 	}
-
-	spdlog::info("Created {} vertex buffers and {} index buffers",
-				 this->vertexBuffers.size(), this->indexBuffers.size());
+	this->meshes.push_back(std::move(mesh));
 }
 
 void Renderer::initializeDepthBuffer() {
@@ -920,6 +907,31 @@ void Renderer::initializeDepthBuffer() {
 	this->depthBuffer->initialize(swapChainExtent.width, swapChainExtent.height);
 
 	spdlog::info("Depth buffer initialized successfully");
+}
+
+void Renderer::initializeGeometry() {
+	/// Create initial scene meshes
+	try {
+		/// Create a cube mesh at the origin
+		auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+		spdlog::info("Created cube mesh with {} vertices and {} indices",
+			cubeMesh->getVertices().size(), cubeMesh->getIndices().size());
+		this->addMesh(std::move(cubeMesh));
+
+		/// Create a second cube mesh at an offset position
+		auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
+		cubeMesh2->setTranslation(glm::vec3(1.5f, 1.5f, 1.5f));
+		spdlog::info("Created second cube mesh with {} vertices and {} indices",
+			cubeMesh2->getVertices().size(), cubeMesh2->getIndices().size());
+		this->addMesh(std::move(cubeMesh2));
+	}
+	catch (const std::exception& e) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to initialize geometry: " + std::string(e.what()),
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
 }
 
 }

@@ -98,7 +98,7 @@ private:
 	void createDescriptorSets();
 	void createSyncObjects();
 	void cleanupSyncObjects();
-	void addMesh(std::unique_ptr<Mesh> mesh);
+	void addMesh(std::unique_ptr<Mesh> mesh); /// Add a mesh to the scene
 	void createMeshBuffers();
 	void initializeDepthBuffer();
 
@@ -148,15 +148,6 @@ private:
 
 	/// Vector to store meshes
 	std::vector<std::unique_ptr<Mesh>> meshes;
-
-	/// Vector to store vertex buffers for each mesh
-	std::vector<vulkan::VulkanBufferHandle> vertexBuffers;
-
-	/// Vector to store index buffers for each mesh
-	std::vector<vulkan::VulkanBufferHandle> indexBuffers;
-
-	/// Vector to store all buffers so we can properly destroy them
-	std::vector<vulkan::VulkanBufferHandle> createdBuffers;
 
 	/// Depth buffer for z-testing
 	/// This allows for proper rendering of 3D scenes by ensuring objects are drawn in the correct order
