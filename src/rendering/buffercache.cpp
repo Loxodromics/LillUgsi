@@ -24,8 +24,9 @@ std::shared_ptr<vulkan::VertexBuffer> BufferCache::getOrCreateVertexBuffer(VkDev
 			bucketSize, buffer.use_count() - 1);
 	}
 
-	/// Create buffer with device-local memory for optimal performance
-	/// Create the staging buffer
+	/// Create staging buffer for transfer
+	/// Using VK_BUFFER_USAGE_TRANSFER_SRC_BIT because this buffer will be used as the source
+	/// of a transfer command
 	VkBufferCreateInfo stagingBufferInfo{};
 	stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	stagingBufferInfo.size = bucketSize;
@@ -38,7 +39,9 @@ std::shared_ptr<vulkan::VertexBuffer> BufferCache::getOrCreateVertexBuffer(VkDev
 	VK_CHECK(vkCreateBuffer(this->device, &stagingBufferInfo, nullptr, &stagingBuffer));
 	spdlog::debug("Created staging buffer - Handle: {}", (void*)stagingBuffer);
 
-	/// Create the actual device-local buffer
+	/// Create the device-local buffer
+	/// Using VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+	/// because this buffer will be the destination of a transfer and used as a vertex buffer
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size = bucketSize;  /// Use bucketed size for potential reuse
@@ -61,7 +64,7 @@ std::shared_ptr<vulkan::VertexBuffer> BufferCache::getOrCreateVertexBuffer(VkDev
 	vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
 	spdlog::debug("Device buffer memory requirements - Size: {}", memRequirements.size);
 
-	/// Allocate staging memory
+	/// Allocate staging memory (host visible for CPU access)
 	VkMemoryAllocateInfo stagingAllocInfo{};
 	stagingAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	stagingAllocInfo.allocationSize = stagingMemReq.size;
@@ -70,7 +73,11 @@ std::shared_ptr<vulkan::VertexBuffer> BufferCache::getOrCreateVertexBuffer(VkDev
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	);
 
-	/// Allocate device-local memory for optimal performance
+	VkDeviceMemory stagingMemory;
+	VK_CHECK(vkAllocateMemory(this->device, &stagingAllocInfo, nullptr, &stagingMemory));
+	VK_CHECK(vkBindBufferMemory(this->device, stagingBuffer, stagingMemory, 0));
+
+	/// Allocate device memory (device local for best performance)
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
@@ -103,7 +110,7 @@ std::shared_ptr<vulkan::VertexBuffer> BufferCache::getOrCreateVertexBuffer(VkDev
 		bufferMemory,
 		std::move(bufferHandle),
 		bucketSize,
-		static_cast<uint32_t>(size / sizeof(Vertex)),  /// Actual vertex count from requested size
+		static_cast<uint32_t>(size / sizeof(Vertex)),
 		sizeof(Vertex)
 	);
 
@@ -136,7 +143,6 @@ std::shared_ptr<vulkan::IndexBuffer> BufferCache::getOrCreateIndexBuffer(VkDevic
 	/// Create buffer with device-local memory for optimal performance
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = bucketSize;  /// Use bucketed size for potential reuse
 	bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -168,8 +174,6 @@ std::shared_ptr<vulkan::IndexBuffer> BufferCache::getOrCreateIndexBuffer(VkDevic
 		});
 
 	/// Create the index buffer object
-	/// Note: We use bucketSize for the buffer but track the actual index count
-	/// based on the original requested size
 	auto indexBuffer = std::make_shared<vulkan::IndexBuffer>(
 		this->device,
 		bufferMemory,
