@@ -35,8 +35,10 @@ add_executable(LillUgsi
 		src/vulkan/depthbuffer.cpp
 		src/vulkan/shadermodule.cpp
 		src/vulkan/shaderprogram.cpp
-
 		src/rendering/buffercache.cpp
+		src/scene/scenetypes.cpp
+		src/scene/boundingbox.cpp
+		src/scene/frustum.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
