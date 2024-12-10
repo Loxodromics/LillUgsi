@@ -39,6 +39,8 @@ add_executable(LillUgsi
 		src/scene/scenetypes.cpp
 		src/scene/boundingbox.cpp
 		src/scene/frustum.cpp
+		src/scene/scenenode.cpp
+		src/scene/scene.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

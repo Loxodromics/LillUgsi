@@ -15,7 +15,7 @@ using NodeID = uint64_t;
 enum class BoundsType {
 	Box,		/// Axis-aligned bounding box - fastest but least accurate
 	Sphere,		/// Bounding sphere - good for rotating objects
-	OBB		/// Oriented bounding box - most accurate but most expensive
+	OBB			/// Oriented bounding box - most accurate but most expensive
 };
 
 /// Enum for visibility status of scene nodes

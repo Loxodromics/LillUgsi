@@ -1,5 +1,4 @@
 #include "scene/frustum.h"
-#include <glm/gtc/matrix_access.hpp>
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::scene {
