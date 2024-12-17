@@ -1,5 +1,7 @@
 #include "renderer.h"
 #include "rendering/cubemesh.h"
+#include "vulkan/vertexbuffer.h"
+#include "vulkan/indexbuffer.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
@@ -27,10 +29,14 @@ static std::vector<char> readFile(const std::string& filename) {
 namespace lillugsi::rendering {
 
 Renderer::Renderer()
-	:  vulkanContext(std::make_unique<vulkan::VulkanContext>())
+	: vulkanContext(std::make_unique<vulkan::VulkanContext>())
 	, width(0)
 	, height(0)
 	, isCleanedUp(false) {
+	/// We create the scene first as it's fundamental to the renderer's operation
+	/// This ensures the scene graph exists before any rendering setup
+	this->scene = std::make_unique<scene::Scene>();
+
 	/// Initialize the camera with a default position
 	/// We place the camera slightly back and up to view the scene
 	this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 2.0f, 5.0f));
@@ -40,19 +46,17 @@ Renderer::~Renderer() {
 	this->cleanup();
 }
 
-bool Renderer::initialize(SDL_Window* window)
-{
-	try
-	{
+bool Renderer::initialize(SDL_Window* window) {
+	try {
 		/// Initialize Vulkan context
-		if (!this->vulkanContext->initialize(window))
-		{
+		if (!this->vulkanContext->initialize(window)) {
 			spdlog::error("Failed to initialize Vulkan context");
 			return false;
 		}
 
 		/// Get window size
-		SDL_GetWindowSizeInPixels(window, reinterpret_cast<int*>(&this->width), reinterpret_cast<int*>(&this->height));
+		SDL_GetWindowSizeInPixels(window, reinterpret_cast<int*>(&this->width),
+			reinterpret_cast<int*>(&this->height));
 
 		/// Initialize depth buffer
 		this->initializeDepthBuffer();
@@ -66,29 +70,19 @@ bool Renderer::initialize(SDL_Window* window)
 		/// Create command pool
 		this->createCommandPool();
 
-		/// Initialize MeshManager
+		/// Initialize MeshManager after Vulkan setup but before scene creation
 		this->meshManager = std::make_unique<MeshManager>(
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice(),
 			this->vulkanContext->getDevice()->getGraphicsQueue(),
 			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex()
 		);
-
-		/// Add a cube mesh
-		auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-		spdlog::info("Created cube mesh with {} vertices and {} indices",
-					 cubeMesh->getVertices().size(), cubeMesh->getIndices().size());
-		this->addMesh(std::move(cubeMesh));
-
-		/// Add a second cube mesh
-		auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
-		cubeMesh2->setTranslation(glm::vec3( 1.5f,  1.5f,  1.5f));
-		spdlog::info("Created cube mesh with {} vertices and {} indices",
-					 cubeMesh2->getVertices().size(), cubeMesh2->getIndices().size());
-		this->addMesh(std::move(cubeMesh2));
+		
+		/// Initialize the scene with basic geometry
+		this->initializeScene();
 
 		/// Initialize VulkanBuffer
-		this->vulkanBuffer = std::make_unique<vulkan::VulkanBuffer>(
+		this->vulkanBufferUtility = std::make_unique<vulkan::VulkanBuffer>(
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice()
 		);
@@ -117,11 +111,7 @@ bool Renderer::initialize(SDL_Window* window)
 		this->createSyncObjects();
 
 		/// Initialize camera
-		this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 2.0f, 5.0f));
-
-		/// Set up the camera's aspect ratio based on the window size
-		float aspectRatio = static_cast<float>(this->width) / static_cast<float>(this->height);
-		this->camera->getProjectionMatrix(aspectRatio);
+		this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 0.0f, 5.0f));
 
 		spdlog::info("Renderer initialized successfully");
 		return true;
@@ -148,6 +138,10 @@ void Renderer::cleanup() {
 	if (this->vulkanContext) {
 		vkDeviceWaitIdle(this->vulkanContext->getDevice()->getDevice());
 	}
+
+	/// Clean up scene first as it might hold GPU resources
+	/// This ensures proper cleanup order and avoids dangling references
+	this->scene.reset();
 
 	/// Clean up synchronization objects
 	this->cleanupSyncObjects();
@@ -183,10 +177,7 @@ void Renderer::cleanup() {
 		this->cameraBufferMemory = VK_NULL_HANDLE;
 	}
 
-	this->vulkanBuffer.reset();
-
-	/// Clear meshes first as they hold buffer references
-	this->meshes.clear();
+	this->vulkanBufferUtility.reset();
 
 	/// Clean up mesh manager before other resources
 	/// This ensures buffers are destroyed before the device
@@ -195,6 +186,7 @@ void Renderer::cleanup() {
 		this->meshManager.reset();
 	}
 
+	this->vulkanBufferUtility.reset();
 
 	/// Reset command pool
 	this->commandPool.reset();
@@ -217,7 +209,7 @@ void Renderer::cleanup() {
 
 void Renderer::drawFrame() {
 	/// Wait for the previous frame to finish
-/// This ensures that we're not using resources that may still be in use by the GPU
+	/// This ensures that we're not using resources that may still be in use by the GPU
 	VK_CHECK(vkWaitForFences(this->vulkanContext->getDevice()->getDevice(), 1, &this->inFlightFence, VK_TRUE, UINT64_MAX));
 
 	/// Reset the fence to the unsignaled state for use in the current frame
@@ -251,7 +243,7 @@ void Renderer::drawFrame() {
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
 	/// Configure pipeline stage flags
-/// We want to wait on the color attachment output stage before we start writing colors
+	/// We want to wait on the color attachment output stage before we start writing colors
 	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = &this->imageAvailableSemaphore;
@@ -287,6 +279,19 @@ void Renderer::drawFrame() {
 	} else if (result != VK_SUCCESS) {
 		throw vulkan::VulkanException(result, "Failed to present swap chain image", __FUNCTION__, __FILE__, __LINE__);
 	}
+}
+
+void Renderer::update(float deltaTime) {
+	/// Store frame time for effects and animations
+	this->currentFrameTime = deltaTime;
+
+	/// Update scene with the provided delta time
+	/// This ensures all scene objects use the same time step
+	this->scene->update(deltaTime);
+
+	/// Update camera with the same time step
+	/// Camera movement and transitions use game-scaled time
+	this->camera->update(deltaTime);
 }
 
 bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
@@ -326,7 +331,12 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		/// Recreate command buffers
 		this->recordCommandBuffers();
 
-		spdlog::info("Swap chain, framebuffers, and command buffers recreated successfully");
+		/// Update camera aspect ratio
+		/// This ensures proper projection after resize
+		float aspectRatio = static_cast<float>(this->width) / static_cast<float>(this->height);
+		this->camera->getProjectionMatrix(aspectRatio);
+
+		spdlog::info("Swap chain recreated with dimensions {}x{}",  this->width, this->height);
 		return true;
 	}
 	catch (const vulkan::VulkanException& e) {
@@ -611,6 +621,12 @@ void Renderer::createGraphicsPipeline()
 void Renderer::recordCommandBuffers() {
 	/// Resize command buffers vector to match the number of framebuffers
 	/// We need one command buffer for each swap chain image
+	vkFreeCommandBuffers(this->vulkanContext->getDevice()->getDevice(),
+		this->commandPool.get(),
+		static_cast<uint32_t>(this->commandBuffers.size()),
+		this->commandBuffers.data());
+
+	/// Resize for new recording
 	this->commandBuffers.resize(this->swapChainFramebuffers.size());
 
 	/// Set up command buffer allocation info
@@ -623,19 +639,18 @@ void Renderer::recordCommandBuffers() {
 	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
 
 	/// Allocate command buffers from the command pool
-	VK_CHECK(vkAllocateCommandBuffers(this->vulkanContext->getDevice()->getDevice(), &allocInfo, this->commandBuffers.data()));
+	VK_CHECK(vkAllocateCommandBuffers(this->vulkanContext->getDevice()->getDevice(),
+		&allocInfo, this->commandBuffers.data()));
 
 	/// Record commands for each framebuffer
 	for (size_t i = 0; i < this->commandBuffers.size(); i++) {
-		/// Start command buffer recording
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		/// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT allows the command buffer to be resubmitted while it is also already pending execution
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
 		VK_CHECK(vkBeginCommandBuffer(this->commandBuffers[i], &beginInfo));
 
-		/// Begin the render pass
+		/// Set up render pass begin info
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.renderPass = this->renderPass.get();
@@ -662,7 +677,8 @@ void Renderer::recordCommandBuffers() {
 		vkCmdBeginRenderPass(this->commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		/// Bind the graphics pipeline
-		vkCmdBindPipeline(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphicsPipeline->get());
+		vkCmdBindPipeline(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
+			this->graphicsPipeline->get());
 
 		/// Bind the descriptor set for this frame
 		vkCmdBindDescriptorSets(
@@ -676,23 +692,23 @@ void Renderer::recordCommandBuffers() {
 			nullptr
 		);
 
-		/// Draw each mesh in the scene
-		for (const auto& mesh : this->meshes) {
-			/// Get render data from the mesh
-			Mesh::RenderData renderData;
-			mesh->prepareRenderData(renderData);
+		/// Collect render data from visible objects in the scene
+		std::vector<rendering::Mesh::RenderData> renderData;
+		this->scene->getRenderData(*this->camera, renderData);
 
-			/// Bind the vertex and index buffers
-			VkBuffer vertexBuffers[] = {renderData.vertexBuffer->get()};
+		/// Draw all visible objects
+		for (const auto& data : renderData) {
+			/// Bind vertex and index buffers
+			VkBuffer vertexBuffers[] = {data.vertexBuffer->get()};
 			VkDeviceSize offsets[] = {0};
 			vkCmdBindVertexBuffers(this->commandBuffers[i], 0, 1, vertexBuffers, offsets);
-			vkCmdBindIndexBuffer(this->commandBuffers[i], renderData.indexBuffer->get(), 0,
-							   VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(this->commandBuffers[i], data.indexBuffer->get(), 0,
+				VK_INDEX_TYPE_UINT32);
 
-			/// Draw the mesh
+			/// Draw the object
 			vkCmdDrawIndexed(this->commandBuffers[i],
-						   renderData.indexBuffer->getIndexCount(),
-						   1, 0, 0, 0);
+				data.indexBuffer->getIndexCount(),
+				1, 0, 0, 0);
 		}
 
 		/// End the render pass
@@ -702,7 +718,7 @@ void Renderer::recordCommandBuffers() {
 		VK_CHECK(vkEndCommandBuffer(this->commandBuffers[i]));
 	}
 
-	spdlog::info("Command buffers recorded successfully with depth clearing");
+	spdlog::debug("Command buffers recorded with scene objects");
 }
 
 void Renderer::createCameraUniformBuffer() {
@@ -711,7 +727,7 @@ void Renderer::createCameraUniformBuffer() {
 	/// Create the uniform buffer
 	/// Use VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	/// to ensure the buffer is accessible by the CPU and automatically synchronized
-	this->vulkanBuffer->createBuffer(
+	this->vulkanBufferUtility->createBuffer(
 		bufferSize,
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -733,22 +749,26 @@ void Renderer::createCameraUniformBuffer() {
 	spdlog::info("Camera uniform buffer created successfully");
 }
 
-void Renderer::updateCameraUniformBuffer() {
-	/// Update the camera's state
-	/// This should be called each frame to ensure smooth camera movement
-	this->camera->update(0.016f);  /// Assuming 60 FPS, we might want to use actual delta time
-
+void Renderer::updateCameraUniformBuffer() const {
 	CameraUBO ubo{};
-	ubo.view = this->camera->getViewMatrix();
-	ubo.projection =
-			this->camera->getProjectionMatrix(this->vulkanContext->getSwapChain()->getSwapChainExtent().width /
-											  static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().height));
 
-	/// Copy the new data to the uniform buffer
+	/// Get the current view matrix from the camera
+	ubo.view = this->camera->getViewMatrix();
+
+	/// Calculate current aspect ratio from window dimensions
+	float aspectRatio = static_cast<float>(this->width) /
+		static_cast<float>(this->height);
+
+	/// Get the projection matrix with current aspect ratio
+	ubo.projection = this->camera->getProjectionMatrix(aspectRatio);
+
+	/// Update GPU buffer with new camera data
 	void* data;
-	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(), this->cameraBufferMemory, 0, sizeof(ubo), 0, &data));
+	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(),
+		this->cameraBufferMemory, 0, sizeof(ubo), 0, &data));
 	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(), this->cameraBufferMemory);
+	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(),
+		this->cameraBufferMemory);
 }
 
 void Renderer::createDescriptorSetLayout() {
@@ -870,17 +890,6 @@ void Renderer::cleanupSyncObjects() {
 	spdlog::info("Synchronization objects cleaned up");
 }
 
-void Renderer::addMesh(std::unique_ptr<Mesh> mesh) {
-	if (!mesh) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Attempted to add null mesh",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
-	this->meshes.push_back(std::move(mesh));
-}
-
 void Renderer::initializeDepthBuffer() {
 	/// We create the depth buffer after the swap chain is initialized
 	/// This ensures we have the correct dimensions for the depth buffer
@@ -909,29 +918,37 @@ void Renderer::initializeDepthBuffer() {
 	spdlog::info("Depth buffer initialized successfully");
 }
 
-void Renderer::initializeGeometry() {
-	/// Create initial scene meshes
-	try {
-		/// Create a cube mesh at the origin
-		auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-		spdlog::info("Created cube mesh with {} vertices and {} indices",
-			cubeMesh->getVertices().size(), cubeMesh->getIndices().size());
-		this->addMesh(std::move(cubeMesh));
+void Renderer::initializeScene() {
+	/// Create a simple cube in the scene for initial testing
+	/// We use the Scene API to create and position objects
+	auto rootNode = this->scene->getRoot();
 
-		/// Create a second cube mesh at an offset position
-		auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
-		cubeMesh2->setTranslation(glm::vec3(1.5f, 1.5f, 1.5f));
-		spdlog::info("Created second cube mesh with {} vertices and {} indices",
-			cubeMesh2->getVertices().size(), cubeMesh2->getIndices().size());
-		this->addMesh(std::move(cubeMesh2));
-	}
-	catch (const std::exception& e) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Failed to initialize geometry: " + std::string(e.what()),
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
+	/// Create a node for our test cube
+	auto cubeNode = this->scene->createNode("TestCube", rootNode);
+
+	/// Create and set up the cube mesh using MeshManager
+	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+	cubeNode->setMesh(std::move(cubeMesh));
+
+	/// Position the cube slightly offset from center
+	scene::Transform transform;
+	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	cubeNode->setLocalTransform(transform);
+
+	/// Create a second cube for testing hierarchical transforms
+	auto cubeNode2 = this->scene->createNode("TestCube2", rootNode);
+	auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
+	cubeNode2->setMesh(std::move(cubeMesh2));
+
+	/// Position the second cube offset from the first
+	scene::Transform transform2;
+	transform2.position = glm::vec3(1.5f, 1.5f, 1.5f);
+	cubeNode2->setLocalTransform(transform2);
+
+	/// Update bounds after creating all objects
+	rootNode->updateBounds();
+
+	spdlog::info("Scene initialized with test objects");
 }
 
 }

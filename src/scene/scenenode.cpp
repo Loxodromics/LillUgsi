@@ -36,6 +36,9 @@ void SceneNode::addChild(std::shared_ptr<SceneNode> child) {
 	this->children.push_back(child);
 	child->parent = weak_from_this();
 
+	/// Update child's world transform
+	child->updateWorldTransform(this->worldTransform);
+
 	/// Mark bounds as dirty since adding a child affects the combined bounds
 	this->boundsDirty = true;
 
@@ -55,8 +58,12 @@ void SceneNode::removeChild(const std::shared_ptr<SceneNode>& child) {
 		/// Remove from children vector
 		this->children.erase(it);
 
-		/// Mark bounds as dirty since removing a child affects the combined bounds
-		this->boundsDirty = true;
+		/// Update bounds hierarchy from this node up to root
+		auto current = shared_from_this();
+		while (current) {
+			current->updateBounds();
+			current = current->getParent().lock();
+		}
 
 		spdlog::debug("Removed child '{}' from SceneNode '{}'", child->name, this->name);
 	}
@@ -64,7 +71,8 @@ void SceneNode::removeChild(const std::shared_ptr<SceneNode>& child) {
 
 void SceneNode::setMesh(std::shared_ptr<rendering::Mesh> mesh) {
 	this->mesh = mesh;
-	this->boundsDirty = true;  /// Mesh affects bounds
+	this->boundsDirty = true;  /// Mark bounds as dirty
+	this->updateBounds();      /// Update bounds immediately
 	spdlog::debug("Set mesh for SceneNode '{}'", this->name);
 }
 

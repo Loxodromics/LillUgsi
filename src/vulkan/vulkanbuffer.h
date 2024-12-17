@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 
 namespace lillugsi::vulkan {
+
 class VulkanBuffer {
 public:
 	VulkanBuffer(VkDevice device, VkPhysicalDevice physicalDevice);
@@ -35,4 +36,5 @@ private:
 	/// Find memory type index for the buffer
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 };
+
 }

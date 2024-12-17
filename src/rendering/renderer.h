@@ -1,4 +1,3 @@
-/// renderer.h
 #pragma once
 
 #include "vulkan/vulkancontext.h"
@@ -9,6 +8,7 @@
 #include "rendering/editorcamera.h"
 #include "rendering/mesh.h"
 #include "rendering/meshmanager.h"
+#include "scene/scene.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <memory>
@@ -56,6 +56,10 @@ public:
 	/// Draw a frame
 	void drawFrame();
 
+	/// Update the renderer state
+	/// @param deltaTime Time elapsed since last frame, scaled by game time settings
+	void update(float deltaTime);
+
 	/// Recreate the swap chain (e.g., after window resize)
 	/// @param newWidth New width of the window
 	/// @param newHeight New height of the window
@@ -73,6 +77,11 @@ public:
 	/// @param event The SDL event to process
 	void handleCameraInput(SDL_Window* window, const SDL_Event& event);
 
+	/// Get the scene manager
+	/// This allows external systems to manipulate the scene
+	/// @return A pointer to the Scene
+	scene::Scene* getScene() { return this->scene.get(); }
+
 private:
 	/// Struct to hold camera data for GPU
 	struct CameraUBO {
@@ -89,18 +98,14 @@ private:
 	void createGraphicsPipeline();
 	void recordCommandBuffers();
 	void createCameraUniformBuffer();
-	void createIndexBuffer();
-	void createVertexBuffer();
-	void updateCameraUniformBuffer();
-	void initializeGeometry();
+	void updateCameraUniformBuffer() const;
 	void createDescriptorSetLayout();
 	void createDescriptorPool();
 	void createDescriptorSets();
 	void createSyncObjects();
 	void cleanupSyncObjects();
-	void addMesh(std::unique_ptr<Mesh> mesh); /// Add a mesh to the scene
-	void createMeshBuffers();
 	void initializeDepthBuffer();
+	void initializeScene();
 
 	/// Vulkan context managing Vulkan instance, device, and swap chain
 	std::unique_ptr<vulkan::VulkanContext> vulkanContext;
@@ -118,7 +123,7 @@ private:
 	std::vector<vulkan::VulkanFramebufferHandle> swapChainFramebuffers;
 
 	/// Vulkan buffer utility
-	std::unique_ptr<vulkan::VulkanBuffer> vulkanBuffer;
+	std::unique_ptr<vulkan::VulkanBuffer> vulkanBufferUtility;
 
 	/// Buffer to hold camera uniform data
 	vulkan::VulkanBufferHandle cameraBuffer;
@@ -146,8 +151,8 @@ private:
 	/// MeshManager for creating and managing meshes
 	std::unique_ptr<MeshManager> meshManager;
 
-	/// Vector to store meshes
-	std::vector<std::unique_ptr<Mesh>> meshes;
+	/// Scene management
+	std::unique_ptr<scene::Scene> scene;  /// Scene graph for object management
 
 	/// Depth buffer for z-testing
 	/// This allows for proper rendering of 3D scenes by ensuring objects are drawn in the correct order
@@ -163,6 +168,9 @@ private:
 
 	/// Flag to track if cleanup has been performed
 	bool isCleanedUp;
+
+	/// Tracks time since last frame for animations and effects
+	float currentFrameTime{0.0f};
 };
 
-}
+} /// namespace lillugsi::rendering

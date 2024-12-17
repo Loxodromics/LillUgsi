@@ -48,8 +48,23 @@ bool Application::initialize() {
 }
 
 void Application::run() {
+	/// Initialize time tracking with current time
+	this->lastFrameTime = std::chrono::steady_clock::now();
+
 	while (this->isRunning) {
+		/// Update time first to provide accurate timing to all systems
+		this->updateTime();
+
+		/// Process input and game events
 		this->handleEvents();
+
+		/// Update game state
+		this->update();
+
+		/// Perform fixed time step updates
+		this->fixedUpdate();
+
+		/// Render the frame
 		this->render();
 	}
 }
@@ -84,14 +99,21 @@ void Application::render() {
 	if (this->framebufferResized) {
 		int w, h;
 		SDL_GetWindowSizeInPixels(this->window, &w, &h);
-		if (this->renderer->recreateSwapChain(static_cast<uint32_t>(w), static_cast<uint32_t>(h))) {
-			// TODO: Swapchain recreation successful
-		} else {
-			// TODO:Handle recreation failure
-		}
+		if (this->renderer->recreateSwapChain(static_cast<uint32_t>(w),
+			static_cast<uint32_t>(h))) {
+				/// TODO: Swapchain recreation successful
+			} else {
+				/// TODO: Handle recreation failure
+			}
 		this->framebufferResized = false;
-		return;  // Skip this frame
+		return;
 	}
+
+	/// Update renderer state before drawing
+	/// This ensures all rendering state is current with game time
+	this->renderer->update(this->gameTime.deltaTime);
+
+	/// Perform actual frame rendering
 	this->renderer->drawFrame();
 }
 
@@ -113,6 +135,69 @@ void Application::handleCameraInput(const SDL_Event& event) {
 /// This keeps the camera logic within the rendering system
 	if (this->renderer) {
 		this->renderer->handleCameraInput(this->window, event);
+	}
+}
+
+void Application::updateTime() {
+	/// Get current time for this frame
+	auto currentTime = std::chrono::steady_clock::now();
+
+	/// Calculate real (unscaled) delta time
+	float realDeltaTime = std::chrono::duration<float>(
+		currentTime - this->lastFrameTime).count();
+
+	/// Store current time for next frame
+	this->lastFrameTime = currentTime;
+
+	/// Apply time scaling and pause state
+	if (this->gameTime.isPaused) {
+		this->gameTime.deltaTime = 0.0f;
+	} else {
+		/// Scale delta time by timeScale
+		this->gameTime.deltaTime = realDeltaTime * this->gameTime.timeScale;
+
+		/// Update total game time
+		this->gameTime.totalTime += this->gameTime.deltaTime;
+
+		/// We use integer division to check if we crossed a 5 second boundary
+		int lastInterval = static_cast<int>((this->gameTime.totalTime - this->gameTime.deltaTime) / this->logInterval);
+		int currentInterval = static_cast<int>(this->gameTime.totalTime / this->logInterval);
+
+		if (currentInterval > lastInterval) {
+			spdlog::info("Game time: {:.2f} seconds", this->gameTime.totalTime);
+		}
+
+		/// Accumulate time for fixed updates
+		this->fixedTimeAccumulator += this->gameTime.deltaTime;
+	}
+
+	/// Cap delta time to prevent spiral of death
+	/// If frame time is too high, we clamp it to maintain stability
+	if (this->gameTime.deltaTime > this->maxDeltaTime) {
+		spdlog::warn("Delta time capped from {} to {}",
+			this->gameTime.deltaTime, this->maxDeltaTime);
+		this->gameTime.deltaTime = this->maxDeltaTime;
+	}
+}
+
+void Application::update() {
+	/// Game logic update with variable time step
+	/// Pass the scaled delta time to all systems
+	if (this->renderer) {
+		/// Update camera with scaled time
+		this->renderer->getCamera()->update(this->gameTime.deltaTime);
+	}
+}
+
+void Application::fixedUpdate() {
+	/// Process all accumulated fixed updates
+	/// This ensures simulation stability by using a fixed time step
+	while (this->fixedTimeAccumulator >= GameTime::fixedTimeStep) {
+		/// Perform fixed update step
+		/// This is where physics and other time-critical updates should happen
+
+		/// Subtract fixed time step from accumulator
+		this->fixedTimeAccumulator -= GameTime::fixedTimeStep;
 	}
 }
 

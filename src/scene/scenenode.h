@@ -89,6 +89,11 @@ public:
 	void getRenderData(const Frustum& frustum,
 		std::vector<rendering::Mesh::RenderData>& outRenderData) const;
 
+	/// Update the bounding box for this node
+	/// This combines mesh bounds with child bounds
+	void updateBounds();
+	bool boundsDirty;                  /// Flag for bounds updates
+
 private:
 	std::string name;                   /// Node identifier
 	Transform localTransform;           /// Transform relative to parent
@@ -99,11 +104,6 @@ private:
 	BoundingBox localBounds;           /// Bounds in local space
 	BoundingBox worldBounds;           /// Bounds in world space
 	bool transformDirty;               /// Flag for transform updates
-	bool boundsDirty;                  /// Flag for bounds updates
-
-	/// Update the bounding box for this node
-	/// This combines mesh bounds with child bounds
-	void updateBounds();
 
 	/// Mark this node's transform as dirty
 	/// This triggers updates in the next update cycle

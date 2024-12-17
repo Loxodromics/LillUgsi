@@ -91,12 +91,19 @@ void Scene::update(float deltaTime) {
 		/// This ensures consistent state after structural changes
 		this->updateTransforms(this->root, glm::mat4(1.0f));
 		this->needsFullUpdate = false;
+
+		/// Update bounds for all nodes
+		this->root->updateBounds();
+
 		spdlog::trace("Performed full scene update");
 	} else {
 		/// Only update nodes that are marked as dirty
 		/// This optimization avoids unnecessary updates
 		for (const auto& child : this->root->getChildren()) {
 			this->updateTransforms(child, this->root->getWorldTransform());
+			if (child->boundsDirty) {
+				child->updateBounds();
+			}
 		}
 		spdlog::trace("Updated dirty nodes in scene");
 	}
