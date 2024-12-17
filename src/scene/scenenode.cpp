@@ -172,6 +172,12 @@ void SceneNode::updateBounds() {
 	spdlog::trace("Updated bounds for SceneNode '{}'", this->name);
 }
 
+void SceneNode::updateBoundsIfNeeded() {
+	if (this->boundsDirty) {
+		this->updateBounds();
+	}
+}
+
 void SceneNode::markTransformDirty() {
 	this->transformDirty = true;
 	this->boundsDirty = true;  /// Transform changes affect world bounds

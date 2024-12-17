@@ -89,10 +89,9 @@ public:
 	void getRenderData(const Frustum& frustum,
 		std::vector<rendering::Mesh::RenderData>& outRenderData) const;
 
-	/// Update the bounding box for this node
-	/// This combines mesh bounds with child bounds
-	void updateBounds();
-	bool boundsDirty;                  /// Flag for bounds updates
+	/// Update bounds if they are marked as dirty
+	/// @return true if bounds were updated
+	void updateBoundsIfNeeded();
 
 private:
 	std::string name;                   /// Node identifier
@@ -108,6 +107,11 @@ private:
 	/// Mark this node's transform as dirty
 	/// This triggers updates in the next update cycle
 	void markTransformDirty();
+
+	/// Update the bounding box for this node
+	/// This combines mesh bounds with child bounds
+	void updateBounds();
+	bool boundsDirty;                  /// Flag for bounds updates
 };
 
 } /// namespace lillugsi::scene

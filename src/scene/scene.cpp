@@ -93,7 +93,7 @@ void Scene::update(float deltaTime) {
 		this->needsFullUpdate = false;
 
 		/// Update bounds for all nodes
-		this->root->updateBounds();
+		this->root->updateBoundsIfNeeded();
 
 		spdlog::trace("Performed full scene update");
 	} else {
@@ -101,9 +101,7 @@ void Scene::update(float deltaTime) {
 		/// This optimization avoids unnecessary updates
 		for (const auto& child : this->root->getChildren()) {
 			this->updateTransforms(child, this->root->getWorldTransform());
-			if (child->boundsDirty) {
-				child->updateBounds();
-			}
+			child->updateBoundsIfNeeded();
 		}
 		spdlog::trace("Updated dirty nodes in scene");
 	}

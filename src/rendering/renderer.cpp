@@ -946,7 +946,7 @@ void Renderer::initializeScene() {
 	cubeNode2->setLocalTransform(transform2);
 
 	/// Update bounds after creating all objects
-	rootNode->updateBounds();
+	rootNode->updateBoundsIfNeeded();
 
 	spdlog::info("Scene initialized with test objects");
 }
