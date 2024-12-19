@@ -34,7 +34,7 @@ public:
 	/// @param descriptorSetLayout The descriptor set layout to use
 	/// @param enableDepthTest Whether to enable depth testing
 	/// @return A shared pointer to the created pipeline handle
-	std::shared_ptr<VulkanPipelineHandle> createGraphicsPipeline(
+	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> createGraphicsPipeline(
 		const std::string& name,
 		ShaderProgram&& shaderProgram,
 		const VkVertexInputBindingDescription& vertexBindingDescription,
@@ -49,15 +49,30 @@ public:
 	/// Get a pipeline by name
 	/// @param name The name of the pipeline to retrieve
 	/// @return A shared pointer to the requested pipeline handle, or nullptr if not found
-	std::shared_ptr<VulkanPipelineHandle> getPipeline(const std::string& name) const;
+	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> getPipeline(const std::string& name) const;
 
 	/// Get a pipeline layout by name
 	/// @param name The name of the pipeline layout to retrieve
 	/// @return A shared pointer to the requested pipeline layout handle, or nullptr if not found
-	std::shared_ptr<VulkanPipelineLayoutHandle> getPipelineLayout(const std::string& name) const;
+	[[nodiscard]] std::shared_ptr<VulkanPipelineLayoutHandle> getPipelineLayout(const std::string& name) const;
 
 	/// Clean up all pipelines
 	void cleanup();
+
+	/// Get the maximum size of push constants supported by the device
+	/// This helps clients ensure they don't exceed hardware limits
+	/// @return Maximum push constant size in bytes
+	[[nodiscard]] static constexpr uint32_t getMaxPushConstantsSize() noexcept {
+		return 128;  /// Vulkan minimum guaranteed size
+	}
+
+	/// Check if a push constant size is supported
+	/// @param size Size to check in bytes
+	/// @return true if the size is supported
+	[[nodiscard]] static constexpr bool isPushConstantSizeSupported(
+		uint32_t size) noexcept {
+		return size <= getMaxPushConstantsSize();
+	}
 
 private:
 	VkDevice device;

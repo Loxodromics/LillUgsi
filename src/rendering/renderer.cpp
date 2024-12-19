@@ -238,6 +238,9 @@ void Renderer::drawFrame() {
 	/// Update uniform buffer with current camera data
 	this->updateCameraUniformBuffer();
 
+	/// Record command buffers with current scene state
+	this->recordCommandBuffers();
+
 	/// Set up the submit info struct
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -698,6 +701,17 @@ void Renderer::recordCommandBuffers() {
 
 		/// Draw all visible objects
 		for (const auto& data : renderData) {
+			/// Update push constants with model matrix for this object
+			/// Push constants provide the fastest way to update per-object data
+			vkCmdPushConstants(
+				this->commandBuffers[i],
+				this->pipelineLayout->get(),
+				VK_SHADER_STAGE_VERTEX_BIT,
+				0,
+				sizeof(glm::mat4),
+				&data.modelMatrix
+			);
+
 			/// Bind vertex and index buffers
 			VkBuffer vertexBuffers[] = {data.vertexBuffer->get()};
 			VkDeviceSize offsets[] = {0};
@@ -932,7 +946,7 @@ void Renderer::initializeScene() {
 
 	/// Position the cube slightly offset from center
 	scene::Transform transform;
-	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	transform.position = glm::vec3(-1.0f, -1.0f, -1.0f);
 	cubeNode->setLocalTransform(transform);
 
 	/// Create a second cube for testing hierarchical transforms

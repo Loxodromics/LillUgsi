@@ -2,6 +2,7 @@
 #include "pipelinemanager.h"
 #include <spdlog/spdlog.h>
 #include <fstream>
+#include <glm/matrix.hpp>
 
 namespace lillugsi::vulkan {
 
@@ -116,15 +117,22 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	depthStencil.maxDepthBounds = 1.0f; /// Not used when depthBoundsTestEnable is VK_FALSE
 	depthStencil.stencilTestEnable = VK_FALSE;
 
+	/// Define the push constant range for model matrix
+	/// We use push constants for per-object transforms as they provide
+	/// the fastest way to update frequently changing data
+	VkPushConstantRange pushConstantRange{};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;  /// Only needed in vertex shader
+	pushConstantRange.offset = 0;  /// Start at beginning of push constant block
+	pushConstantRange.size = sizeof(glm::mat4);  /// Size of model matrix
+
 	/// Set up pipeline layout
 	/// This describes the resources that can be accessed by the pipeline
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;  /// We're using one descriptor set layout
 	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;  /// Point to the descriptor set layout
-	/// No push constants for now
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;  /// One range for model matrix
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
 	/// Create the pipeline layout
 	VkPipelineLayout pipelineLayout;
