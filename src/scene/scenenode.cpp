@@ -80,33 +80,35 @@ void SceneNode::setLocalTransform(const Transform& transform) {
 }
 
 void SceneNode::updateWorldTransform(const glm::mat4& parentTransform) {
+	/// Update only if transform has changed
+	if (!this->transformDirty) {
+		return;
+	}
 	/// Calculate new world transform by combining parent transform with local transform
 	this->worldTransform = parentTransform * this->localTransform.toMatrix();
 
 	/// Log transforms for debugging
-	// spdlog::debug("Node '{}' transforms:", this->name);
-	// spdlog::trace("  Local: pos({}, {}, {})",
-	// 	this->localTransform.position.x,
-	// 	this->localTransform.position.y,
-	// 	this->localTransform.position.z);
-	// spdlog::trace("  World: mat4[({:.2f}, {:.2f}, {:.2f}, {:.2f}),",
-	// 	this->worldTransform[0][0], this->worldTransform[0][1],
-	// 	this->worldTransform[0][2], this->worldTransform[0][3]);
-	// spdlog::trace("            ({:.2f}, {:.2f}, {:.2f}, {:.2f}),",
-	// 	this->worldTransform[1][0], this->worldTransform[1][1],
-	// 	this->worldTransform[1][2], this->worldTransform[1][3]);
-	// spdlog::trace("            ({:.2f}, {:.2f}, {:.2f}, {:.2f}),",
-	// 	this->worldTransform[2][0], this->worldTransform[2][1],
-	// 	this->worldTransform[2][2], this->worldTransform[2][3]);
-	// spdlog::trace("            ({:.2f}, {:.2f}, {:.2f}, {:.2f})]",
-	// 	this->worldTransform[3][0], this->worldTransform[3][1],
-	// 	this->worldTransform[3][2], this->worldTransform[3][3]);
+	spdlog::debug("Node '{}' transforms:", this->name);
+	spdlog::trace("  Local: pos({}, {}, {})",
+		this->localTransform.position.x,
+		this->localTransform.position.y,
+		this->localTransform.position.z);
+	spdlog::trace("  World: mat4[({:.2f}, {:.2f}, {:.2f}, {:.2f}),",
+		this->worldTransform[0][0], this->worldTransform[0][1],
+		this->worldTransform[0][2], this->worldTransform[0][3]);
+	spdlog::trace("            ({:.2f}, {:.2f}, {:.2f}, {:.2f}),",
+		this->worldTransform[1][0], this->worldTransform[1][1],
+		this->worldTransform[1][2], this->worldTransform[1][3]);
+	spdlog::trace("            ({:.2f}, {:.2f}, {:.2f}, {:.2f}),",
+		this->worldTransform[2][0], this->worldTransform[2][1],
+		this->worldTransform[2][2], this->worldTransform[2][3]);
+	spdlog::trace("            ({:.2f}, {:.2f}, {:.2f}, {:.2f})]",
+		this->worldTransform[3][0], this->worldTransform[3][1],
+		this->worldTransform[3][2], this->worldTransform[3][3]);
 
 	/// Update world bounds if transform has changed
-	if (this->transformDirty) {
-		this->worldBounds = this->localBounds.transform(this->worldTransform);
-		this->transformDirty = false;
-	}
+	this->worldBounds = this->localBounds.transform(this->worldTransform);
+	this->transformDirty = false;
 
 	/// Recursively update all children
 	for (const auto& child : this->children) {

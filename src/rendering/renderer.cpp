@@ -732,7 +732,7 @@ void Renderer::recordCommandBuffers() {
 		VK_CHECK(vkEndCommandBuffer(this->commandBuffers[i]));
 	}
 
-	spdlog::debug("Command buffers recorded with scene objects");
+	spdlog::trace("Command buffers recorded with scene objects");
 }
 
 void Renderer::createCameraUniformBuffer() {
