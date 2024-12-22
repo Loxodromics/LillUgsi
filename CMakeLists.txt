@@ -41,6 +41,8 @@ add_executable(LillUgsi
 		src/scene/frustum.cpp
 		src/scene/scenenode.cpp
 		src/scene/scene.cpp
+		src/rendering/light.cpp
+		src/rendering/lightmanager.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
