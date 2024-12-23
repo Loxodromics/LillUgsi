@@ -78,8 +78,6 @@ bool Renderer::initialize(SDL_Window* window) {
 			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex()
 		);
 		
-		/// Initialize the scene with basic geometry
-		this->initializeScene();
 
 		/// Initialize VulkanBuffer
 		this->vulkanBufferUtility = std::make_unique<vulkan::VulkanBuffer>(
@@ -88,6 +86,14 @@ bool Renderer::initialize(SDL_Window* window) {
 		);
 		/// Create camera uniform buffer
 		this->createCameraUniformBuffer();
+
+		/// Initialize light management and buffer
+		/// This needs to happen before descriptor set creation
+		this->lightManager = std::make_unique<LightManager>();
+		this->createLightUniformBuffer();
+
+		/// Initialize the scene with basic geometry
+		this->initializeScene();
 
 		/// Create descriptor set layout
 		this->createDescriptorSetLayout();
@@ -138,6 +144,19 @@ void Renderer::cleanup() {
 	if (this->vulkanContext) {
 		vkDeviceWaitIdle(this->vulkanContext->getDevice()->getDevice());
 	}
+
+	/// Clean up light resources
+	if (this->lightBuffer) {
+		this->lightBuffer.reset();
+	}
+	if (this->lightBufferMemory != VK_NULL_HANDLE) {
+		vkFreeMemory(this->vulkanContext->getDevice()->getDevice(),
+			this->lightBufferMemory, nullptr);
+		this->lightBufferMemory = VK_NULL_HANDLE;
+	}
+	this->lightManager.reset();
+
+	this->camera.reset();
 
 	/// Clean up scene first as it might hold GPU resources
 	/// This ensures proper cleanup order and avoids dangling references
@@ -237,6 +256,8 @@ void Renderer::drawFrame() {
 
 	/// Update uniform buffer with current camera data
 	this->updateCameraUniformBuffer();
+
+	this->updateLightUniformBuffer();
 
 	/// Record command buffers with current scene state
 	this->recordCommandBuffers();
@@ -786,46 +807,65 @@ void Renderer::updateCameraUniformBuffer() const {
 }
 
 void Renderer::createDescriptorSetLayout() {
-	/// Define how the uniform buffer will be accessed in the shader
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0; /// Corresponds to the binding in the shader
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1; /// We only have one uniform buffer
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; /// This uniform buffer is used in the vertex shader
-	uboLayoutBinding.pImmutableSamplers = nullptr; /// Only relevant for image sampling, which we're not doing here
+	/// Define bindings for both camera and light uniform buffers
+	/// We use separate bindings to maintain clear data organization
+	/// and allow for independent updates
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings;
+
+	/// Camera UBO binding
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	bindings[0].pImmutableSamplers = nullptr;
+
+	/// Light UBO binding
+	/// We make this accessible to both vertex and fragment shaders
+	/// This allows for flexible lighting calculations
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[1].descriptorCount = 1;
+	bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[1].pImmutableSamplers = nullptr;  /// Only relevant for image sampling, which we're not doing here
 
 	/// Create the descriptor set layout
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1; /// We only have one binding
-	layoutInfo.pBindings = &uboLayoutBinding;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
 
 	/// Create the descriptor set layout
 	/// This defines the interface between the shader and the uniform buffer
-	VK_CHECK(vkCreateDescriptorSetLayout(this->vulkanContext->getDevice()->getDevice(), &layoutInfo, nullptr, &this->descriptorSetLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(this->vulkanContext->getDevice()->getDevice(),
+		&layoutInfo, nullptr, &this->descriptorSetLayout));
 
-	spdlog::info("Descriptor set layout created successfully");
+	spdlog::info("Descriptor set layout created with camera and light bindings");
 }
 
 void Renderer::createDescriptorPool() {
-	/// Define the types of descriptors we'll be allocating
-	VkDescriptorPoolSize poolSize{};
-	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize.descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size()); /// One uniform buffer per frame in flight
+	/// Define pool sizes for our descriptor types
+	/// We need space for both camera and light uniform buffers
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+
+	/// Camera buffer pool size
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
+
+	/// Light buffer pool size
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
 
 	/// Create the descriptor pool
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = 1; /// We only have one type of descriptor
-	poolInfo.pPoolSizes = &poolSize;
-	/// Set the maximum number of descriptor sets that can be allocated
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
 	poolInfo.maxSets = static_cast<uint32_t>(this->swapChainFramebuffers.size());
 
-	/// Create the descriptor pool
-	/// This pool will be used to allocate the descriptor sets
-	VK_CHECK(vkCreateDescriptorPool(this->vulkanContext->getDevice()->getDevice(), &poolInfo, nullptr, &this->descriptorPool));
+	VK_CHECK(vkCreateDescriptorPool(this->vulkanContext->getDevice()->getDevice(),
+		&poolInfo, nullptr, &this->descriptorPool));
 
-	spdlog::info("Descriptor pool created successfully");
+	spdlog::info("Descriptor pool created for uniform buffers");
 }
 
 void Renderer::createDescriptorSets() {
@@ -843,30 +883,50 @@ void Renderer::createDescriptorSets() {
 
 	/// Update each descriptor set with the uniform buffer info
 	for (size_t i = 0; i < this->swapChainFramebuffers.size(); i++) {
-		/// Describe the uniform buffer to Vulkan
-		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = this->cameraBuffer.get();
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(CameraUBO);
+		/// Describe both uniform buffers
+		std::array<VkDescriptorBufferInfo, 2> bufferInfos{};
 
-		/// Prepare to write the descriptor set
-		VkWriteDescriptorSet descriptorWrite{};
-		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite.dstSet = this->descriptorSets[i];
-		descriptorWrite.dstBinding = 0; /// Corresponds to the binding in the shader
-		descriptorWrite.dstArrayElement = 0; /// We're not using an array of descriptors
-		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.pBufferInfo = &bufferInfo;
+		/// Camera buffer info
+		bufferInfos[0].buffer = this->cameraBuffer.get();
+		bufferInfos[0].offset = 0;
+		bufferInfos[0].range = sizeof(CameraUBO);
 
-		/// Update the descriptor set
-		vkUpdateDescriptorSets(this->vulkanContext->getDevice()->getDevice(), 1, &descriptorWrite, 0, nullptr);
+		/// Light buffer info
+		bufferInfos[1].buffer = this->lightBuffer.get();
+		bufferInfos[1].offset = 0;
+		bufferInfos[1].range = sizeof(LightData) * LightManager::MaxLights;
+
+		/// Prepare descriptor writes for both buffers
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+
+		/// Camera buffer write
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = this->descriptorSets[i];
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &bufferInfos[0];
+
+		/// Light buffer write
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = this->descriptorSets[i];
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pBufferInfo = &bufferInfos[1];
+
+		/// Update both descriptor sets at once
+		vkUpdateDescriptorSets(this->vulkanContext->getDevice()->getDevice(),
+			static_cast<uint32_t>(descriptorWrites.size()),
+			descriptorWrites.data(), 0, nullptr);
 	}
 
 	spdlog::info("Descriptor sets created and updated successfully");
 }
 
-void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
+void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) const {
 	/// Delegate input handling to the camera
 	/// This keeps the camera logic encapsulated within the EditorCamera class
 	this->camera->handleInput(window, event);
@@ -933,6 +993,17 @@ void Renderer::initializeDepthBuffer() {
 }
 
 void Renderer::initializeScene() {
+	/// Create a default directional light
+	/// We use shared_ptr since LightManager stores lights using shared_ptr
+	auto mainLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, 1.0f, 1.0f));
+	mainLight->setColor(glm::vec3(1.0f, 0.095f, 0.08f));  /// Slightly warm sunlight color
+	mainLight->setIntensity(1.0f);
+	mainLight->setAmbient(glm::vec3(0.01f, 0.01f, 0.015f));  /// Slightly blue-tinted ambient
+
+	/// Add light to the manager
+	this->lightManager->addLight(mainLight);
+	spdlog::info("Created default directional light");
+
 	/// Create a simple cube in the scene for initial testing
 	/// We use the Scene API to create and position objects
 	auto rootNode = this->scene->getRoot();
@@ -963,6 +1034,58 @@ void Renderer::initializeScene() {
 	rootNode->updateBoundsIfNeeded();
 
 	spdlog::info("Scene initialized with test objects");
+}
+
+void Renderer::createLightUniformBuffer() {
+	/// Calculate required buffer size
+	/// We allocate space for the maximum number of lights
+	/// This simplifies buffer management as size remains constant
+	VkDeviceSize bufferSize = sizeof(LightData) * LightManager::MaxLights;
+
+	/// Create the uniform buffer
+	/// We use VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT to allow CPU updates
+	/// and VK_MEMORY_PROPERTY_HOST_COHERENT_BIT to ensure synchronization
+	this->vulkanBufferUtility->createBuffer(
+		bufferSize,
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		this->lightBuffer,
+		this->lightBufferMemory
+	);
+
+	/// Initialize buffer with empty light data
+	/// This ensures valid data even before any lights are added
+	std::vector<LightData> initialData(LightManager::MaxLights);
+	void* data;
+	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(),
+		this->lightBufferMemory, 0, bufferSize, 0, &data));
+	memcpy(data, initialData.data(), bufferSize);
+	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(),
+		this->lightBufferMemory);
+
+	spdlog::info("Light uniform buffer created with size {} bytes", bufferSize);
+}
+
+/// Update the light uniform buffer with current light data
+/// This should be called when lights change or every frame if lights are dynamic
+void Renderer::updateLightUniformBuffer() const {
+	/// Get current light data from the manager
+	/// This data is already in GPU-friendly format
+	auto lightData = this->lightManager->getLightData();
+
+	/// Calculate buffer size
+	VkDeviceSize bufferSize = sizeof(LightData) * LightManager::MaxLights;
+
+	/// Map the buffer memory and update it with new data
+	void* data;
+	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(),
+		this->lightBufferMemory, 0, bufferSize, 0, &data));
+	memcpy(data, lightData.data(), bufferSize);
+	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(),
+		this->lightBufferMemory);
+
+	spdlog::trace("Updated light uniform buffer with {} lights",
+		this->lightManager->getLightCount());
 }
 
 }

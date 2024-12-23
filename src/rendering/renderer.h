@@ -6,8 +6,8 @@
 #include "vulkan/pipelinemanager.h"
 #include "vulkan/depthbuffer.h"
 #include "rendering/editorcamera.h"
-#include "rendering/mesh.h"
 #include "rendering/meshmanager.h"
+#include "rendering/lightmanager.h"
 #include "scene/scene.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
@@ -75,12 +75,17 @@ public:
 	/// This method should be called for each relevant SDL event
 	/// @param window The SDL window, needed for mouse capture
 	/// @param event The SDL event to process
-	void handleCameraInput(SDL_Window* window, const SDL_Event& event);
+	void handleCameraInput(SDL_Window* window, const SDL_Event& event) const;
 
 	/// Get the scene manager
 	/// This allows external systems to manipulate the scene
 	/// @return A pointer to the Scene
 	scene::Scene* getScene() { return this->scene.get(); }
+
+	/// Get the light manager instance
+	/// This allows external systems to add and modify lights
+	/// @return Pointer to the light manager
+	[[nodiscard]] LightManager* getLightManager() const { return this->lightManager.get(); }
 
 private:
 	/// Struct to hold camera data for GPU
@@ -106,6 +111,8 @@ private:
 	void cleanupSyncObjects();
 	void initializeDepthBuffer();
 	void initializeScene();
+	void createLightUniformBuffer();
+	void updateLightUniformBuffer() const;
 
 	/// Vulkan context managing Vulkan instance, device, and swap chain
 	std::unique_ptr<vulkan::VulkanContext> vulkanContext;
@@ -171,6 +178,12 @@ private:
 
 	/// Tracks time since last frame for animations and effects
 	float currentFrameTime{0.0f};
+
+	/// Light management
+	std::unique_ptr<LightManager> lightManager;
+	vulkan::VulkanBufferHandle lightBuffer;
+	VkDeviceMemory lightBufferMemory;
+
 };
 
 } /// namespace lillugsi::rendering
