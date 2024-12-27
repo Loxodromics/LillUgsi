@@ -31,7 +31,7 @@ public:
 	/// @param light The light to add
 	/// @return Index of the added light for future reference
 	/// @throws VulkanException if maximum light count is exceeded
-	[[nodiscard]] uint32_t addLight(std::shared_ptr<Light> light);
+	uint32_t addLight(std::shared_ptr<Light> light);
 
 	/// Remove a light by its index
 	/// @param index The index of the light to remove
