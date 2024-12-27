@@ -57,7 +57,7 @@ using VulkanSamplerHandle = VulkanHandle<VkSampler, PFN_vkDestroySampler>;
 using VulkanDescriptorSetLayoutHandle = VulkanHandle<VkDescriptorSetLayout, std::function<void(VkDescriptorSetLayout)>>;
 
 /// Type alias for VkDescriptorPool wrapper
-using VulkanDescriptorPoolHandle = VulkanHandle<VkDescriptorPool, PFN_vkDestroyDescriptorPool>;
+using VulkanDescriptorPoolHandle = VulkanHandle<VkDescriptorPool, std::function<void(VkDescriptorPool)>>;
 
 /// Type alias for VkDeviceMemory wrapper
 using VulkanDeviceMemoryHandle = VulkanHandle<VkDeviceMemory, std::function<void(VkDeviceMemory)>>;

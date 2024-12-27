@@ -44,6 +44,7 @@ add_executable(LillUgsi
 		src/rendering/light.cpp
 		src/rendering/lightmanager.cpp
 		src/rendering/pbrmaterial.cpp
+		src/rendering/custommaterial.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

@@ -131,4 +131,8 @@ void PBRMaterial::setAmbient(float ambient) {
 	this->updateUniformBuffer();
 }
 
+VkDescriptorSetLayout PBRMaterial::getDescriptorSetLayout() const {
+	return this->descriptorSetLayout.get();
+}
+
 } /// namespace lillugsi::rendering
