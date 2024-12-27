@@ -17,7 +17,8 @@ struct alignas(16) LightData {
 	/// Light color and intensity
 	/// RGB components represent color, w component stores intensity
 	/// This combines color and intensity in one vector to reduce uniform buffer size
-	glm::vec4 colorAndIntensity{1.0f};
+	/// All lights with colorAndIntensity > 0 will be added to the light calculation
+	glm::vec4 colorAndIntensity{0.0f};
 
 	/// Ambient contribution of the light
 	/// We separate ambient from main color to allow for different ambient colors

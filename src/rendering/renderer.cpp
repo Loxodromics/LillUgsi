@@ -993,16 +993,26 @@ void Renderer::initializeDepthBuffer() {
 }
 
 void Renderer::initializeScene() {
-	/// Create a default directional light
-	/// We use shared_ptr since LightManager stores lights using shared_ptr
-	auto mainLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, 1.0f, 1.0f));
-	mainLight->setColor(glm::vec3(1.0f, 0.095f, 0.08f));  /// Slightly warm sunlight color
-	mainLight->setIntensity(1.0f);
-	mainLight->setAmbient(glm::vec3(0.01f, 0.01f, 0.015f));  /// Slightly blue-tinted ambient
+	/// Create main directional light (sun)
+	auto sunLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, 1.0f, 1.0f));
+	sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.8f));  /// Warm sunlight
+	sunLight->setIntensity(1.0f);
+	sunLight->setAmbient(glm::vec3(0.1f, 0.1f, 0.15f));
+	this->lightManager->addLight(sunLight);
 
-	/// Add light to the manager
-	this->lightManager->addLight(mainLight);
-	spdlog::info("Created default directional light");
+	/// Create blue fill light from the left
+	auto fillLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, -0.5f, 0.0f));
+	fillLight->setColor(glm::vec3(0.3f, 0.4f, 0.8f));  /// Cool blue color
+	fillLight->setIntensity(0.5f);                      /// Less intense than sun
+	fillLight->setAmbient(glm::vec3(0.0f));            /// No ambient contribution
+	this->lightManager->addLight(fillLight);
+
+	/// Create red rim light from behind
+	auto rimLight = std::make_shared<DirectionalLight>(glm::vec3(0.0f, 0.0f, 1.0f));
+	rimLight->setColor(glm::vec3(0.8f, 0.3f, 0.2f));   /// Warm red color
+	rimLight->setIntensity(0.3f);                       /// Subtle intensity
+	rimLight->setAmbient(glm::vec3(0.0f));             /// No ambient contribution
+	this->lightManager->addLight(rimLight);
 
 	/// Create a simple cube in the scene for initial testing
 	/// We use the Scene API to create and position objects
@@ -1029,6 +1039,29 @@ void Renderer::initializeScene() {
 	scene::Transform transform2;
 	transform2.position = glm::vec3(1.5f, 1.5f, 1.5f);
 	cubeNode2->setLocalTransform(transform2);
+
+	/// Add more cubes to better show lighting
+	/// Create a grid of cubes to demonstrate lighting from different angles
+	for (int x = -2; x <= 2; x++) {
+		for (int z = -2; z <= 2; z++) {
+			auto cubeNode = this->scene->createNode(
+				"GridCube_" + std::to_string(x) + "_" + std::to_string(z),
+				this->scene->getRoot()
+			);
+
+			auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+			cubeNode->setMesh(std::move(cubeMesh));
+
+			scene::Transform transform;
+			transform.position = glm::vec3(
+				x * 2.0f,          /// Space cubes 2 units apart
+				0.0f,              /// All on same height
+				z * 2.0f
+			);
+			transform.scale = glm::vec3(0.5f);  /// Make them smaller
+			cubeNode->setLocalTransform(transform);
+		}
+	}
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
