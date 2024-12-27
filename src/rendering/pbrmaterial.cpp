@@ -5,7 +5,7 @@
 
 namespace lillugsi::rendering {
 
-PBRMaterial::PBRMaterial(VkDevice device, VkPhysicalDevice physicalDevice, const std::string& name)
+PBRMaterial::PBRMaterial(VkDevice device, const std::string& name, VkPhysicalDevice physicalDevice)
 	: device(device)
 	, physicalDevice(physicalDevice)
 	, name(name) {

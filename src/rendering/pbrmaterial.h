@@ -13,9 +13,9 @@ class PBRMaterial : public Material {
 public:
 	/// Create a new PBR material
 	/// @param device The logical device for creating GPU resources
-	/// @param physicalDevice The logical device for findMemoryType
 	/// @param name Unique name for this material instance
-	PBRMaterial(VkDevice device, VkPhysicalDevice physicalDevice, const std::string& name);
+	/// @param physicalDevice The logical device for findMemoryType
+	PBRMaterial(VkDevice device, const std::string& name, VkPhysicalDevice physicalDevice);
 	~PBRMaterial() override;
 
 	void bind(VkCommandBuffer cmdBuffer) const override;
