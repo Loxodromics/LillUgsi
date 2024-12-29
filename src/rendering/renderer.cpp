@@ -584,13 +584,26 @@ void Renderer::createGraphicsPipeline() {
 		this->renderPass.get()
 	);
 
-	/// Create a shader program for our graphics pipeline
-	/// ShaderProgram manages the lifecycle of both vertex and fragment shaders
-	auto shaderProgram = vulkan::ShaderProgram::createGraphicsProgram(
-		this->vulkanContext->getDevice()->getDevice(),
-		"shaders/vert.spv",
-		"shaders/frag.spv"
+	/// Get the default material's shader program
+	auto defaultMaterial = this->materialManager->getMaterial("default");
+	if (!defaultMaterial) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Default material not found for pipeline creation",
+			__FUNCTION__, __FILE__, __LINE__
 	);
+	}
+
+	/// Get shader program from the material
+	/// We need to cast to PBRMaterial to access the shader program
+	auto pbrMaterial = std::dynamic_pointer_cast<PBRMaterial>(defaultMaterial);
+	if (!pbrMaterial) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Default material is not a PBR material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
 
 	/// Define the vertex input binding
 	/// This describes how to interpret the vertex data that will be input to the vertex shader
@@ -621,17 +634,6 @@ void Renderer::createGraphicsPipeline() {
 	attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
 	attributeDescriptions[2].offset = offsetof(Vertex, color);
 
-	/// Get the descriptor set layout from the default material
-	/// We use this to ensure the pipeline can handle our material bindings
-	auto defaultMaterial = this->materialManager->getMaterial("default");
-	if (!defaultMaterial) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Default material not found for pipeline creation",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
-
 	/// We need to combine camera/light descriptors with material descriptors
 	/// Combine all descriptor set layouts in the order that matches
 	/// the set = X bindings in the shaders
@@ -644,7 +646,7 @@ void Renderer::createGraphicsPipeline() {
 	/// Create the graphics pipeline using the PipelineManager
 	this->graphicsPipeline = this->pipelineManager->createGraphicsPipeline(
 		"mainPipeline",
-		std::move(shaderProgram),
+		pbrMaterial->getShaderProgram(),
 		bindingDescription,
 		std::vector<VkVertexInputAttributeDescription>(
 			attributeDescriptions.begin(),

@@ -36,7 +36,7 @@ public:
 	/// @return A shared pointer to the created pipeline handle
 	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> createGraphicsPipeline(
 		const std::string& name,
-		ShaderProgram&& shaderProgram,
+		std::shared_ptr<ShaderProgram> shaderProgram,
 		const VkVertexInputBindingDescription& vertexBindingDescription,
 		const std::vector<VkVertexInputAttributeDescription>& vertexAttributeDescriptions,
 		VkPrimitiveTopology topology,
@@ -82,9 +82,10 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<VulkanPipelineHandle>> pipelines;
 	std::unordered_map<std::string, std::shared_ptr<VulkanPipelineLayoutHandle>> pipelineLayouts;
 
-	/// Add storage for shader programs
-	/// This ensures shader programs live as long as the pipeline
-	std::unordered_map<std::string, ShaderProgram> shaderPrograms;
+	/// Store shader programs with shared ownership
+	/// Multiple pipelines might use the same shaders, so we share
+	/// shader program instances to optimize resource usage
+	std::unordered_map<std::string, std::shared_ptr<ShaderProgram>> shaderPrograms;
 };
 
 }

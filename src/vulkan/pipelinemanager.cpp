@@ -12,23 +12,21 @@ PipelineManager::PipelineManager(VkDevice device, VkRenderPass renderPass)
 
 std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	const std::string& name,
-	ShaderProgram&& shaderProgram,
+	std::shared_ptr<ShaderProgram> shaderProgram,
 	const VkVertexInputBindingDescription& vertexBindingDescription,
 	const std::vector<VkVertexInputAttributeDescription>& vertexAttributeDescriptions,
 	VkPrimitiveTopology topology,
 	uint32_t width,
 	uint32_t height,
 	const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
-	bool enableDepthTest
-) {
-	/// Store the shader program
-	/// We move the program into our storage to maintain ownership
-	/// Using insert_or_assign allows us to potentially update existing programs
-	this->shaderPrograms.insert_or_assign(name, std::move(shaderProgram));
+	bool enableDepthTest) {
+	/// Store the shader program with shared ownership
+	/// This allows multiple pipelines to use the same shaders efficiently
+	this->shaderPrograms[name] = shaderProgram;
 
 	/// Get the shader stages from the program
-	/// The ShaderProgram handles all the stage creation and validation
-	auto shaderStages = this->shaderPrograms.at(name).getShaderStages();
+	/// The program remains valid as long as any pipeline using it exists
+	auto shaderStages = this->shaderPrograms.at(name)->getShaderStages();
 
 	/// Set up vertex input state
 	/// This describes the format of the vertex data that will be provided to the vertex shader
@@ -152,8 +150,8 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.layout = pipelineLayout;
 	pipelineInfo.renderPass = this->renderPass;
-	pipelineInfo.subpass = 0;  // Index of the subpass in the render pass where this pipeline will be used
-	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;  // Not deriving from an existing pipeline
+	pipelineInfo.subpass = 0;  /// Index of the subpass in the render pass where this pipeline will be used
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;  /// Not deriving from an existing pipeline
 
 	/// Create the graphics pipeline
 	VkPipeline graphicsPipeline;

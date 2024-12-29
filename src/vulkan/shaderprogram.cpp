@@ -7,24 +7,24 @@ ShaderProgram::ShaderProgram(VkDevice device)
 	: device(device) {
 }
 
-ShaderProgram ShaderProgram::createGraphicsProgram(
+std::shared_ptr<ShaderProgram> ShaderProgram::createGraphicsProgram(
 	VkDevice device,
 	const std::string& vertexPath,
 	const std::string& fragmentPath
 ) {
 	/// Create a new shader program instance
-	ShaderProgram program(device);
+	std::shared_ptr<ShaderProgram> program = std::make_shared<ShaderProgram>(device);
 
 	try {
 		/// Create the vertex shader module
 		/// We use std::optional's emplace to construct the ShaderModule in place
-		program.vertexShader.emplace(
+		program->vertexShader.emplace(
 			ShaderModule::fromSpirV(device, vertexPath, VK_SHADER_STAGE_VERTEX_BIT)
 		);
 		spdlog::info("Vertex shader loaded: {}", vertexPath);
 
 		/// Create the fragment shader module
-		program.fragmentShader.emplace(
+		program->fragmentShader.emplace(
 			ShaderModule::fromSpirV(device, fragmentPath, VK_SHADER_STAGE_FRAGMENT_BIT)
 		);
 		spdlog::info("Fragment shader loaded: {}", fragmentPath);

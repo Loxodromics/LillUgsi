@@ -16,7 +16,7 @@ public:
 	/// @param vertexPath Path to the vertex shader SPIR-V file
 	/// @param fragmentPath Path to the fragment shader SPIR-V file
 	/// @return A new ShaderProgram instance
-	static ShaderProgram createGraphicsProgram(
+	static std::shared_ptr<ShaderProgram> createGraphicsProgram(
 		VkDevice device,
 		const std::string& vertexPath,
 		const std::string& fragmentPath
@@ -43,10 +43,11 @@ public:
 	/// @return Optional reference to the fragment shader module
 	const std::optional<ShaderModule>& getFragmentShader() const { return this->fragmentShader; }
 
-private:
-	/// Private constructor to enforce creation through factory methods
+	/// FIXME: This shoudl be a private constructor to enforce creation through factory methods
+	/// But with the change to std::shared_ptr<ShaderProgram> createGraphicsProgram, I don't know how to do it
 	explicit ShaderProgram(VkDevice device);
 
+private:
 	/// The logical device associated with this shader program
 	VkDevice device;
 

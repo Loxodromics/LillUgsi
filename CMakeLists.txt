@@ -61,7 +61,7 @@ target_link_libraries(LillUgsi
 
 add_custom_target(Shaders
 	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
-	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vert.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/vert.spv
-	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/frag.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/frag.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/pbr.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/pbr.vert.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/pbr.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/pbr.frag.spv
 )
 add_dependencies(LillUgsi Shaders)

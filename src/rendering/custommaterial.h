@@ -54,7 +54,7 @@ public:
 
 	/// Get the shader program used by this material
 	/// @return The material's shader program
-	[[nodiscard]] const vulkan::ShaderProgram& getShaderProgram() const {
+	[[nodiscard]] std::shared_ptr<vulkan::ShaderProgram> getShaderProgram() const {
 		return this->shaderProgram;
 	}
 
@@ -81,7 +81,7 @@ private:
 	VkDevice device;
 	VkPhysicalDevice physicalDevice;
 	std::string name;
-	vulkan::ShaderProgram shaderProgram;
+	std::shared_ptr<vulkan::ShaderProgram> shaderProgram;
 
 	/// GPU resource management
 	vulkan::VulkanDescriptorSetLayoutHandle descriptorSetLayout;

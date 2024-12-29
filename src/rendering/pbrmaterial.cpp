@@ -5,19 +5,33 @@
 
 namespace lillugsi::rendering {
 
-PBRMaterial::PBRMaterial(VkDevice device, const std::string& name, VkPhysicalDevice physicalDevice)
-	: Material(device, name, physicalDevice) {
+PBRMaterial::PBRMaterial(
+	VkDevice device,
+	const std::string& name,
+	VkPhysicalDevice physicalDevice,
+	const std::string& vertexShaderPath,
+	const std::string& fragmentShaderPath )
+	: Material(device, name, physicalDevice)
+	/// Create shader program before descriptor layout
+	/// as the layout depends on shader requirements
+	, shaderProgram(vulkan::ShaderProgram::createGraphicsProgram(
+		device,
+		vertexShaderPath,
+		fragmentShaderPath
+	))
+{
 	/// Create descriptor layout first as it's needed for other resources
 	this->createDescriptorSetLayout();
-	
+
 	/// Create and initialize the uniform buffer
 	this->createUniformBuffer();
 
 	/// Create descriptor pool and set
 	this->createDescriptorPool();
 	this->createDescriptorSet();
-	
-	spdlog::debug("Created PBR material '{}'", this->name);
+
+	spdlog::debug("Created PBR material '{}' with shaders: {} and {}",
+		this->name, vertexShaderPath, fragmentShaderPath);
 }
 
 PBRMaterial::~PBRMaterial() {
