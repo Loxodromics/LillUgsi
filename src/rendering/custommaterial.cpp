@@ -11,13 +11,14 @@ CustomMaterial::CustomMaterial(
 	const std::string& vertexShaderPath,
 	const std::string& fragmentShaderPath
 )
-	: Material(device, name, physicalDevice)
-	, shaderProgram(vulkan::ShaderProgram::createGraphicsProgram(
+	: Material(device, name, physicalDevice) {
+	/// Create shader program before descriptor layout
+	/// as the layout depends on shader requirements
+	this->shaderProgram = vulkan::ShaderProgram::createGraphicsProgram(
 		device,
 		vertexShaderPath,
-		fragmentShaderPath
-	))
-{
+		fragmentShaderPath);
+
 	spdlog::debug("Created CustomMaterial '{}' with shaders: {} and {}",
 		this->name, vertexShaderPath, fragmentShaderPath);
 }

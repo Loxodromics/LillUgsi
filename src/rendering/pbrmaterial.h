@@ -2,9 +2,8 @@
 
 #include "material.h"
 #include "vulkan/vulkanwrappers.h"
-#include "vulkan/shadermodule.h"
+
 #include <glm/glm.hpp>
-#include <vulkan/shaderprogram.h>
 
 namespace lillugsi::rendering {
 
@@ -53,22 +52,15 @@ public:
 	/// @param ambient Value between 0 (fully occluded) and 1 (unoccluded)
 	void setAmbient(float ambient);
 
-	/// Get the shader program for this material
-	/// Each material type provides its own shaders
-	/// @return Reference to the material's shader program
-	[[nodiscard]] std::shared_ptr<vulkan::ShaderProgram> getShaderProgram() const {
-		return this->shaderProgram;
-	}
-
 protected:
 	/// GPU-aligned material properties structure
 	/// We use this layout to match the shader's uniform buffer
 	struct Properties {
 		glm::vec4 baseColor{1.0f};  /// RGB + alpha
-		float roughness{0.5f};      /// Default: medium roughness
-		float metallic{0.0f};       /// Default: dielectric
-		float ambient{1.0f};        /// Default: fully unoccluded
-		float padding;              /// Required for GPU alignment
+		float roughness{0.5f};           /// Default: medium roughness
+		float metallic{0.0f};            /// Default: dielectric
+		float ambient{1.0f};             /// Default: fully unoccluded
+		float padding;                   /// Required for GPU alignment
 	};
 
 	/// Create the descriptor set layout for PBR materials
@@ -88,8 +80,7 @@ protected:
 	/// Called whenever material properties change
 	void updateUniformBuffer();
 
-	Properties properties;           /// CPU-side material properties
-	std::shared_ptr<vulkan::ShaderProgram> shaderProgram;
+	Properties properties;   /// CPU-side material properties
 };
 
 } /// namespace lillugsi::rendering

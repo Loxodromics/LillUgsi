@@ -2,9 +2,8 @@
 
 #include "material.h"
 #include "vulkan/vulkanwrappers.h"
-#include "vulkan/shaderprogram.h"
+
 #include <string>
-#include <vector>
 #include <unordered_map>
 
 namespace lillugsi::rendering {
@@ -12,6 +11,7 @@ namespace lillugsi::rendering {
 /// CustomMaterial allows for complete shader and uniform customization
 /// While PBRMaterial provides a standard material workflow, CustomMaterial
 /// enables users to define their own shading models and material properties
+/// There is no Pipeline yet to use this material
 class CustomMaterial : public Material {
 public:
 	/// Create a custom material with specified shaders
@@ -52,12 +52,6 @@ public:
 		VkDeviceSize offset = 0
 	);
 
-	/// Get the shader program used by this material
-	/// @return The material's shader program
-	[[nodiscard]] std::shared_ptr<vulkan::ShaderProgram> getShaderProgram() const {
-		return this->shaderProgram;
-	}
-
 private:
 	/// Structure to track uniform buffer information
 	struct UniformBufferInfo {
@@ -77,16 +71,6 @@ private:
 	/// Validate uniform buffer updates
 	/// @throws VulkanException if validation fails
 	void validateUniformUpdate( const std::string& name, VkDeviceSize size, VkDeviceSize offset ) const;
-
-	VkDevice device;
-	VkPhysicalDevice physicalDevice;
-	std::string name;
-	std::shared_ptr<vulkan::ShaderProgram> shaderProgram;
-
-	/// GPU resource management
-	vulkan::VulkanDescriptorSetLayoutHandle descriptorSetLayout;
-	vulkan::VulkanDescriptorPoolHandle descriptorPool;
-	VkDescriptorSet descriptorSet;
 
 	/// Track uniform buffers and their metadata
 	std::unordered_map<std::string, UniformBufferInfo> uniformBuffers;

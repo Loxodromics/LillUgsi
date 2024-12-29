@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vulkan/shaderprogram.h"
 #include "vulkan/vulkanwrappers.h"
 #include <string>
 
@@ -33,6 +34,14 @@ public:
 	Material(const Material&) = delete;
 	Material& operator=(const Material&) = delete;
 
+
+	/// Get the shader program for this material
+	/// Each material type provides its own shaders
+	/// @return Reference to the material's shader program
+	[[nodiscard]] std::shared_ptr<vulkan::ShaderProgram> getShaderProgram() const {
+		return this->shaderProgram;
+	}
+
 protected:
 	/// Create a new Material, but only for subclasses
 	/// @param device The logical device for creating GPU resources
@@ -51,6 +60,7 @@ protected:
 	VkDevice device;                 /// Logical device reference
 	VkPhysicalDevice physicalDevice; /// Physical device reference
 	std::string name;                /// Unique material name
+	std::shared_ptr<vulkan::ShaderProgram> shaderProgram;
 
 	/// GPU resources
 	vulkan::VulkanDescriptorSetLayoutHandle descriptorSetLayout;

@@ -11,15 +11,14 @@ PBRMaterial::PBRMaterial(
 	VkPhysicalDevice physicalDevice,
 	const std::string& vertexShaderPath,
 	const std::string& fragmentShaderPath )
-	: Material(device, name, physicalDevice)
+	: Material(device, name, physicalDevice) {
 	/// Create shader program before descriptor layout
 	/// as the layout depends on shader requirements
-	, shaderProgram(vulkan::ShaderProgram::createGraphicsProgram(
+	this->shaderProgram = vulkan::ShaderProgram::createGraphicsProgram(
 		device,
 		vertexShaderPath,
-		fragmentShaderPath
-	))
-{
+		fragmentShaderPath);
+
 	/// Create descriptor layout first as it's needed for other resources
 	this->createDescriptorSetLayout();
 
