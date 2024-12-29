@@ -6,14 +6,16 @@
 namespace lillugsi::rendering {
 
 PBRMaterial::PBRMaterial(VkDevice device, const std::string& name, VkPhysicalDevice physicalDevice)
-	: device(device)
-	, physicalDevice(physicalDevice)
-	, name(name) {
+	: Material(device, name, physicalDevice) {
 	/// Create descriptor layout first as it's needed for other resources
 	this->createDescriptorSetLayout();
 	
 	/// Create and initialize the uniform buffer
 	this->createUniformBuffer();
+
+	/// Create descriptor pool and set
+	this->createDescriptorPool();
+	this->createDescriptorSet();
 	
 	spdlog::debug("Created PBR material '{}'", this->name);
 }
@@ -25,17 +27,6 @@ PBRMaterial::~PBRMaterial() {
 	}
 
 	spdlog::debug("Destroyed PBR material '{}'", this->name);
-}
-
-void PBRMaterial::bind(VkCommandBuffer cmdBuffer) const {
-	/// Bind the material's descriptor set to set index 2
-	/// We use set 0 for camera data and set 1 for lighting
-	VkDescriptorSet sets[] = {this->descriptorSet};
-	vkCmdBindDescriptorSets(cmdBuffer,
-		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		/* layout to be passed in */nullptr,
-		2, 1, sets,
-		0, nullptr);
 }
 
 void PBRMaterial::createDescriptorSetLayout() {
@@ -104,6 +95,33 @@ void PBRMaterial::createUniformBuffer() {
 	spdlog::debug("Created uniform buffer for PBR material '{}'", this->name);
 }
 
+void PBRMaterial::createDescriptorSet() {
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = this->descriptorPool.get();
+	allocInfo.descriptorSetCount = 1;
+	const VkDescriptorSetLayout layout = this->descriptorSetLayout.get();
+	allocInfo.pSetLayouts = &layout;
+
+	VK_CHECK(vkAllocateDescriptorSets(this->device, &allocInfo, &this->descriptorSet));
+
+	VkDescriptorBufferInfo bufferInfo{};
+	bufferInfo.buffer = this->uniformBuffer.get();
+	bufferInfo.offset = 0;
+	bufferInfo.range = sizeof(Properties);
+
+	VkWriteDescriptorSet descriptorWrite{};
+	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite.dstSet = this->descriptorSet;
+	descriptorWrite.dstBinding = 0;
+	descriptorWrite.dstArrayElement = 0;
+	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrite.descriptorCount = 1;
+	descriptorWrite.pBufferInfo = &bufferInfo;
+
+	vkUpdateDescriptorSets(this->device, 1, &descriptorWrite, 0, nullptr);
+}
+
 void PBRMaterial::updateUniformBuffer() {
 	void* data;
 	VK_CHECK(vkMapMemory(this->device, this->uniformBufferMemory, 0, sizeof(Properties), 0, &data));
@@ -129,10 +147,6 @@ void PBRMaterial::setMetallic(float metallic) {
 void PBRMaterial::setAmbient(float ambient) {
 	this->properties.ambient = glm::clamp(ambient, 0.0f, 1.0f);
 	this->updateUniformBuffer();
-}
-
-VkDescriptorSetLayout PBRMaterial::getDescriptorSetLayout() const {
-	return this->descriptorSetLayout.get();
 }
 
 } /// namespace lillugsi::rendering

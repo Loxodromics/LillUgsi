@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vertex.h"
+#include "material.h"
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <vector>
@@ -26,8 +27,12 @@ public:
 		std::shared_ptr<vulkan::VertexBuffer> vertexBuffer;
 		std::shared_ptr<vulkan::IndexBuffer> indexBuffer;
 
+		/// Material data for rendering appearance
+		/// We use a shared_ptr to ensure the material stays alive
+		/// as long as any RenderData referring to it exists
+		std::shared_ptr<Material> material;
+
 		/// Future expansion fields:
-		/// uint32_t materialIndex;  /// For material system
 		/// bool isTransparent;     /// For render sorting
 		/// float distanceToCamera; /// For LOD/culling
 	};
@@ -47,6 +52,7 @@ public:
 		data.modelMatrix = glm::translate(glm::mat4(1.0f), this->translation);
 		data.vertexBuffer = this->vertexBuffer;
 		data.indexBuffer = this->indexBuffer;
+		data.material = this->material;
 	}
 
 	/// Get vertex data (used during buffer creation)
@@ -73,6 +79,19 @@ public:
 		this->generateGeometry();
 	}
 
+	/// Set the material for this mesh
+	/// The material defines how the mesh is rendered
+	/// @param material Shared pointer to the material to use
+	void setMaterial(std::shared_ptr<Material> material) {
+		this->material = material;
+	}
+
+	/// Get the current material
+	/// @return Shared pointer to the current material, or nullptr if none set
+	[[nodiscard]] std::shared_ptr<Material> getMaterial() const {
+		return this->material;
+	}
+
 protected:
 	/// Vertex data stored in CPU memory
 	std::vector<Vertex> vertices;
@@ -86,6 +105,9 @@ protected:
 	/// GPU buffers
 	std::shared_ptr<vulkan::VertexBuffer> vertexBuffer;
 	std::shared_ptr<vulkan::IndexBuffer> indexBuffer;
+
+	/// We use a shared_ptr to share materials between meshes and ensure proper lifecycle management
+	std::shared_ptr<Material> material;
 };
 
 } /// namespace lillugsi::rendering

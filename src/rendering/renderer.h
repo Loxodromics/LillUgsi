@@ -9,10 +9,11 @@
 #include "rendering/meshmanager.h"
 #include "rendering/lightmanager.h"
 #include "scene/scene.h"
-#include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
+
+#include "materialmanager.h"
 
 namespace lillugsi::rendering {
 
@@ -87,6 +88,14 @@ public:
 	/// @return Pointer to the light manager
 	[[nodiscard]] LightManager* getLightManager() const { return this->lightManager.get(); }
 
+	/// Get the material manager
+	/// This allows external systems to create and modify materials
+	/// @return Pointer to the material manager
+	[[nodiscard]] MaterialManager* getMaterialManager() const {
+		return this->materialManager.get();
+	}
+
+
 private:
 	/// Struct to hold camera data for GPU
 	struct CameraUBO {
@@ -105,6 +114,7 @@ private:
 	void createCameraUniformBuffer();
 	void updateCameraUniformBuffer() const;
 	void createDescriptorSetLayout();
+	void createDescriptorSetLayouts();
 	void createDescriptorPool();
 	void createDescriptorSets();
 	void createSyncObjects();
@@ -113,6 +123,7 @@ private:
 	void initializeScene();
 	void createLightUniformBuffer();
 	void updateLightUniformBuffer() const;
+	void initializeMaterials();
 
 	/// Vulkan context managing Vulkan instance, device, and swap chain
 	std::unique_ptr<vulkan::VulkanContext> vulkanContext;
@@ -136,14 +147,17 @@ private:
 	vulkan::VulkanBufferHandle cameraBuffer;
 	VkDeviceMemory cameraBufferMemory;
 
-	/// Descriptor set layout
-	VkDescriptorSetLayout descriptorSetLayout;
+	/// Descriptor set layouts
+	vulkan::VulkanDescriptorSetLayoutHandle cameraDescriptorSetLayout;  // set = 0
+	vulkan::VulkanDescriptorSetLayoutHandle lightDescriptorSetLayout;   // set = 1
 
 	/// Descriptor pool
 	VkDescriptorPool descriptorPool;
 
 	/// Descriptor sets
-	std::vector<VkDescriptorSet> descriptorSets;
+	// std::vector<VkDescriptorSet> descriptorSets;
+	std::vector<VkDescriptorSet> cameraDescriptorSets;  /// Set = 0 for camera data
+	std::vector<VkDescriptorSet> lightDescriptorSets;   /// Set = 1 for light data
 
 	/// Synchronization objects
 	VkSemaphore imageAvailableSemaphore;
@@ -183,6 +197,9 @@ private:
 	std::unique_ptr<LightManager> lightManager;
 	vulkan::VulkanBufferHandle lightBuffer;
 	VkDeviceMemory lightBufferMemory;
+
+	/// Material management
+	std::unique_ptr<MaterialManager> materialManager;
 
 };
 

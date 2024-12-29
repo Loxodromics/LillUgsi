@@ -1,4 +1,3 @@
-/// pipelinemanager.cpp
 #include "pipelinemanager.h"
 #include <spdlog/spdlog.h>
 #include <fstream>
@@ -19,7 +18,7 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	VkPrimitiveTopology topology,
 	uint32_t width,
 	uint32_t height,
-	VkDescriptorSetLayout descriptorSetLayout,
+	const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
 	bool enableDepthTest
 ) {
 	/// Store the shader program
@@ -125,12 +124,12 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
 	pushConstantRange.offset = 0;  /// Start at beginning of push constant block
 	pushConstantRange.size = sizeof(glm::mat4);  /// Size of model matrix
 
-	/// Set up pipeline layout
-	/// This describes the resources that can be accessed by the pipeline
+	/// Set up pipeline layout with multiple descriptor set layouts
+	/// The order of layouts matches the 'set = X' bindings in shaders
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;  /// We're using one descriptor set layout
-	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;  /// Point to the descriptor set layout
+	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
+	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();  /// Point to the descriptor set layouts
 	pipelineLayoutInfo.pushConstantRangeCount = 1;  /// One range for model matrix
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 

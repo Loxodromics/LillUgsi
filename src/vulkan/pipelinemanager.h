@@ -31,7 +31,7 @@ public:
 	/// @param topology The primitive topology to use
 	/// @param width The width of the render area
 	/// @param height The height of the render area
-	/// @param descriptorSetLayout The descriptor set layout to use
+	/// @param descriptorSetLayouts Vector of descriptor set layouts in shader binding order
 	/// @param enableDepthTest Whether to enable depth testing
 	/// @return A shared pointer to the created pipeline handle
 	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> createGraphicsPipeline(
@@ -42,7 +42,7 @@ public:
 		VkPrimitiveTopology topology,
 		uint32_t width,
 		uint32_t height,
-		VkDescriptorSetLayout descriptorSetLayout,
+		const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
 		bool enableDepthTest
 	);
 

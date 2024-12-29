@@ -11,9 +11,7 @@ CustomMaterial::CustomMaterial(
 	const std::string& vertexShaderPath,
 	const std::string& fragmentShaderPath
 )
-	: device(device)
-	, physicalDevice(physicalDevice)
-	, name(name)
+	: Material(device, name, physicalDevice)
 	, shaderProgram(vulkan::ShaderProgram::createGraphicsProgram(
 		device,
 		vertexShaderPath,
@@ -36,17 +34,6 @@ CustomMaterial::~CustomMaterial() {
 	}
 
 	spdlog::debug("Destroyed CustomMaterial '{}'", this->name);
-}
-
-void CustomMaterial::bind(VkCommandBuffer cmdBuffer) const {
-	/// Descriptor sets are bound at set index 2, after camera (0) and lighting (1)
-	vkCmdBindDescriptorSets(
-		cmdBuffer,
-		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		/* layout to be passed in */nullptr,
-		2, 1, &this->descriptorSet,
-		0, nullptr
-	);
 }
 
 void CustomMaterial::defineUniformBuffer(
@@ -239,11 +226,7 @@ void CustomMaterial::createDescriptorSets() {
 	spdlog::debug("Created descriptor pool and sets for material '{}'", this->name);
 }
 
-void CustomMaterial::validateUniformUpdate(
-	const std::string& name,
-	VkDeviceSize size,
-	VkDeviceSize offset
-) const {
+void CustomMaterial::validateUniformUpdate(const std::string& name, const VkDeviceSize size, const VkDeviceSize offset) const {
 	/// Ensure the uniform buffer exists
 	auto it = this->uniformBuffers.find(name);
 	if (it == this->uniformBuffers.end()) {
@@ -263,10 +246,6 @@ void CustomMaterial::validateUniformUpdate(
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}
-}
-
-VkDescriptorSetLayout CustomMaterial::getDescriptorSetLayout() const {
-	return this->descriptorSetLayout.get();
 }
 
 } /// namespace lillugsi::rendering

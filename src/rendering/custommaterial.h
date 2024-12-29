@@ -30,10 +30,6 @@ public:
 
 	~CustomMaterial() override;
 
-	void bind(VkCommandBuffer cmdBuffer) const override;
-	[[nodiscard]] VkDescriptorSetLayout getDescriptorSetLayout() const override;
-	[[nodiscard]] std::string getName() const override { return this->name; }
-
 	/// Define a new uniform buffer in the material
 	/// @param name Identifier for the uniform buffer
 	/// @param size Size of the uniform data in bytes
@@ -80,11 +76,7 @@ private:
 
 	/// Validate uniform buffer updates
 	/// @throws VulkanException if validation fails
-	void validateUniformUpdate(
-		const std::string& name,
-		VkDeviceSize size,
-		VkDeviceSize offset
-	) const;
+	void validateUniformUpdate( const std::string& name, VkDeviceSize size, VkDeviceSize offset ) const;
 
 	VkDevice device;
 	VkPhysicalDevice physicalDevice;
