@@ -591,7 +591,7 @@ void Renderer::createGraphicsPipeline() {
 			VK_ERROR_INITIALIZATION_FAILED,
 			"Default material not found for pipeline creation",
 			__FUNCTION__, __FILE__, __LINE__
-	);
+		);
 	}
 
 	/// Get shader program from the material
@@ -1171,6 +1171,9 @@ void Renderer::initializeScene() {
 	/// Create a second cube for testing hierarchical transforms
 	auto cubeNode2 = this->scene->createNode("TestCube2", rootNode);
 	auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
+
+	/// Set the material before adding to scene
+	cubeMesh2->setMaterial(defaultMaterial);
 	cubeNode2->setMesh(std::move(cubeMesh2));
 
 	/// Position the second cube offset from the first
