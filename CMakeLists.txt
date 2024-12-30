@@ -10,8 +10,11 @@ if(ENABLE_NDEBUG)
 	add_compile_definitions(NDEBUG)
 endif()
 
-# Set the path to your Vulkan SDK
-set(Vulkan_DIR "/Users/philipp/VulkanSDK/1.3.216.0/macOS")
+if(NOT DEFINED Vulkan_DIR)
+	message(STATUS "Vulkan_DIR not specified, trying to find Vulkan automatically")
+else()
+	message(STATUS "Using specified Vulkan_DIR: ${Vulkan_DIR}")
+endif()
 
 find_package(Vulkan REQUIRED)
 find_package(spdlog REQUIRED)
