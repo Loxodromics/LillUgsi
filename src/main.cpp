@@ -6,10 +6,10 @@ int main(int argc, char* argv[]) {
 	try {
 		/// Initialize spdlog
 		spdlog::set_level(spdlog::level::debug);
-		spdlog::info("Starting Vulkan Learning Renderer");
+		spdlog::info("Starting LillUgsi Vulkan Learning Renderer");
 
 		/// Create and initialize the application
-		lillugsi::core::Application app("Vulkan Learning Renderer", 800, 600);
+		lillugsi::core::Application app("LillUgsi: Vulkan Learning Renderer", 800, 600);
 
 		if (!app.initialize()) {
 			spdlog::error("Failed to initialize the application");
