@@ -1,6 +1,8 @@
 # Lill Ugsi: Vulkan Learning Render
 Rather than following yet another Vulkan beginner's tutorial, I asked [Claude](https://claude.ai) to take me by the hand as we build a Vulkan renderer together. This project focuses on improving my graphics programming skills rather than creating a finished product. While primarily meant for my personal learning, the code is well-commented, so others might find it useful as well.
 
+![ScreenShot Version 0.2](screenshots/LillUgsi0.2.jpeg)
+
 ## Motivation
 1. Learning: Gain hands-on experience with Vulkan and understand the principles of modern GPU programming.
 2. Best Practices: Implement software engineering best practices in a complex, performance-critical application. This includes modular design, RAII (Resource Acquisition Is Initialization), and effective error handling.
@@ -28,12 +30,11 @@ The project will start with basic Vulkan initialization and simple rendering, gr
 
 Based on your project structure and source code, I'll help you write a Getting Started section for your README. This should go under your "Key Features" section:
 
-```markdown
 ## Getting Started
 
 ### Prerequisites
 - CMake 3.24 or higher
-- Vulkan SDK 1.3.216 or higher (download from [LunarG](https://vulkan.lunarg.com/))
+- Vulkan SDK 1.3.216 or higher, I guess  🤷‍♀️ 
 - Modern C++ compiler with C++17 support
 - SDL3
 - Conan package manager
