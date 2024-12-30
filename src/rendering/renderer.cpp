@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "rendering/cubemesh.h"
+#include "rendering/icospheremesh.h"
 #include "vulkan/vertexbuffer.h"
 #include "vulkan/indexbuffer.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -1152,6 +1153,28 @@ void Renderer::initializeScene() {
 	/// Create a simple cube in the scene for initial testing
 	/// We use the Scene API to create and position objects
 	auto rootNode = this->scene->getRoot();
+
+	/// Create a metallic material for the icosphere
+	/// We use different material properties to better showcase the geometry
+	auto metallicMaterial = this->materialManager->createPBRMaterial("metallic");
+	metallicMaterial->setBaseColor(glm::vec4(0.95f, 0.95f, 0.95f, 1.0f));  /// Almost white
+	metallicMaterial->setMetallic(1.0f);     /// Fully metallic
+	metallicMaterial->setRoughness(0.2f);    /// Fairly smooth for good reflection
+	metallicMaterial->setAmbient(1.0f);      /// Full ambient occlusion
+
+	/// Add an icosphere to demonstrate spherical geometry
+	/// We place it at the center where it's easy to observe
+	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
+	auto icosphereMesh = this->meshManager->createMesh<IcosphereMesh>();
+	icosphereMesh->setMaterial(metallicMaterial);
+	icosphereNode->setMesh(std::move(icosphereMesh));
+
+	/// Position the icosphere slightly above ground level
+	/// This makes it easier to see its relationship to other objects
+	scene::Transform icosphereTransform;
+	icosphereTransform.position = glm::vec3(0.0f, 1.0f, 0.0f);
+	icosphereTransform.scale = glm::vec3(0.5f);  /// Make it smaller than the cubes
+	icosphereNode->setLocalTransform(icosphereTransform);
 
 	/// Create a node for our test cube
 	auto cubeNode = this->scene->createNode("TestCube", rootNode);
