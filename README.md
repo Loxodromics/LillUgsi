@@ -3,12 +3,17 @@ Rather than following yet another Vulkan beginner's tutorial, I asked [Claude](h
 
 ![ScreenShot Version 0.2](screenshots/LillUgsi0.2.jpeg)
 
+## Notes
+This is a **personal learning project** that I'm sharing for educational purposes. While I welcome others to learn from, use, and adapt this code (under the MIT License), **I am not actively seeking contributions**. The repository is provided as-is, primarily as a reference for others interested in learning Vulkan and graphics programming.
+
+Further, as mentioned right at the beginning, this project contains lots of **AI generated code**. Do whatever you like with this information.
+
 ## Motivation
-1. Learning: Gain hands-on experience with Vulkan and understand the principles of modern GPU programming.
+1. Learning: Gain hands-on experience with Vulkan and understand the principles of modern graphics programming.
 2. Best Practices: Implement software engineering best practices in a complex, performance-critical application. This includes modular design, RAII (Resource Acquisition Is Initialization), and effective error handling.
 3. Graphics Techniques: Progressively implement and understand various graphics techniques, from basic rendering to advanced effects like physically-based rendering and global illumination.
 4. Performance Optimization: Learn to optimize graphics applications, understanding the intricacies of GPU utilization and memory management.
-5. Cross-Platform Development: Create a renderer that works on multiple platforms (focusing on macOS and Linux), understanding the challenges of cross-platform graphics development.
+5. Cross-Platform Development: Create a renderer that works on multiple platforms (focusing on macOS and Linux).
 
 ## Key Features
 - Vulkan-based rendering pipeline
@@ -27,8 +32,6 @@ The project will start with basic Vulkan initialization and simple rendering, gr
 - GLM for mathematics
 - spdlog for logging
 - CMake and Conan for build management and dependency handling
-
-Based on your project structure and source code, I'll help you write a Getting Started section for your README. This should go under your "Key Features" section:
 
 ## Getting Started
 
