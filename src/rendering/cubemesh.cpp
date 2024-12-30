@@ -8,7 +8,6 @@ CubeMesh::CubeMesh(float sideLength)
 	: sideLength(sideLength)
 	, faceColors(DefaultColors.begin(), DefaultColors.end()) {
 	spdlog::debug("Creating cube mesh with side length {}", sideLength);
-	this->generateGeometry();
 }
 
 void CubeMesh::generateGeometry() {

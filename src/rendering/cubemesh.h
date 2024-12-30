@@ -8,10 +8,10 @@ namespace lillugsi::rendering {
 
 class CubeMesh : public Mesh {
 public:
-	CubeMesh(float sideLength = 1.0f);
-	virtual ~CubeMesh() = default;
+	explicit CubeMesh(float sideLength = 1.0f);
+	~CubeMesh() override = default;
 
-	virtual void generateGeometry() override;
+	void generateGeometry() override;
 
 	/// Set colors for each face of the cube
 	void setFaceColors(const std::vector<glm::vec3>& colors);
