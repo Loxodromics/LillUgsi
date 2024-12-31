@@ -43,6 +43,12 @@ public:
 	/// @return The shader stage creation info structure
 	VkPipelineShaderStageCreateInfo getStageCreateInfo() const;
 
+	/// Read a binary file into a vector of chars
+	/// Helper method to load SPIR-V shader code from file
+	/// @param filepath Path to the file to read
+	/// @return Vector containing the file contents
+	static std::vector<char> readFile(const std::string& filepath);
+
 private:
 	/// Constructor is private to enforce creation through factory methods
 	ShaderModule(VkDevice device, VulkanShaderModuleHandle module, VkShaderStageFlagBits stage);
@@ -55,12 +61,6 @@ private:
 
 	/// The stage this shader operates in (vertex, fragment, etc.)
 	VkShaderStageFlagBits stage;
-
-	/// Read a binary file into a vector of chars
-	/// Helper method to load SPIR-V shader code from file
-	/// @param filepath Path to the file to read
-	/// @return Vector containing the file contents
-	static std::vector<char> readFile(const std::string& filepath);
 };
 
 } /// namespace lillugsi::vulkan

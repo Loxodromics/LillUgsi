@@ -51,6 +51,7 @@ add_executable(LillUgsi
 		src/rendering/materialmanager.cpp
 		src/rendering/material.cpp
 		src/rendering/icospheremesh.cpp
+		src/rendering/pipelineconfig.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
