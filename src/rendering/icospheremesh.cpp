@@ -32,7 +32,14 @@ IcosphereMesh::IcosphereMesh(float radius, uint32_t subdivisions)
 }
 
 void IcosphereMesh::generateGeometry() {
+	/// Create base icosahedron
 	this->initializeBaseIcosahedron();
+
+	/// Perform requested number of subdivisions
+	for (uint32_t i = 0; i < this->subdivisions; ++i) {
+		spdlog::debug("Performing subdivision {}/{}", i + 1, this->subdivisions);
+		this->subdivide();
+	}
 }
 
 void IcosphereMesh::initializeBaseIcosahedron() {
@@ -120,6 +127,109 @@ void IcosphereMesh::initializeBaseIcosahedron() {
 	}
 
 	spdlog::debug("Initialized base icosahedron with {} vertices and {} triangles",
+		this->vertices.size(), this->indices.size() / 3);
+}
+
+int64_t IcosphereMesh::generateEdgeKey(uint32_t index1, uint32_t index2) {
+	/// Always use the smaller index first for consistent key generation
+	/// This ensures (1,2) and (2,1) generate the same key
+	const uint32_t i1 = std::min(index1, index2);
+	const uint32_t i2 = std::max(index1, index2);
+
+	/// Combine indices into a single 64-bit key
+	/// We use 32 bits for each index, allowing for up to 4 billion vertices
+	/// The shift by 32 puts the first index in the upper 32 bits
+	return (static_cast<int64_t>(i1) << 32) | static_cast<int64_t>(i2);
+}
+
+uint32_t IcosphereMesh::getOrCreateMidpoint(uint32_t index1, uint32_t index2) {
+	/// Generate a unique key for this edge
+	const int64_t key = generateEdgeKey(index1, index2);
+
+	/// Check if we already have a vertex for this edge
+	auto it = this->midpointCache.find(key);
+	if (it != this->midpointCache.end()) {
+		return it->second;
+	}
+
+	/// No existing midpoint, so we need to create a new vertex
+	/// Get the positions of the two vertices we're interpolating between
+	const glm::vec3& p1 = this->vertices[index1].position;
+	const glm::vec3& p2 = this->vertices[index2].position;
+
+	/// Create the new vertex at the midpoint
+	Vertex newVertex;
+	/// Calculate midpoint and project onto sphere surface
+	/// We normalize to ensure the vertex lies exactly on the sphere
+	newVertex.position = glm::normalize(p1 + p2) * this->radius;
+
+	/// Average and normalize the normals of the two vertices
+	/// This creates smooth shading across the sphere
+	newVertex.normal = glm::normalize(
+		this->vertices[index1].normal +
+		this->vertices[index2].normal
+	);
+
+	/// Interpolate colors for smooth color transitions
+	newVertex.color = (
+		this->vertices[index1].color +
+		this->vertices[index2].color
+	) * 0.5f;
+
+	/// Add the new vertex to our mesh
+	const uint32_t newIndex = static_cast<uint32_t>(this->vertices.size());
+	this->vertices.push_back(newVertex);
+
+	/// Cache the midpoint for future lookups
+	this->midpointCache[key] = newIndex;
+
+	return newIndex;
+}
+
+void IcosphereMesh::subdivide() {
+	/// Each triangle is split into four new triangles:
+	///   v1        Original triangle: v1, v2, v3
+	///  /  \       After subdivision:
+	/// a -- b      - v1, a, b
+	///  \ /  \     - a, v2, c
+	///   c -- v2   - b, c, v3
+	///    \  /     - a, c, b
+	///     v3      where a, b, c are new vertices
+
+	/// Store original indices
+	/// We can't modify the index buffer while iterating through it
+	const std::vector<uint32_t> oldIndices = this->indices;
+
+	/// Clear index buffer for new triangles
+	/// Each triangle will become four new triangles
+	this->indices.clear();
+	this->indices.reserve(oldIndices.size() * 4);
+
+	/// Process each triangle
+	for (size_t i = 0; i < oldIndices.size(); i += 3) {
+		/// Get indices of original triangle vertices
+		const uint32_t v1 = oldIndices[i];
+		const uint32_t v2 = oldIndices[i + 1];
+		const uint32_t v3 = oldIndices[i + 2];
+
+		/// Get or create vertices at the midpoints of each edge
+		const uint32_t a = this->getOrCreateMidpoint(v1, v2);
+		const uint32_t b = this->getOrCreateMidpoint(v1, v3);
+		const uint32_t c = this->getOrCreateMidpoint(v2, v3);
+
+		/// Add four new triangles
+		/// Order is important to maintain consistent winding
+		this->indices.push_back(v1); this->indices.push_back(a); this->indices.push_back(b);
+		this->indices.push_back(a); this->indices.push_back(v2); this->indices.push_back(c);
+		this->indices.push_back(b); this->indices.push_back(c); this->indices.push_back(v3);
+		this->indices.push_back(a); this->indices.push_back(c); this->indices.push_back(b);
+	}
+
+	/// Clear midpoint cache after subdivision
+	/// This prevents memory growth when subdividing multiple times
+	this->midpointCache.clear();
+
+	spdlog::debug("Subdivision complete: {} vertices, {} triangles",
 		this->vertices.size(), this->indices.size() / 3);
 }
 
