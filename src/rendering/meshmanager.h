@@ -25,60 +25,17 @@ public:
 	/// Destructor ensures proper cleanup of resources
 	~MeshManager();
 
-	/// Create a mesh of the specified type
-	/// This method creates the mesh and its associated GPU buffers
-	/// @tparam T The type of mesh to create (must derive from Mesh)
-	/// @return A unique pointer to the created mesh
-	template<typename T>
-	std::unique_ptr<Mesh> createMesh() {
-		auto mesh = std::make_unique<T>();
-
-		/// Generate geometry and verify we have data
-		mesh->generateGeometry();
-		if (mesh->getVertices().empty() || mesh->getIndices().empty()) {
-			throw vulkan::VulkanException(
-				VK_ERROR_INITIALIZATION_FAILED,
-				"Mesh generated with no geometry",
-				__FUNCTION__, __FILE__, __LINE__
-			);
-		}
-
-		spdlog::debug("Creating mesh with {} vertices ({} bytes) and {} indices ({} bytes)",
-			mesh->getVertices().size(), mesh->getVertices().size() * sizeof(Vertex),
-			mesh->getIndices().size(), mesh->getIndices().size() * sizeof(uint32_t));
-
-		try {
-			/// Create GPU buffers for the mesh
-			auto vertexBuffer = this->bufferCache->getOrCreateVertexBuffer(
-				mesh->getVertices().size() * sizeof(Vertex));
-
-			auto indexBuffer = this->bufferCache->getOrCreateIndexBuffer(
-				mesh->getIndices().size() * sizeof(uint32_t));
-
-			/// Copy data to buffers using staging buffers
-			this->copyToBuffer(mesh->getVertices().data(),
-				mesh->getVertices().size() * sizeof(Vertex),
-				vertexBuffer->get());
-
-			this->copyToBuffer(mesh->getIndices().data(),
-				mesh->getIndices().size() * sizeof(uint32_t),
-				indexBuffer->get());
-
-			/// Assign buffers to the mesh
-			mesh->setBuffers(std::move(vertexBuffer), std::move(indexBuffer));
-
-			spdlog::info("Successfully created mesh with {} vertices and {} indices",
-				mesh->getVertices().size(), mesh->getIndices().size());
-
-			return mesh;
-		}
-		catch (const vulkan::VulkanException& e) {
-			spdlog::error("Failed to create mesh buffers: {}", e.what());
-			throw;
-		}
-	}
-
 	void cleanup();
+
+	/// Create a mesh of the specified type with constructor parameters
+	/// This method creates the mesh and its associated GPU buffers
+	/// The variadic template allows each mesh type to have its own parameters
+	/// @tparam T The type of mesh to create (must derive from Mesh)
+	/// @tparam Args Parameter pack for mesh constructor arguments
+	/// @param args Constructor arguments forwarded to mesh creation
+	/// @return A unique pointer to the created mesh
+	template<typename T, typename... Args>
+	[[nodiscard]] std::unique_ptr<Mesh> createMesh(Args&&... args);
 
 private:
 	/// Vulkan device references

@@ -1,4 +1,7 @@
 #include "meshmanager.h"
+#include "cubemesh.h"
+#include "icospheremesh.h"
+
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::rendering {
@@ -37,6 +40,57 @@ void MeshManager::cleanup() {
 	}
 
 	spdlog::info("MeshManager cleanup completed");
+}
+
+template <typename T, typename... Args>
+std::unique_ptr<Mesh> MeshManager::createMesh(Args&&... args) {
+	/// Create the mesh instance with provided parameters
+	/// We use perfect forwarding to pass constructor arguments exactly as received
+	auto mesh = std::make_unique<T>(std::forward<Args>(args)...);
+
+	/// Generate geometry and verify we have data
+	mesh->generateGeometry();
+	if (mesh->getVertices().empty() || mesh->getIndices().empty()) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Mesh generated with no geometry",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	spdlog::debug("Creating mesh with {} vertices ({} bytes) and {} indices ({} bytes)",
+	              mesh->getVertices().size(), mesh->getVertices().size() * sizeof(Vertex),
+	              mesh->getIndices().size(), mesh->getIndices().size() * sizeof(uint32_t));
+
+	try {
+		/// Create GPU buffers for the mesh
+		auto vertexBuffer = this->bufferCache->getOrCreateVertexBuffer(
+			mesh->getVertices().size() * sizeof(Vertex));
+
+		auto indexBuffer = this->bufferCache->getOrCreateIndexBuffer(
+			mesh->getIndices().size() * sizeof(uint32_t));
+
+		/// Copy data to buffers using staging buffers
+		this->copyToBuffer(mesh->getVertices().data(),
+		                   mesh->getVertices().size() * sizeof(Vertex),
+		                   vertexBuffer->get());
+
+		this->copyToBuffer(mesh->getIndices().data(),
+		                   mesh->getIndices().size() * sizeof(uint32_t),
+		                   indexBuffer->get());
+
+		/// Assign buffers to the mesh
+		mesh->setBuffers(std::move(vertexBuffer), std::move(indexBuffer));
+
+		spdlog::info("Successfully created mesh with {} vertices and {} indices",
+		             mesh->getVertices().size(), mesh->getIndices().size());
+
+		return mesh;
+	}
+	catch (const vulkan::VulkanException& e) {
+		spdlog::error("Failed to create mesh buffers: {}", e.what());
+		throw;
+	}
 }
 
 void MeshManager::createCommandPool(uint32_t graphicsQueueFamilyIndex) {
@@ -156,5 +210,18 @@ uint32_t MeshManager::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags 
 		__FUNCTION__, __FILE__, __LINE__
 	);
 }
+
+/// Explicit template instantiations for known mesh types
+/// We need these because we're implementing the template in the cpp file
+/// The double ampersands here are part of "universal references" (also called forwarding references). They allow the template to:
+/// Accept both lvalues and rvalues
+/// Forward them to the constructor exactly as they were passed
+/// Preserve their value category(whether they can be moved fromor not)
+/// In practice, you could also write it without the &&:
+/// This would still work in our case because we're not doing any special move semantics with the parameters.
+/// The && version is more technically correct when working with perfect forwarding, but for simple types like float
+/// and int, there's no practical difference.
+template std::unique_ptr<Mesh> MeshManager::createMesh<CubeMesh>();
+template std::unique_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float&&, int&&);
 
 } /// namespace lillugsi::rendering

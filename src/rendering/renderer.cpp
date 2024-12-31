@@ -1165,15 +1165,16 @@ void Renderer::initializeScene() {
 	/// Add an icosphere to demonstrate spherical geometry
 	/// We place it at the center where it's easy to observe
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
-	auto icosphereMesh = this->meshManager->createMesh<IcosphereMesh>();
+	auto icosphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.0f, 4);
 	icosphereMesh->setMaterial(metallicMaterial);
 	icosphereNode->setMesh(std::move(icosphereMesh));
 
-	/// Position the icosphere slightly above ground level
+	/// Position a large icosphere in the middle of all cubes
+	/// It intersects some of the cude to see, that depth rendering works correctly
 	/// This makes it easier to see its relationship to other objects
 	scene::Transform icosphereTransform;
-	icosphereTransform.position = glm::vec3(0.0f, 1.0f, 0.0f);
-	icosphereTransform.scale = glm::vec3(0.5f);  /// Make it smaller than the cubes
+	icosphereTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	icosphereTransform.scale = glm::vec3(2.9f);
 	icosphereNode->setLocalTransform(icosphereTransform);
 
 	/// Create a node for our test cube
