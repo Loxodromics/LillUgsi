@@ -5,6 +5,8 @@
 #include <string>
 #include <functional>
 
+#include "vulkanwrappers.h"
+
 namespace lillugsi::vulkan {
 
 /// PipelineShaderStage encapsulates configuration for a single shader stage
@@ -16,6 +18,26 @@ struct PipelineShaderStage {
 	const char* entryPoint = "main";
 };
 
+/// PipelineConfig represents the complete configuration needed to create a graphics pipeline
+/// This class manages both the configuration data and the resources needed for pipeline creation
+///
+/// Lifecycle and Resource Management:
+/// - PipelineConfig is created by Material classes to specify their pipeline requirements
+/// - All Vulkan resources (like shader modules) are managed through RAII handles
+/// - The configuration and its resources remain valid until the PipelineConfig is destroyed
+/// - No explicit cleanup is needed due to RAII design
+///
+/// Usage Flow:
+/// 1. Material creates configuration and adds shader stages
+/// 2. PipelineManager uses configuration to create actual pipeline
+/// 3. Configuration and resources are automatically cleaned up
+///
+/// Resource Dependencies:
+/// - Shader modules are kept alive through shaderModules member
+/// - Shader stage information references these modules
+/// - All pointers in pipeline create info refer to member variables
+/// - Member variables ensure all referenced data remains valid
+///
 /// PipelineConfig represents the complete configuration needed to create a graphics pipeline
 /// We use this structure to:
 /// 1. Uniquely identify pipeline configurations for caching
@@ -85,32 +107,56 @@ public:
 	[[nodiscard]] size_t hash() const;
 
 	/// Get the complete pipeline create info
+	/// @param device
 	/// @param renderPass The render pass this pipeline will be used with
 	/// @param layout The pipeline layout to use
 	/// @return The pipeline create info structure
 	[[nodiscard]] VkGraphicsPipelineCreateInfo getCreateInfo(VkDevice device, VkRenderPass renderPass,
-		VkPipelineLayout layout) const;
+		VkPipelineLayout layout);
 
 private:
 	/// Shader stages configuration
 	std::vector<PipelineShaderStage> shaderStages;
 
-	/// Vertex input state
-	VkVertexInputBindingDescription vertexBindingDescription{};
-	std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
+	/// Shader stage configuration
+	/// References shader modules and must stay alive until pipeline creation
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStageInfos;
+
+	/// Shader modules for pipeline creation
+	/// These must stay alive until pipeline creation is complete
+	/// as they are referenced by shaderStageInfos
+	std::vector<VulkanShaderModuleHandle> shaderModules;
 
 	/// Input assembly state
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
 
+	/// Vertex input state
+	VkVertexInputBindingDescription vertexBindingDescription{};
+	std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+
+	/// Dynamic state for viewport and scissor
+	/// These need to be dynamic for window resizing
+	std::array<VkDynamicState, 2> dynamicStates;
+	VkPipelineDynamicStateCreateInfo dynamicState{};
+
+	/// Viewport and scissor state
+	/// Even with dynamic viewport/scissor, we need to specify counts
+	VkPipelineViewportStateCreateInfo viewportState{};
+
 	/// Rasterization state
 	VkPipelineRasterizationStateCreateInfo rasterization{};
 
-	/// Depth state
+	/// Depth-stencil state
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 
 	/// Color blend state
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	VkPipelineColorBlendStateCreateInfo colorBlend{};
+
+	/// Multisampling state
+	/// We keep this as member to ensure pointer validity
+	VkPipelineMultisampleStateCreateInfo multisampling{};
 
 	/// Initialize all state structures with default values
 	/// Called by constructor to ensure consistent initialization

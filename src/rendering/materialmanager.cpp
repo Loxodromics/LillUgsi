@@ -1,4 +1,5 @@
 #include "materialmanager.h"
+#include "vulkan/vulkanexception.h"
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::rendering {

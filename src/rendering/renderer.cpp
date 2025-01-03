@@ -65,52 +65,54 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Create render pass
 		this->createRenderPass();
 
-		/// Create framebuffers
-		this->createFramebuffers();
-
 		/// Create command pool
 		this->createCommandPool();
 
-		/// Initialize MeshManager after Vulkan setup but before scene creation
+		/// Initialize pipeline manager
+		/// This needs to happen before materials are created
+		/// as they depend on the global descriptor layouts
+		this->pipelineManager = std::make_unique<vulkan::PipelineManager>(
+			this->vulkanContext->getDevice()->getDevice(),
+			this->renderPass.get()
+		);
+		this->pipelineManager->initialize();
+
+		/// Initialize buffer utility after Vulkan setup
+		this->vulkanBufferUtility = std::make_unique<vulkan::VulkanBuffer>(
+			this->vulkanContext->getDevice()->getDevice(),
+			this->vulkanContext->getPhysicalDevice()
+		);
+
+		/// Create framebuffers
+		this->createFramebuffers();
+
+		/// Initialize MeshManager
 		this->meshManager = std::make_unique<MeshManager>(
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice(),
 			this->vulkanContext->getDevice()->getGraphicsQueue(),
 			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex()
 		);
-		
 
-		/// Initialize VulkanBuffer
-		this->vulkanBufferUtility = std::make_unique<vulkan::VulkanBuffer>(
-			this->vulkanContext->getDevice()->getDevice(),
-			this->vulkanContext->getPhysicalDevice()
-		);
 		/// Create camera uniform buffer
 		this->createCameraUniformBuffer();
 
 		/// Initialize light management and buffer
-		/// This needs to happen before descriptor set creation
 		this->lightManager = std::make_unique<LightManager>();
 		this->createLightUniformBuffer();
-
-		/// Create separate descriptor layouts before material system
-		this->createDescriptorSetLayouts();
-
-		/// Initialize material system with proper descriptor layout setup before scene creation
-		/// This ensures materials are available when creating scene objects
-		this->initializeMaterials();
-
-		/// Initialize the scene with basic geometry
-		this->initializeScene();
 
 		/// Create descriptor pool
 		this->createDescriptorPool();
 
 		/// Create descriptor sets
+		/// Using global layouts from pipeline manager
 		this->createDescriptorSets();
 
-		/// Create graphics pipeline
-		this->createGraphicsPipeline();
+		/// Initialize material system
+		this->initializeMaterials();
+
+		/// Initialize the scene
+		this->initializeScene();
 
 		/// Create command buffers
 		this->createCommandBuffers();
@@ -121,7 +123,7 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Create synchronization objects
 		this->createSyncObjects();
 
-		/// Initialize camera
+		/// Initialize camera with default position
 		this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 0.0f, 5.0f));
 
 		spdlog::info("Renderer initialized successfully");
@@ -129,10 +131,6 @@ bool Renderer::initialize(SDL_Window* window) {
 	}
 	catch (const vulkan::VulkanException& e) {
 		spdlog::error("Vulkan error during renderer initialization: {}", e.what());
-		return false;
-	}
-	catch (const std::exception& e) {
-		spdlog::error("Error during renderer initialization: {}", e.what());
 		return false;
 	}
 }
@@ -190,10 +188,6 @@ void Renderer::cleanup() {
 		vkDestroyDescriptorPool(this->vulkanContext->getDevice()->getDevice(), this->descriptorPool, nullptr);
 		this->descriptorPool = VK_NULL_HANDLE;
 	}
-
-	/// This ensures proper cleanup order as other resources might depend on these layouts
-	this->cameraDescriptorSetLayout.reset();
-	this->lightDescriptorSetLayout.reset();
 
 	/// Clean up uniform buffers
 	if (this->cameraBuffer) {
@@ -577,114 +571,21 @@ vulkan::VulkanShaderModuleHandle Renderer::createShaderModule(const std::vector<
 	});
 }
 
-void Renderer::createGraphicsPipeline() {
-	/// Initialize the PipelineManager
-	/// This manager will handle the creation and management of our graphics pipelines
-	this->pipelineManager = std::make_unique<vulkan::PipelineManager>(
-		this->vulkanContext->getDevice()->getDevice(),
-		this->renderPass.get()
-	);
-
-	/// Get the default material's shader program
-	auto defaultMaterial = this->materialManager->getMaterial("default");
-	if (!defaultMaterial) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Default material not found for pipeline creation",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
-
-	/// Get shader program from the material
-	/// We need to cast to PBRMaterial to access the shader program
-	auto pbrMaterial = std::dynamic_pointer_cast<PBRMaterial>(defaultMaterial);
-	if (!pbrMaterial) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Default material is not a PBR material",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
-
-	/// Define the vertex input binding
-	/// This describes how to interpret the vertex data that will be input to the vertex shader
-	VkVertexInputBindingDescription bindingDescription{};
-	bindingDescription.binding = 0; /// We're using a single vertex buffer, so we use binding 0
-	bindingDescription.stride = sizeof(Vertex); /// Size of each vertex
-	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; /// Move to the next data entry after each vertex
-
-	/// Define the vertex attribute descriptions
-	/// These describe how to extract vertex attributes from the vertex buffer data
-	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-
-	/// Position attribute
-	attributeDescriptions[0].binding = 0; /// Which binding the per-vertex data comes from
-	attributeDescriptions[0].location = 0; /// Location in the vertex shader
-	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; /// Format of the attribute (vec3)
-	attributeDescriptions[0].offset = offsetof(Vertex, position); /// Offset of the attribute in the vertex struct
-
-	/// Normal attribute
-	attributeDescriptions[1].binding = 0;
-	attributeDescriptions[1].location = 1;
-	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[1].offset = offsetof(Vertex, normal);
-
-	/// Color attribute
-	attributeDescriptions[2].binding = 0;
-	attributeDescriptions[2].location = 2;
-	attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[2].offset = offsetof(Vertex, color);
-
-	/// We need to combine camera/light descriptors with material descriptors
-	/// Combine all descriptor set layouts in the order that matches
-	/// the set = X bindings in the shaders
-	const std::vector<VkDescriptorSetLayout> descriptorSetLayouts = {
-		this->cameraDescriptorSetLayout.get(),    /// set = 0 for camera data
-		this->lightDescriptorSetLayout.get(),     /// set = 1 for lighting data
-		defaultMaterial->getDescriptorSetLayout() /// set = 2 for material data
-	};
-
-	/// Create the graphics pipeline using the PipelineManager
-	this->graphicsPipeline = this->pipelineManager->createGraphicsPipeline(
-		"mainPipeline",
-		pbrMaterial->getShaderProgram(),
-		bindingDescription,
-		std::vector<VkVertexInputAttributeDescription>(
-			attributeDescriptions.begin(),
-			attributeDescriptions.end()
-		),
-		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		this->vulkanContext->getSwapChain()->getSwapChainExtent().width,
-		this->vulkanContext->getSwapChain()->getSwapChainExtent().height,
-		descriptorSetLayouts,  // Pass vector of layouts instead of single layout
-		true
-	);
-
-	/// Retrieve the pipeline layout
-	this->pipelineLayout = this->pipelineManager->getPipelineLayout("mainPipeline");
-
-	if (!this->graphicsPipeline || !this->pipelineLayout) {
-		throw vulkan::VulkanException(VK_ERROR_INITIALIZATION_FAILED, "Failed to create graphics pipeline or retrieve pipeline layout", __FUNCTION__, __FILE__, __LINE__);
-	}
-	
-	/// At this point, we have successfully created a graphics pipeline and retrieved its layout
-	/// The pipeline is ready to be used for rendering
-	/// The pipeline layout can be used when binding descriptor sets or push constants
-	spdlog::info("Graphics pipeline and layout created successfully");
-}
-
 void Renderer::recordCommandBuffers() {
 	/// Resize command buffers vector to match the number of framebuffers
 	/// We need one command buffer for each swap chain image
+	/// Start with clean command buffers
+	/// First, free existing command buffers to prevent memory leaks
 	vkFreeCommandBuffers(this->vulkanContext->getDevice()->getDevice(),
 		this->commandPool.get(),
 		static_cast<uint32_t>(this->commandBuffers.size()),
 		this->commandBuffers.data());
 
 	/// Resize for new recording
+	/// One command buffer per framebuffer
 	this->commandBuffers.resize(this->swapChainFramebuffers.size());
 
-	/// Set up command buffer allocation info
+	/// Allocate new command buffers
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = this->commandPool.get();
@@ -714,14 +615,13 @@ void Renderer::recordCommandBuffers() {
 		renderPassInfo.renderArea.offset = {0, 0};
 		renderPassInfo.renderArea.extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
 
-		/// Define clear values for color and depth attachments
-		/// We now need two clear values: one for color and one for depth
+		/// Set clear values for color and depth attachments
 		std::array<VkClearValue, 2> clearValues{};
 		clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};  /// Black with 100% opacity
 		/// For Reverse-Z, we clear to 0.0f instead of 1.0f
 		/// This represents the furthest possible depth value in Reverse-Z
 		/// Objects closer to the camera will have depth values closer to 1.0
-		clearValues[1].depthStencil = {0.0f, 0};
+		clearValues[1].depthStencil = {0.0f, 0};            /// Using 0.0f for Reverse-Z
 
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassInfo.pClearValues = clearValues.data();
@@ -731,44 +631,81 @@ void Renderer::recordCommandBuffers() {
 		/// and no secondary command buffers will be executed
 		vkCmdBeginRenderPass(this->commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		/// Bind the graphics pipeline
-		vkCmdBindPipeline(this->commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
-			this->graphicsPipeline->get());
-
-		/// Bind both camera and light descriptor sets before material
-		std::array<VkDescriptorSet, 2> sets = {
-			this->cameraDescriptorSets[i],
-			this->lightDescriptorSets[i]
-		};
-		vkCmdBindDescriptorSets(
-			this->commandBuffers[i],
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			this->pipelineLayout->get(),
-			0,  /// First set = 0 (camera)
-			2,  /// Bind both sets at once
-			sets.data(),
-			0, nullptr
-		);
-
 		/// Collect render data from visible objects in the scene
 		std::vector<rendering::Mesh::RenderData> renderData;
 		this->scene->getRenderData(*this->camera, renderData);
 
+		/// Track current material to minimize pipeline switches
+		std::string currentMaterialName;
+
 		/// Draw all visible objects
 		for (const auto& data : renderData) {
-			/// Bind the material before drawing
-			/// Each material handles its own descriptor set binding
-			if (data.material) {
-				data.material->bind(this->commandBuffers[i], this->pipelineLayout->get());
-			} else {
-				spdlog::warn("Object rendered without material");
+			/// Get material name for pipeline lookup
+			const auto& materialName = data.material->getName();
+
+			/// Switch pipeline only if material changes
+			if (materialName != currentMaterialName) {
+				/// Get pipeline from PipelineManager using material name
+				auto pipeline = this->pipelineManager->getPipeline(materialName);
+				if (!pipeline) {
+					spdlog::error("Failed to find pipeline for material '{}'", materialName);
+					continue;
+				}
+
+				auto pipelineLayout = this->pipelineManager->getPipelineLayout(materialName);
+				if (!pipelineLayout) {
+					spdlog::error("Failed to find pipeline layout for material '{}'", materialName);
+					continue;
+				}
+
+				/// Bind the new pipeline
+				vkCmdBindPipeline(this->commandBuffers[i],
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					pipeline->get());
+
+				/// Set dynamic viewport and scissor
+				/// These need to be set because we configured them as dynamic state
+				VkViewport viewport{};
+				viewport.x = 0.0f;
+				viewport.y = 0.0f;
+				viewport.width = static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().width);
+				viewport.height = static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().height);
+				viewport.minDepth = 0.0f;
+				viewport.maxDepth = 1.0f;
+
+				VkRect2D scissor{};
+				scissor.offset = {0, 0};
+				scissor.extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
+
+				vkCmdSetViewport(this->commandBuffers[i], 0, 1, &viewport);
+				vkCmdSetScissor(this->commandBuffers[i], 0, 1, &scissor);
+
+				/// Bind camera and light descriptor sets (sets 0 and 1)
+				std::array<VkDescriptorSet, 2> globalSets = {
+					this->cameraDescriptorSets[i],
+					this->lightDescriptorSets[i]
+				};
+				vkCmdBindDescriptorSets(
+					this->commandBuffers[i],
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					pipelineLayout->get(),
+					0,  /// First set = 0 (camera)
+					2,  /// Bind both global sets at once
+					globalSets.data(),
+					0, nullptr
+				);
+
+				currentMaterialName = materialName;
 			}
 
-			/// Update push constants with model matrix for this object
-			/// Push constants provide the fastest way to update per-object data
+			/// Bind material-specific resources
+			data.material->bind(this->commandBuffers[i],
+				this->pipelineManager->getPipelineLayout(materialName)->get());
+
+			/// Update push constants with model matrix
 			vkCmdPushConstants(
 				this->commandBuffers[i],
-				this->pipelineLayout->get(),
+				this->pipelineManager->getPipelineLayout(materialName)->get(),
 				VK_SHADER_STAGE_VERTEX_BIT,
 				0,
 				sizeof(glm::mat4),
@@ -795,7 +732,7 @@ void Renderer::recordCommandBuffers() {
 		VK_CHECK(vkEndCommandBuffer(this->commandBuffers[i]));
 	}
 
-	spdlog::trace("Command buffers recorded with scene objects");
+	// spdlog::debug("Command buffers recorded successfully");
 }
 
 void Renderer::createCameraUniformBuffer() {
@@ -848,120 +785,43 @@ void Renderer::updateCameraUniformBuffer() const {
 		this->cameraBufferMemory);
 }
 
-/// Create descriptor set layouts for camera and lighting
-/// We separate these layouts to match shader bindings
-/// and allow for independent updates of different data types
-void Renderer::createDescriptorSetLayouts() {
-	/// Create camera descriptor set layout (set = 0)
-	/// Camera data needs to be accessible in the vertex shader
-	{
-		VkDescriptorSetLayoutBinding cameraBinding{};
-		cameraBinding.binding = 0;
-		cameraBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		cameraBinding.descriptorCount = 1;
-		cameraBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		cameraBinding.pImmutableSamplers = nullptr;
-
-		VkDescriptorSetLayoutCreateInfo layoutInfo{};
-		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = 1;
-		layoutInfo.pBindings = &cameraBinding;
-
-		VkDescriptorSetLayout layout;
-		VK_CHECK(vkCreateDescriptorSetLayout(
-			this->vulkanContext->getDevice()->getDevice(),
-			&layoutInfo,
-			nullptr,
-			&layout
-		));
-
-		this->cameraDescriptorSetLayout = vulkan::VulkanDescriptorSetLayoutHandle(
-			layout,
-			[this](VkDescriptorSetLayout l)
-			{
-				vkDestroyDescriptorSetLayout(
-					this->vulkanContext->getDevice()->getDevice(),
-					l,
-					nullptr
-				);
-			}
-		);
-	}
-
-	/// Create light descriptor set layout (set = 1)
-	/// Light data needs to be accessible in both vertex and fragment shaders
-	{
-		VkDescriptorSetLayoutBinding lightBinding{};
-		lightBinding.binding = 0;
-		lightBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		lightBinding.descriptorCount = 1;
-		lightBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-		lightBinding.pImmutableSamplers = nullptr;
-
-		VkDescriptorSetLayoutCreateInfo layoutInfo{};
-		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = 1;
-		layoutInfo.pBindings = &lightBinding;
-
-		VkDescriptorSetLayout layout;
-		VK_CHECK(vkCreateDescriptorSetLayout(
-			this->vulkanContext->getDevice()->getDevice(),
-			&layoutInfo,
-			nullptr,
-			&layout
-		));
-
-		this->lightDescriptorSetLayout = vulkan::VulkanDescriptorSetLayoutHandle(
-			layout,
-			[this](VkDescriptorSetLayout l)
-			{
-				vkDestroyDescriptorSetLayout(
-					this->vulkanContext->getDevice()->getDevice(),
-					l,
-					nullptr
-				);
-			}
-		);
-	}
-
-	spdlog::info("Created separate descriptor set layouts for camera and lighting");
-}
 
 void Renderer::createDescriptorPool() {
-    /// Define pool sizes for our different descriptor types
-    /// Each type needs its own pool allocation
-    std::array<VkDescriptorPoolSize, 2> poolSizes{};
+	/// Define pool sizes for our different descriptor types
+	/// Each type needs its own pool allocation
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 
-    /// Camera buffer pool size
-    /// One descriptor per swap chain image
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
+	/// Camera buffer pool size
+	/// One descriptor per swap chain image
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
 
-    /// Light buffer pool size
-    /// One descriptor per swap chain image
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
+	/// Light buffer pool size
+	/// One descriptor per swap chain image
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
 
-    /// Create the descriptor pool
-    /// We need enough space for both camera and light descriptors per frame
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-    poolInfo.pPoolSizes = poolSizes.data();
-    /// Multiply maxSets by 2 because we need two sets (camera + light) per frame
-    poolInfo.maxSets = static_cast<uint32_t>(this->swapChainFramebuffers.size() * 2);
+	/// Create the descriptor pool
+	/// We need enough space for both camera and light descriptors per frame
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
+	/// Multiply maxSets by 2 because we need two sets (camera + light) per frame
+	poolInfo.maxSets = static_cast<uint32_t>(this->swapChainFramebuffers.size() * 2);
 
-    VK_CHECK(vkCreateDescriptorPool(
-        this->vulkanContext->getDevice()->getDevice(),
-        &poolInfo,
-        nullptr,
-        &this->descriptorPool));
+	VK_CHECK(vkCreateDescriptorPool(
+		this->vulkanContext->getDevice()->getDevice(),
+		&poolInfo,
+		nullptr,
+		&this->descriptorPool));
 
-    spdlog::info("Created descriptor pool for camera and light descriptors");
+	spdlog::info("Created descriptor pool for camera and light descriptors");
 }
 
 void Renderer::createDescriptorSets() {
-	/// We need two sets of descriptors (camera + light) for each swap chain image
+	/// Calculate number of descriptor sets needed
+	/// One set per swap chain image for both camera and lighting data
 	size_t numFrames = this->swapChainFramebuffers.size();
 
 	/// Create storage for camera descriptor sets
@@ -971,7 +831,10 @@ void Renderer::createDescriptorSets() {
 
 	/// First, allocate camera descriptor sets
 	{
-		std::vector<VkDescriptorSetLayout> cameraLayouts(numFrames, this->cameraDescriptorSetLayout.get());
+		/// Create layouts array using global layout from pipeline manager
+		std::vector<VkDescriptorSetLayout> cameraLayouts(numFrames,
+			this->pipelineManager->getCameraDescriptorLayout());
+
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = this->descriptorPool;
@@ -986,7 +849,10 @@ void Renderer::createDescriptorSets() {
 
 	/// Then, allocate light descriptor sets
 	{
-		std::vector<VkDescriptorSetLayout> lightLayouts(numFrames, this->lightDescriptorSetLayout.get());
+		/// Create layouts array using global layout from pipeline manager
+		std::vector<VkDescriptorSetLayout> lightLayouts(numFrames,
+			this->pipelineManager->getLightDescriptorLayout());
+
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = this->descriptorPool;
@@ -1000,8 +866,7 @@ void Renderer::createDescriptorSets() {
 	}
 
 	/// Update descriptors for each frame
-	for (size_t i = 0; i < numFrames; i++)
-	{
+	for (size_t i = 0; i < numFrames; i++) {
 		/// Update camera descriptor
 		{
 			VkDescriptorBufferInfo bufferInfo{};
@@ -1300,8 +1165,6 @@ void Renderer::updateLightUniformBuffer() const {
 		this->lightManager->getLightCount());
 }
 
-/// Initialize the material system
-/// Sets up the material manager and creates default materials
 void Renderer::initializeMaterials() {
 	/// Create material manager
 	/// We pass the Vulkan device handles needed for resource creation
@@ -1311,13 +1174,72 @@ void Renderer::initializeMaterials() {
 	);
 
 	/// Create default PBR material
-	/// This provides a standard material for basic objects
+	/// This provides our standard material for basic objects
 	auto defaultMaterial = this->materialManager->createPBRMaterial("default");
 	defaultMaterial->setBaseColor(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
 	defaultMaterial->setRoughness(0.5f);
 	defaultMaterial->setMetallic(0.0f);
 
-	spdlog::info("Material system initialized with default materials");
+	/// Create pipeline for default material
+	/// This ensures the pipeline is ready when we start rendering
+	auto defaultPipeline = this->pipelineManager->createPipeline(*defaultMaterial);
+	if (!defaultPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for default material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create a metallic material for the icosphere
+	/// We use different material properties to better showcase the geometry
+	auto metallicMaterial = this->materialManager->createPBRMaterial("metallic");
+	metallicMaterial->setBaseColor(glm::vec4(0.95f, 0.95f, 0.95f, 1.0f));
+	metallicMaterial->setMetallic(1.0f);     /// Fully metallic
+	metallicMaterial->setRoughness(0.2f);    /// Fairly smooth for good reflection
+	metallicMaterial->setAmbient(1.0f);      /// Full ambient occlusion
+
+	/// Create pipeline for metallic material
+	auto metallicPipeline = this->pipelineManager->createPipeline(*metallicMaterial);
+	if (!metallicPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for metallic material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// We use different material properties to better showcase the geometry
+	/// For the grid of cubes, create some varied materials
+	auto redMaterial = this->materialManager->createPBRMaterial("red");
+	redMaterial->setBaseColor(glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
+	redMaterial->setRoughness(0.7f);
+
+	/// Create pipeline for red material
+	auto redPipeline = this->pipelineManager->createPipeline(*redMaterial);
+	if (!redPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for red material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+	
+	auto blueMaterial = this->materialManager->createPBRMaterial("blue");
+	blueMaterial->setBaseColor(glm::vec4(0.2f, 0.2f, 1.0f, 1.0f));
+	blueMaterial->setMetallic(0.8f);
+
+	/// Create pipeline for blue material
+	auto bluePipeline = this->pipelineManager->createPipeline(*blueMaterial);
+	if (!bluePipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for blue material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	spdlog::info("Materials and pipelines initialized successfully");
 }
 
 }

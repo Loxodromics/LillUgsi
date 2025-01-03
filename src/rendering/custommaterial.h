@@ -30,6 +30,10 @@ public:
 
 	~CustomMaterial() override;
 
+	/// Get the shader paths for this custom material
+	/// @return Shader paths configuration for custom pipeline creation
+	[[nodiscard]] ShaderPaths getShaderPaths() const override;
+
 	/// Define a new uniform buffer in the material
 	/// @param name Identifier for the uniform buffer
 	/// @param size Size of the uniform data in bytes
@@ -75,6 +79,10 @@ private:
 	/// Track uniform buffers and their metadata
 	std::unordered_map<std::string, UniformBufferInfo> uniformBuffers;
 	uint32_t nextBinding{0};  /// Track next available binding point
+
+	/// Shader paths stored for pipeline creation
+	std::string vertexShaderPath;
+	std::string fragmentShaderPath;
 };
 
 } /// namespace lillugsi::rendering

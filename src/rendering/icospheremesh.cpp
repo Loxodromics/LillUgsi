@@ -1,4 +1,5 @@
 #include "icospheremesh.h"
+#include "vulkan/vulkanexception.h"
 #include <spdlog/spdlog.h>
 // #include <glm/gtx/normalize.hpp>
 #include <cmath>

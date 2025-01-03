@@ -10,14 +10,10 @@ PBRMaterial::PBRMaterial(
 	const std::string& name,
 	VkPhysicalDevice physicalDevice,
 	const std::string& vertexShaderPath,
-	const std::string& fragmentShaderPath )
-	: Material(device, name, physicalDevice) {
-	/// Create shader program before descriptor layout
-	/// as the layout depends on shader requirements
-	this->shaderProgram = vulkan::ShaderProgram::createGraphicsProgram(
-		device,
-		vertexShaderPath,
-		fragmentShaderPath);
+	const std::string& fragmentShaderPath)
+	: Material(device, name, physicalDevice, MaterialType::PBR)
+	, vertexShaderPath(vertexShaderPath)
+	, fragmentShaderPath(fragmentShaderPath) {
 
 	/// Create descriptor layout first as it's needed for other resources
 	this->createDescriptorSetLayout();
@@ -40,6 +36,26 @@ PBRMaterial::~PBRMaterial() {
 	}
 
 	spdlog::debug("Destroyed PBR material '{}'", this->name);
+}
+
+ShaderPaths PBRMaterial::getShaderPaths() const {
+	/// Return stored shader paths for pipeline creation
+	/// These paths are validated during construction
+	ShaderPaths paths;
+	paths.vertexPath = this->vertexShaderPath;
+	paths.fragmentPath = this->fragmentShaderPath;
+
+	/// Ensure paths are still valid
+	/// This check helps catch potential runtime issues
+	if (!paths.isValid()) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Invalid shader paths in PBR material '" + this->name + "'",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	return paths;
 }
 
 void PBRMaterial::createDescriptorSetLayout() {

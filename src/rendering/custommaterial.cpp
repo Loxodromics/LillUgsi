@@ -9,15 +9,10 @@ CustomMaterial::CustomMaterial(
 	const std::string& name,
 	VkPhysicalDevice physicalDevice,
 	const std::string& vertexShaderPath,
-	const std::string& fragmentShaderPath
-)
-	: Material(device, name, physicalDevice) {
-	/// Create shader program before descriptor layout
-	/// as the layout depends on shader requirements
-	this->shaderProgram = vulkan::ShaderProgram::createGraphicsProgram(
-		device,
-		vertexShaderPath,
-		fragmentShaderPath);
+	const std::string& fragmentShaderPath)
+	: Material(device, name, physicalDevice, MaterialType::Custom)
+	, vertexShaderPath(vertexShaderPath)
+	, fragmentShaderPath(fragmentShaderPath) {
 
 	spdlog::debug("Created CustomMaterial '{}' with shaders: {} and {}",
 		this->name, vertexShaderPath, fragmentShaderPath);
@@ -35,6 +30,26 @@ CustomMaterial::~CustomMaterial() {
 	}
 
 	spdlog::debug("Destroyed CustomMaterial '{}'", this->name);
+}
+
+ShaderPaths CustomMaterial::getShaderPaths() const {
+	/// Return stored shader paths for pipeline creation
+	/// Custom materials always require explicit shader paths
+	ShaderPaths paths;
+	paths.vertexPath = this->vertexShaderPath;
+	paths.fragmentPath = this->fragmentShaderPath;
+
+	/// Validate shader paths
+	/// This is especially important for custom materials as paths are user-provided
+	if (!paths.isValid()) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Invalid shader paths in custom material '" + this->name + "'",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	return paths;
 }
 
 void CustomMaterial::defineUniformBuffer(

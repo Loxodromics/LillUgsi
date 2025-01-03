@@ -113,8 +113,6 @@ private:
 	void recordCommandBuffers();
 	void createCameraUniformBuffer();
 	void updateCameraUniformBuffer() const;
-	void createDescriptorSetLayout();
-	void createDescriptorSetLayouts();
 	void createDescriptorPool();
 	void createDescriptorSets();
 	void createSyncObjects();
@@ -147,15 +145,10 @@ private:
 	vulkan::VulkanBufferHandle cameraBuffer;
 	VkDeviceMemory cameraBufferMemory;
 
-	/// Descriptor set layouts
-	vulkan::VulkanDescriptorSetLayoutHandle cameraDescriptorSetLayout;  // set = 0
-	vulkan::VulkanDescriptorSetLayoutHandle lightDescriptorSetLayout;   // set = 1
-
 	/// Descriptor pool
 	VkDescriptorPool descriptorPool;
 
 	/// Descriptor sets
-	// std::vector<VkDescriptorSet> descriptorSets;
 	std::vector<VkDescriptorSet> cameraDescriptorSets;  /// Set = 0 for camera data
 	std::vector<VkDescriptorSet> lightDescriptorSets;   /// Set = 1 for light data
 

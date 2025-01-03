@@ -33,6 +33,10 @@ public:
 	);
 	~PBRMaterial() override;
 
+	/// Get the shader paths for this PBR material
+	/// @return Shader paths configuration for PBR pipeline creation
+	[[nodiscard]] ShaderPaths getShaderPaths() const override;
+
 	/// Set the base color of the material
 	/// @param color RGB color with alpha
 	void setBaseColor(const glm::vec4& color);
@@ -81,6 +85,10 @@ protected:
 	void updateUniformBuffer();
 
 	Properties properties;   /// CPU-side material properties
+
+	/// Shader paths stored for pipeline creation
+	std::string vertexShaderPath;
+	std::string fragmentShaderPath;
 };
 
 } /// namespace lillugsi::rendering

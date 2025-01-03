@@ -1,207 +1,255 @@
 #include "pipelinemanager.h"
+#include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
-#include <fstream>
-#include <glm/matrix.hpp>
 
 namespace lillugsi::vulkan {
 
 PipelineManager::PipelineManager(VkDevice device, VkRenderPass renderPass)
 	: device(device)
 	, renderPass(renderPass) {
+	spdlog::debug("Created pipeline manager");
 }
 
-std::shared_ptr<VulkanPipelineHandle> PipelineManager::createGraphicsPipeline(
-	const std::string& name,
-	std::shared_ptr<ShaderProgram> shaderProgram,
-	const VkVertexInputBindingDescription& vertexBindingDescription,
-	const std::vector<VkVertexInputAttributeDescription>& vertexAttributeDescriptions,
-	VkPrimitiveTopology topology,
-	uint32_t width,
-	uint32_t height,
-	const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
-	bool enableDepthTest) {
-	/// Store the shader program with shared ownership
-	/// This allows multiple pipelines to use the same shaders efficiently
-	this->shaderPrograms[name] = shaderProgram;
+void PipelineManager::initialize() {
+	/// Create global descriptor layouts before any pipeline creation
+	/// These layouts are required for all materials
+	this->createGlobalDescriptorLayouts();
+	spdlog::info("Pipeline manager initialized with global descriptor layouts");
+}
 
-	/// Get the shader stages from the program
-	/// The program remains valid as long as any pipeline using it exists
-	auto shaderStages = this->shaderPrograms.at(name)->getShaderStages();
+std::shared_ptr<VulkanPipelineHandle> PipelineManager::createPipeline(
+	const rendering::Material& material) {
+	/// Get shader paths and create shader program
+	auto shaderPaths = material.getShaderPaths();
+	auto shaderProgram = this->getOrCreateShaderProgram(shaderPaths);
+	if (!shaderProgram) {
+		throw VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create shader program for material '" + material.getName() + "'",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
 
-	/// Set up vertex input state
-	/// This describes the format of the vertex data that will be provided to the vertex shader
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &vertexBindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributeDescriptions.size());
-	vertexInputInfo.pVertexAttributeDescriptions = vertexAttributeDescriptions.data();
+	/// Get pipeline configuration from material
+	auto config = material.getPipelineConfig();
 
-	/// Set up input assembly state
-	/// This describes how to assemble vertices into primitives
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssembly.topology = topology;  // Use the provided topology (e.g., triangle list, line strip)
-	inputAssembly.primitiveRestartEnable = VK_FALSE;  // Don't use primitive restart
+	/// Create descriptor set layouts array based on material requirements
+	/// We need three layouts: camera (set=0), lighting (set=1), material (set=2)
+	/// Order matches shader set bindings
+	std::vector<VkDescriptorSetLayout> descriptorSetLayouts = {
+		this->getCameraDescriptorLayout(),    /// set = 0
+		this->getLightDescriptorLayout(),     /// set = 1
+		material.getDescriptorSetLayout()     /// set = 2
+	};
 
-	/// Set up viewport and scissor
-	/// The viewport describes the region of the framebuffer that the output will be rendered to
-	VkViewport viewport{};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(width);
-	viewport.height = static_cast<float>(height);
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	/// The scissor rectangle defines in which regions pixels will actually be stored
-	/// Any pixels outside the scissor rectangles will be discarded
-	VkRect2D scissor{};
-	scissor.offset = {0, 0};
-	scissor.extent = {width, height};
-
-	VkPipelineViewportStateCreateInfo viewportState{};
-	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = &viewport;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = &scissor;
-
-	/// Set up rasterizer state
-	/// The rasterizer takes the geometry shaped by the vertices and turns it into fragments
-	VkPipelineRasterizationStateCreateInfo rasterizer{};
-	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizer.depthClampEnable = VK_FALSE;  /// Don't clamp fragments to near and far planes
-	rasterizer.rasterizerDiscardEnable = VK_FALSE;  /// Don't discard all primitives before rasterization stage
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;  /// Fill the area of the polygon with fragments
-	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;  /// Cull back faces
-	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;  /// Specify vertex order for faces to be considered front-facing
-	rasterizer.depthBiasEnable = VK_FALSE;  /// Don't use depth bias
-
-	/// Set up multisampling state
-	/// Multisampling is one of the ways to perform anti-aliasing
-	VkPipelineMultisampleStateCreateInfo multisampling{};
-	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;  /// No multisampling, use 1 sample per pixel
-
-	/// Set up color blending
-	/// This describes how to combine colors in the framebuffer
-	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	colorBlendAttachment.blendEnable = VK_FALSE;  /// No blending, overwrite existing color
-
-	VkPipelineColorBlendStateCreateInfo colorBlending{};
-	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.logicOpEnable = VK_FALSE;
-	colorBlending.attachmentCount = 1;
-	colorBlending.pAttachments = &colorBlendAttachment;
-
-	/// Configure depth and stencil state for Reverse-Z
-	VkPipelineDepthStencilStateCreateInfo depthStencil{};
-	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
-	depthStencil.depthWriteEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
-
-	/// Use GREATER instead of LESS for Reverse-Z
-	/// In Reverse-Z, larger depth values are closer to the camera
-	/// This is the opposite of traditional depth testing
-	depthStencil.depthCompareOp = VK_COMPARE_OP_GREATER;
-
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.minDepthBounds = 0.0f; /// Not used when depthBoundsTestEnable is VK_FALSE
-	depthStencil.maxDepthBounds = 1.0f; /// Not used when depthBoundsTestEnable is VK_FALSE
-	depthStencil.stencilTestEnable = VK_FALSE;
-
-	/// Define the push constant range for model matrix
-	/// We use push constants for per-object transforms as they provide
-	/// the fastest way to update frequently changing data
-	VkPushConstantRange pushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;  /// Only needed in vertex shader
-	pushConstantRange.offset = 0;  /// Start at beginning of push constant block
-	pushConstantRange.size = sizeof(glm::mat4);  /// Size of model matrix
-
-	/// Set up pipeline layout with multiple descriptor set layouts
-	/// The order of layouts matches the 'set = X' bindings in shaders
+	/// Create pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
-	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();  /// Point to the descriptor set layouts
-	pipelineLayoutInfo.pushConstantRangeCount = 1;  /// One range for model matrix
+	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
+
+	/// Set up push constant range for model matrix
+	VkPushConstantRange pushConstantRange{};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(glm::mat4);  /// Model matrix size
+
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
-	/// Create the pipeline layout
 	VkPipelineLayout pipelineLayout;
 	VK_CHECK(vkCreatePipelineLayout(this->device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
-	/// Set up the graphics pipeline creation info
-	/// This combines all the state we've defined above into a single create info structure
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());  /// For now that always 2: Vertex and fragment shader stages
-	pipelineInfo.pStages = shaderStages.data();
-	pipelineInfo.pVertexInputState = &vertexInputInfo;
-	pipelineInfo.pInputAssemblyState = &inputAssembly;
-	pipelineInfo.pViewportState = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizer;
-	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pColorBlendState = &colorBlending;
-	pipelineInfo.pDepthStencilState = &depthStencil;
-	pipelineInfo.layout = pipelineLayout;
-	pipelineInfo.renderPass = this->renderPass;
-	pipelineInfo.subpass = 0;  /// Index of the subpass in the render pass where this pipeline will be used
-	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;  /// Not deriving from an existing pipeline
+	/// Create pipeline layout handle for RAII
+	auto layoutHandle = std::make_shared<VulkanPipelineLayoutHandle>(
+		pipelineLayout,
+		[this](VkPipelineLayout pl) {
+			vkDestroyPipelineLayout(this->device, pl, nullptr);
+		}
+	);
+
+	/// Get create info from config
+	/// This includes all pipeline states configured by the material
+	auto createInfo = config.getCreateInfo(this->device, this->renderPass, pipelineLayout);
 
 	/// Create the graphics pipeline
-	VkPipeline graphicsPipeline;
-	VK_CHECK(vkCreateGraphicsPipelines(this->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
+	VkPipeline pipeline;
+	VK_CHECK(vkCreateGraphicsPipelines(
+		this->device,
+		VK_NULL_HANDLE,  /// Optional pipeline cache
+		1,
+		&createInfo,
+		nullptr,
+		&pipeline
+	));
 
-	/// Create and store the pipeline handle as a shared pointer
-	auto pipelineHandle = std::make_shared<VulkanPipelineHandle>(graphicsPipeline, [this](VkPipeline p) {
-		vkDestroyPipeline(this->device, p, nullptr);
-	});
+	/// Create pipeline handle for RAII
+	auto pipelineHandle = std::make_shared<VulkanPipelineHandle>(
+		pipeline,
+		[this](VkPipeline p) {
+			vkDestroyPipeline(this->device, p, nullptr);
+		}
+	);
+
+	/// Store both handles for later use
+	/// We use material name as the key for consistency
+	const auto& name = material.getName();
 	this->pipelines[name] = pipelineHandle;
-
-	/// Create and store the pipeline layout handle as a shared pointer
-	auto layoutHandle = std::make_shared<VulkanPipelineLayoutHandle>(pipelineLayout, [this](VkPipelineLayout pl) {
-		vkDestroyPipelineLayout(this->device, pl, nullptr);
-	});
 	this->pipelineLayouts[name] = layoutHandle;
 
-	spdlog::info("Graphics pipeline '{}' created successfully with depth testing {}",
-		name, enableDepthTest ? "enabled" : "disabled");
+	spdlog::info("Created pipeline and layout for material '{}'", name);
 
 	return pipelineHandle;
 }
 
-std::shared_ptr<VulkanPipelineHandle> PipelineManager::getPipeline(const std::string& name) const {
+std::shared_ptr<ShaderProgram> PipelineManager::createShaderProgram(
+	const rendering::ShaderPaths& paths) {
+	/// Create a new shader program from the given paths
+	/// This creates actual Vulkan shader modules
+	try {
+		auto program = ShaderProgram::createGraphicsProgram(
+			this->device,
+			paths.vertexPath,
+			paths.fragmentPath
+		);
+
+		spdlog::debug("Created shader program for vertex: {}, fragment: {}",
+			paths.vertexPath, paths.fragmentPath);
+
+		return program;
+	}
+	catch (const VulkanException& e) {
+		spdlog::error("Failed to create shader program: {}", e.what());
+		throw;
+	}
+}
+
+std::shared_ptr<ShaderProgram> PipelineManager::getOrCreateShaderProgram(
+	const rendering::ShaderPaths& paths) {
+	/// Generate a unique key for these shader paths
+	auto key = generateShaderKey(paths);
+
+	/// Check if we already have a program for these shaders
+	auto it = this->shaderPrograms.find(key);
+	if (it != this->shaderPrograms.end()) {
+		spdlog::trace("Reusing existing shader program for key: {}", key);
+		return it->second;
+	}
+
+	/// Create new shader program if not found
+	auto program = this->createShaderProgram(paths);
+	this->shaderPrograms[key] = program;
+
+	return program;
+}
+
+std::string PipelineManager::generateShaderKey(const rendering::ShaderPaths& paths) {
+	/// Create a unique key by combining vertex and fragment paths
+	/// We use a separator that's unlikely to appear in paths
+	return paths.vertexPath + "||" + paths.fragmentPath;
+}
+
+std::shared_ptr<VulkanPipelineHandle> PipelineManager::getPipeline(
+	const std::string& name) const {
 	auto it = this->pipelines.find(name);
 	if (it != this->pipelines.end()) {
 		return it->second;
 	}
+	
 	spdlog::warn("Pipeline '{}' not found", name);
 	return nullptr;
 }
 
-std::shared_ptr<VulkanPipelineLayoutHandle> PipelineManager::getPipelineLayout(const std::string& name) const {
+std::shared_ptr<VulkanPipelineLayoutHandle> PipelineManager::getPipelineLayout(
+	const std::string& name) const {
 	auto it = this->pipelineLayouts.find(name);
 	if (it != this->pipelineLayouts.end()) {
 		return it->second;
 	}
+	
 	spdlog::warn("Pipeline layout '{}' not found", name);
 	return nullptr;
 }
 
+void PipelineManager::createGlobalDescriptorLayouts() {
+	/// Create camera descriptor set layout (set = 0)
+	/// This layout describes the bindings for camera data
+	{
+		VkDescriptorSetLayoutBinding cameraBinding{};
+		cameraBinding.binding = 0;
+		cameraBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		cameraBinding.descriptorCount = 1;
+		cameraBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		cameraBinding.pImmutableSamplers = nullptr;
+
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &cameraBinding;
+
+		VkDescriptorSetLayout layout;
+		VK_CHECK(vkCreateDescriptorSetLayout(
+			this->device,
+			&layoutInfo,
+			nullptr,
+			&layout
+		));
+
+		this->cameraDescriptorLayout = VulkanDescriptorSetLayoutHandle(
+			layout,
+			[this](VkDescriptorSetLayout l) {
+				vkDestroyDescriptorSetLayout(this->device, l, nullptr);
+			}
+		);
+
+		spdlog::debug("Created camera descriptor set layout");
+	}
+
+	/// Create light descriptor set layout (set = 1)
+	/// This layout describes the bindings for light data
+	{
+		VkDescriptorSetLayoutBinding lightBinding{};
+		lightBinding.binding = 0;
+		lightBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		lightBinding.descriptorCount = 1;
+		lightBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+		lightBinding.pImmutableSamplers = nullptr;
+
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &lightBinding;
+
+		VkDescriptorSetLayout layout;
+		VK_CHECK(vkCreateDescriptorSetLayout(
+			this->device,
+			&layoutInfo,
+			nullptr,
+			&layout
+		));
+
+		this->lightDescriptorLayout = VulkanDescriptorSetLayoutHandle(
+			layout,
+			[this](VkDescriptorSetLayout l) {
+				vkDestroyDescriptorSetLayout(this->device, l, nullptr);
+			}
+		);
+
+		spdlog::debug("Created light descriptor set layout");
+	}
+}
+
 void PipelineManager::cleanup() {
-	/// Clean up all pipelines and pipeline layouts
+	/// Clean up in reverse order of creation
 	this->pipelines.clear();
 	this->pipelineLayouts.clear();
-
-	/// Clean up shader programs
 	this->shaderPrograms.clear();
 
-	spdlog::info("All pipelines and pipeline layouts cleaned up");
+	/// Clean up global descriptor layouts last
+	this->lightDescriptorLayout.reset();
+	this->cameraDescriptorLayout.reset();
+
+	spdlog::info("Pipeline manager resources cleaned up");
 }
 
-}
+} /// namespace lillugsi::vulkan

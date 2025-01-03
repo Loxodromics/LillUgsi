@@ -16,6 +16,30 @@ PipelineConfig::PipelineConfig() {
 }
 
 void PipelineConfig::initializeDefaults() {
+	/// Initialize dynamic states first as they affect other settings
+	/// We always want viewport and scissor to be dynamic for window resizing
+	this->dynamicStates = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	this->dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	this->dynamicState.dynamicStateCount = static_cast<uint32_t>(this->dynamicStates.size());
+	this->dynamicState.pDynamicStates = this->dynamicStates.data();
+
+	/// Initialize vertex input state
+	this->vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+	/// Initialize viewport state
+	/// Count must match dynamic state configuration
+	this->viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	this->viewportState.viewportCount = 1;
+	this->viewportState.scissorCount = 1;
+
+	/// Initialize multisampling with default settings
+	this->multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	this->multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
 	/// Set up input assembly defaults
 	/// We use triangle lists as the most common primitive type
 	this->inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -168,7 +192,49 @@ size_t PipelineConfig::hash() const {
 }
 
 VkGraphicsPipelineCreateInfo PipelineConfig::getCreateInfo(
-	VkDevice device, VkRenderPass renderPass, VkPipelineLayout layout) const {
+	VkDevice device, VkRenderPass renderPass, VkPipelineLayout layout) {
+
+	/// Update vertex input configuration
+	/// We need to update this here because the descriptions might have changed
+	this->vertexInputInfo.vertexBindingDescriptionCount = 1;
+	this->vertexInputInfo.pVertexBindingDescriptions = &this->vertexBindingDescription;
+	this->vertexInputInfo.vertexAttributeDescriptionCount =
+		static_cast<uint32_t>(this->vertexAttributeDescriptions.size());
+	this->vertexInputInfo.pVertexAttributeDescriptions = this->vertexAttributeDescriptions.data();
+
+	/// Convert shader stages to Vulkan format
+	this->shaderStageInfos.reserve(this->shaderStages.size());
+	this->shaderModules.reserve(this->shaderStages.size());
+
+	for (const auto& stage : this->shaderStages) {
+		auto shaderCode = ShaderModule::readFile(stage.shaderPath);
+
+		/// Create shader module
+		VkShaderModuleCreateInfo moduleCreateInfo{};
+		moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		moduleCreateInfo.codeSize = shaderCode.size();
+		moduleCreateInfo.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
+
+		VkShaderModule shaderModule;
+		VK_CHECK(vkCreateShaderModule(device, &moduleCreateInfo, nullptr, &shaderModule));
+
+		/// Store module handle for cleanup
+		this->shaderModules.emplace_back(shaderModule,
+			[device](VkShaderModule sm) {
+				vkDestroyShaderModule(device, sm, nullptr);
+			});
+
+		/// Set up shader stage info
+		VkPipelineShaderStageCreateInfo shaderStageInfo{};
+		shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shaderStageInfo.stage = stage.stage;
+		shaderStageInfo.module = shaderModule;
+		shaderStageInfo.pName = stage.entryPoint;
+		this->shaderStageInfos.push_back(shaderStageInfo);
+
+		spdlog::trace("Created shader stage for {}", stage.shaderPath);
+	}
+
 	/// Create dynamic state
 	/// We always enable viewport and scissor as dynamic states
 	/// This allows for window resizing without pipeline recreation
@@ -182,45 +248,13 @@ VkGraphicsPipelineCreateInfo PipelineConfig::getCreateInfo(
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
 	dynamicState.pDynamicStates = dynamicStates.data();
 
-	/// Convert shader stages to Vulkan format
-	std::vector<VkPipelineShaderStageCreateInfo> shaderStageInfos;
-	shaderStageInfos.reserve(this->shaderStages.size());
-
-	/// We'll need to keep shader modules alive until pipeline creation
-	std::vector<VulkanShaderModuleHandle> shaderModules;
-	shaderModules.reserve(this->shaderStages.size());
-
-	for (const auto& stage : this->shaderStages) {
-		/// Create shader module for each stage
-		/// The modules will be automatically cleaned up when this function returns
-		auto shaderCode = ShaderModule::readFile(stage.shaderPath);
-		VkShaderModule shaderModule;
-		
-		VkShaderModuleCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		createInfo.codeSize = shaderCode.size();
-		createInfo.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
-
-		VK_CHECK(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule));
-		shaderModules.emplace_back(shaderModule, 
-			[this, device](VkShaderModule sm) { vkDestroyShaderModule(device, sm, nullptr); });
-
-		VkPipelineShaderStageCreateInfo shaderStageInfo{};
-		shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		shaderStageInfo.stage = stage.stage;
-		shaderStageInfo.module = shaderModule;
-		shaderStageInfo.pName = stage.entryPoint;
-		shaderStageInfos.push_back(shaderStageInfo);
-	}
-
 	/// Set up vertex input state
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &this->vertexBindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = 
+	this->vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	this->vertexInputInfo.vertexBindingDescriptionCount = 1;
+	this->vertexInputInfo.pVertexBindingDescriptions = &this->vertexBindingDescription;
+	this->vertexInputInfo.vertexAttributeDescriptionCount =
 		static_cast<uint32_t>(this->vertexAttributeDescriptions.size());
-	vertexInputInfo.pVertexAttributeDescriptions = this->vertexAttributeDescriptions.data();
+	this->vertexInputInfo.pVertexAttributeDescriptions = this->vertexAttributeDescriptions.data();
 
 	/// Create viewport state
 	/// We use dynamic viewport and scissor, so we only need to specify the count
@@ -238,16 +272,16 @@ VkGraphicsPipelineCreateInfo PipelineConfig::getCreateInfo(
 	/// Create the final pipeline create info
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.stageCount = static_cast<uint32_t>(shaderStageInfos.size());
-	pipelineInfo.pStages = shaderStageInfos.data();
-	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.stageCount = static_cast<uint32_t>(this->shaderStageInfos.size());
+	pipelineInfo.pStages = this->shaderStageInfos.data();
+	pipelineInfo.pVertexInputState = &this->vertexInputInfo;
 	pipelineInfo.pInputAssemblyState = &this->inputAssembly;
-	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pViewportState = &this->viewportState;
 	pipelineInfo.pRasterizationState = &this->rasterization;
-	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pMultisampleState = &this->multisampling;
 	pipelineInfo.pDepthStencilState = &this->depthStencil;
 	pipelineInfo.pColorBlendState = &this->colorBlend;
-	pipelineInfo.pDynamicState = &dynamicState;
+	pipelineInfo.pDynamicState = &this->dynamicState;
 	pipelineInfo.layout = layout;
 	pipelineInfo.renderPass = renderPass;
 	pipelineInfo.subpass = 0;
