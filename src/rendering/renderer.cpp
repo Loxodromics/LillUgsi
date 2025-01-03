@@ -632,7 +632,7 @@ void Renderer::recordCommandBuffers() {
 		vkCmdBeginRenderPass(this->commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		/// Collect render data from visible objects in the scene
-		std::vector<rendering::Mesh::RenderData> renderData;
+		std::vector<Mesh::RenderData> renderData;
 		this->scene->getRenderData(*this->camera, renderData);
 
 		/// Track current material to minimize pipeline switches
@@ -1209,7 +1209,6 @@ void Renderer::initializeMaterials() {
 		);
 	}
 
-	/// We use different material properties to better showcase the geometry
 	/// For the grid of cubes, create some varied materials
 	auto redMaterial = this->materialManager->createPBRMaterial("red");
 	redMaterial->setBaseColor(glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
@@ -1224,7 +1223,7 @@ void Renderer::initializeMaterials() {
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}
-	
+
 	auto blueMaterial = this->materialManager->createPBRMaterial("blue");
 	blueMaterial->setBaseColor(glm::vec4(0.2f, 0.2f, 1.0f, 1.0f));
 	blueMaterial->setMetallic(0.8f);

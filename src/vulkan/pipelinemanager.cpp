@@ -150,14 +150,20 @@ std::string PipelineManager::generateShaderKey(const rendering::ShaderPaths& pat
 }
 
 std::shared_ptr<VulkanPipelineHandle> PipelineManager::getPipeline(
-	const std::string& name) const {
+	const std::string& name) {
 	auto it = this->pipelines.find(name);
 	if (it != this->pipelines.end()) {
 		return it->second;
 	}
 	
-	spdlog::warn("Pipeline '{}' not found", name);
+	/// Log only if we haven't warned about this material before
+	if (this->missingPipelineWarnings.find(name) == this->missingPipelineWarnings.end()) {
+		spdlog::warn("Pipeline '{}' not found, using fallback pipeline", name);
+		this->missingPipelineWarnings.insert(name);
+	}
+
 	return nullptr;
+	// return this->fallbackPipeline;
 }
 
 std::shared_ptr<VulkanPipelineLayoutHandle> PipelineManager::getPipelineLayout(
@@ -248,6 +254,8 @@ void PipelineManager::cleanup() {
 	/// Clean up global descriptor layouts last
 	this->lightDescriptorLayout.reset();
 	this->cameraDescriptorLayout.reset();
+
+	this->missingPipelineWarnings.clear();
 
 	spdlog::info("Pipeline manager resources cleaned up");
 }

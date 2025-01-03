@@ -4,10 +4,10 @@
 #include "vulkan/vulkanexception.h"
 #include "vulkan/shaderprogram.h"
 #include "rendering/material.h"
+
 #include <string>
-#include <vector>
 #include <unordered_map>
-#include <memory>
+#include <unordered_set>
 
 namespace lillugsi::vulkan {
 
@@ -39,7 +39,7 @@ public:
 	/// @param name The name of the pipeline to retrieve
 	/// @return A shared pointer to the requested pipeline handle, or nullptr if not found
 	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> getPipeline(
-		const std::string& name) const;
+		const std::string& name);
 
 	/// Get a pipeline layout by material name
 	/// @param name The name of the pipeline layout to retrieve
@@ -104,6 +104,8 @@ private:
 	/// Cache for shader programs
 	/// Key is generated from shader paths to enable reuse
 	std::unordered_map<std::string, std::shared_ptr<ShaderProgram>> shaderPrograms;
+
+	std::unordered_set<std::string> missingPipelineWarnings;
 };
 
 } /// namespace lillugsi::vulkan
