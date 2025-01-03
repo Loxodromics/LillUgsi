@@ -88,16 +88,48 @@ private:
 	/// These layouts are used by all materials
 	void createGlobalDescriptorLayouts();
 
+	/// Cache structure for shared pipeline resources
+	/// Multiple materials can share the same underlying pipeline and layout
+	/// while maintaining their own RAII handles
+	struct PipelineCache {
+		VkPipeline pipeline;         /// Raw pipeline handle for sharing
+		VkPipelineLayout layout;     /// Raw layout handle for sharing
+		uint32_t referenceCount{0};  /// Track number of materials using this pipeline
+	};
+
+	/// Pipeline handles for a specific material
+	/// Each material gets its own RAII handles even when sharing pipelines
+	struct MaterialPipeline {
+		std::shared_ptr<VulkanPipelineHandle> pipeline;
+		std::shared_ptr<VulkanPipelineLayoutHandle> layout;
+	};
+
+	/// Get or create pipeline for a material
+	/// @param config Pipeline configuration from the material
+	/// @param material The material requesting the pipeline
+	/// @return Material-specific pipeline handles
+	[[nodiscard]] MaterialPipeline getOrCreatePipeline(
+		PipelineConfig& config,
+		const rendering::Material& material);
+
 	VkDevice device;
 	VkRenderPass renderPass;
+
+	/// Cache of shared pipeline resources by configuration
+	/// Multiple materials with the same configuration share these pipelines
+	std::unordered_map<size_t, PipelineCache> pipelinesByConfig;
+
+	/// Material-specific pipeline handles
+	/// Each material gets its own entry even when sharing pipelines
+	std::unordered_map<std::string, MaterialPipeline> materialPipelines;
 
 	/// Global descriptor set layouts
 	/// These are shared across all pipelines
 	VulkanDescriptorSetLayoutHandle cameraDescriptorLayout;
 	VulkanDescriptorSetLayoutHandle lightDescriptorLayout;
 
-	/// Store pipelines and pipeline layouts as shared pointers
-	/// This allows for shared ownership while keeping VulkanHandles move-only
+	/// Named pipelines for direct lookup
+	/// We keep this for compatibility and explicit pipeline access
 	std::unordered_map<std::string, std::shared_ptr<VulkanPipelineHandle>> pipelines;
 	std::unordered_map<std::string, std::shared_ptr<VulkanPipelineLayoutHandle>> pipelineLayouts;
 
@@ -105,7 +137,9 @@ private:
 	/// Key is generated from shader paths to enable reuse
 	std::unordered_map<std::string, std::shared_ptr<ShaderProgram>> shaderPrograms;
 
-	std::unordered_set<std::string> missingPipelineWarnings;
+	/// Set of materials we've already warned about
+	/// Prevents log spam for missing materials
+	mutable std::unordered_set<std::string> missingPipelineWarnings;
 };
 
 } /// namespace lillugsi::vulkan

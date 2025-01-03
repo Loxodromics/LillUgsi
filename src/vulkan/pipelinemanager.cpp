@@ -19,87 +19,13 @@ void PipelineManager::initialize() {
 
 std::shared_ptr<VulkanPipelineHandle> PipelineManager::createPipeline(
 	const rendering::Material& material) {
-	/// Get shader paths and create shader program
-	auto shaderPaths = material.getShaderPaths();
-	auto shaderProgram = this->getOrCreateShaderProgram(shaderPaths);
-	if (!shaderProgram) {
-		throw VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Failed to create shader program for material '" + material.getName() + "'",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
-
-	/// Get pipeline configuration from material
+	/// Get shader paths and configurations
 	auto config = material.getPipelineConfig();
 
-	/// Create descriptor set layouts array based on material requirements
-	/// We need three layouts: camera (set=0), lighting (set=1), material (set=2)
-	/// Order matches shader set bindings
-	std::vector<VkDescriptorSetLayout> descriptorSetLayouts = {
-		this->getCameraDescriptorLayout(),    /// set = 0
-		this->getLightDescriptorLayout(),     /// set = 1
-		material.getDescriptorSetLayout()     /// set = 2
-	};
+	/// Get or create pipeline using configuration
+	auto cacheEntry = this->getOrCreatePipeline(config, material);
 
-	/// Create pipeline layout
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
-	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
-
-	/// Set up push constant range for model matrix
-	VkPushConstantRange pushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(glm::mat4);  /// Model matrix size
-
-	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-
-	VkPipelineLayout pipelineLayout;
-	VK_CHECK(vkCreatePipelineLayout(this->device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
-
-	/// Create pipeline layout handle for RAII
-	auto layoutHandle = std::make_shared<VulkanPipelineLayoutHandle>(
-		pipelineLayout,
-		[this](VkPipelineLayout pl) {
-			vkDestroyPipelineLayout(this->device, pl, nullptr);
-		}
-	);
-
-	/// Get create info from config
-	/// This includes all pipeline states configured by the material
-	auto createInfo = config.getCreateInfo(this->device, this->renderPass, pipelineLayout);
-
-	/// Create the graphics pipeline
-	VkPipeline pipeline;
-	VK_CHECK(vkCreateGraphicsPipelines(
-		this->device,
-		VK_NULL_HANDLE,  /// Optional pipeline cache
-		1,
-		&createInfo,
-		nullptr,
-		&pipeline
-	));
-
-	/// Create pipeline handle for RAII
-	auto pipelineHandle = std::make_shared<VulkanPipelineHandle>(
-		pipeline,
-		[this](VkPipeline p) {
-			vkDestroyPipeline(this->device, p, nullptr);
-		}
-	);
-
-	/// Store both handles for later use
-	/// We use material name as the key for consistency
-	const auto& name = material.getName();
-	this->pipelines[name] = pipelineHandle;
-	this->pipelineLayouts[name] = layoutHandle;
-
-	spdlog::info("Created pipeline and layout for material '{}'", name);
-
-	return pipelineHandle;
+	return cacheEntry.pipeline;
 }
 
 std::shared_ptr<ShaderProgram> PipelineManager::createShaderProgram(
@@ -151,9 +77,9 @@ std::string PipelineManager::generateShaderKey(const rendering::ShaderPaths& pat
 
 std::shared_ptr<VulkanPipelineHandle> PipelineManager::getPipeline(
 	const std::string& name) {
-	auto it = this->pipelines.find(name);
-	if (it != this->pipelines.end()) {
-		return it->second;
+	auto it = this->materialPipelines.find(name);
+	if (it != this->materialPipelines.end()) {
+		return it->second.pipeline;
 	}
 	
 	/// Log only if we haven't warned about this material before
@@ -163,14 +89,14 @@ std::shared_ptr<VulkanPipelineHandle> PipelineManager::getPipeline(
 	}
 
 	return nullptr;
-	// return this->fallbackPipeline;
+	// return this->fallbackPipeline; /// TODO
 }
 
 std::shared_ptr<VulkanPipelineLayoutHandle> PipelineManager::getPipelineLayout(
 	const std::string& name) const {
-	auto it = this->pipelineLayouts.find(name);
-	if (it != this->pipelineLayouts.end()) {
-		return it->second;
+	auto it = this->materialPipelines.find(name);
+	if (it != this->materialPipelines.end()) {
+		return it->second.layout;
 	}
 	
 	spdlog::warn("Pipeline layout '{}' not found", name);
@@ -245,8 +171,112 @@ void PipelineManager::createGlobalDescriptorLayouts() {
 	}
 }
 
+PipelineManager::MaterialPipeline PipelineManager::getOrCreatePipeline(
+	PipelineConfig& config,
+	const rendering::Material& material) {
+	/// Calculate configuration hash
+	/// This identifies materials that can share pipelines
+	size_t configHash = config.hash();
+
+	/// Check if we have an existing pipeline for this configuration
+	auto& cacheEntry = this->pipelinesByConfig[configHash];
+
+	/// Create new pipeline and layout if this is a new configuration
+	if (cacheEntry.referenceCount == 0) {
+		/// Create pipeline layout first
+		VkPipelineLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+		/// Set up descriptor layouts in the order expected by shaders
+		/// We need three layouts: camera (set=0), lighting (set=1), material (set=2)
+		/// Order matches shader set bindings
+		std::vector<VkDescriptorSetLayout> descriptorSetLayouts = {
+			this->getCameraDescriptorLayout(), /// set = 0
+			this->getLightDescriptorLayout(),  /// set = 1
+			material.getDescriptorSetLayout()  /// set = 2 (material-specific)
+		};
+		layoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
+		layoutInfo.pSetLayouts = descriptorSetLayouts.data();
+
+		/// Configure push constant for model matrix
+		VkPushConstantRange pushConstantRange{};
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		pushConstantRange.offset = 0;
+		pushConstantRange.size = sizeof(glm::mat4);  /// Model matrix size
+		layoutInfo.pushConstantRangeCount = 1;
+		layoutInfo.pPushConstantRanges = &pushConstantRange;
+
+		VK_CHECK(vkCreatePipelineLayout(
+			this->device, &layoutInfo, nullptr, &cacheEntry.layout));
+
+		/// Create the graphics pipeline
+		auto createInfo = config.getCreateInfo(
+			this->device, this->renderPass, cacheEntry.layout);
+
+		VK_CHECK(vkCreateGraphicsPipelines(
+			this->device,
+			VK_NULL_HANDLE,
+			1,
+			&createInfo,
+			nullptr,
+			&cacheEntry.pipeline
+		));
+
+		spdlog::info("Created new pipeline configuration with hash {:#x}", configHash);
+	}
+	else {
+		spdlog::debug("Reusing pipeline configuration with hash {:#x} for material '{}'",
+		              configHash, material.getName());
+	}
+
+	/// Create RAII handles for this material
+	/// These share the underlying Vulkan objects but provide safe cleanup
+	MaterialPipeline materialPipeline;
+	materialPipeline.pipeline = std::make_shared<VulkanPipelineHandle>(
+		cacheEntry.pipeline,
+		[this, configHash](VkPipeline p) {
+			/// Only decrease reference count, actual destruction happens in PipelineManager cleanup
+			auto& entry = this->pipelinesByConfig[configHash];
+			entry.referenceCount--;
+			spdlog::debug("Released pipeline reference, remaining refs: {}", entry.referenceCount);
+		}
+	);
+
+	materialPipeline.layout = std::make_shared<VulkanPipelineLayoutHandle>(
+		cacheEntry.layout,
+		[this, configHash](VkPipelineLayout l) {
+			/// Clean up layout when last reference is gone
+			auto& entry = this->pipelinesByConfig[configHash];
+			if (entry.referenceCount == 0)
+			{
+				vkDestroyPipelineLayout(this->device, l, nullptr);
+			}
+		}
+	);
+
+	/// Increment reference count for this configuration
+	cacheEntry.referenceCount++;
+
+	/// Store material-specific handles
+	this->materialPipelines[material.getName()] = materialPipeline;
+
+	return materialPipeline;
+}
+
 void PipelineManager::cleanup() {
 	/// Clean up in reverse order of creation
+	/// Clean up material-specific handles first
+	this->materialPipelines.clear();
+
+	/// Clean up shared pipeline resources
+	for (const auto& [hash, cache] : this->pipelinesByConfig)
+	{
+		vkDestroyPipelineLayout(this->device, cache.layout, nullptr);
+		vkDestroyPipeline(this->device, cache.pipeline, nullptr);
+		spdlog::debug("Destroyed shared pipeline configuration {:#x}", hash);
+	}
+	this->pipelinesByConfig.clear();
+
 	this->pipelines.clear();
 	this->pipelineLayouts.clear();
 	this->shaderPrograms.clear();
