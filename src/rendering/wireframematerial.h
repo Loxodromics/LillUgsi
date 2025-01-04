@@ -36,15 +36,6 @@ public:
 	/// @return The current RGB color
 	[[nodiscard]] glm::vec3 getColor() const { return this->properties.color; }
 
-protected:
-	/// Configure pipeline settings specific to wireframe rendering
-	/// This overrides the base material configuration to set up:
-	/// - Line polygon mode for wireframe display
-	/// - Line width settings based on device capabilities
-	/// - Appropriate depth testing configuration
-	/// @param config The pipeline configuration to modify
-	void configurePipeline(vulkan::PipelineConfig& config) const override;
-
 private:
 	/// We use a simpler layout than PBR as we only need color data
 	void createDescriptorSetLayout();

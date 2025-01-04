@@ -69,5 +69,7 @@ add_custom_target(Shaders
 	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/pbr.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/pbr.vert.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/pbr.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/pbr.frag.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/wireframe.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/wireframe.vert.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/wireframe.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/wireframe.frag.spv
 )
 add_dependencies(LillUgsi Shaders)

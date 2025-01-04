@@ -9,7 +9,7 @@ WireframeMaterial::WireframeMaterial(
 	VkDevice device,
 	const std::string& name,
 	VkPhysicalDevice physicalDevice)
-	: Material(device, name, physicalDevice, MaterialType::Wireframe) {
+	: Material(device, name, physicalDevice, MaterialType::Wireframe, MaterialFeatureFlags::DoubleSided) {
 
 	/// Create descriptor layout first as it's needed for other resources
 	/// This establishes the interface between our material and shaders
@@ -63,39 +63,6 @@ void WireframeMaterial::setColor(const glm::vec3& color) {
 
 	spdlog::trace("Set wireframe color to ({}, {}, {}) for material '{}'",
 		color.r, color.g, color.b, this->name);
-}
-
-void WireframeMaterial::configurePipeline(vulkan::PipelineConfig& config) const {
-	/// Configure pipeline for wireframe rendering
-	/// We override the base configuration to set wireframe-specific states
-
-	/// Set polygon mode to line for wireframe display
-	/// This is the key configuration that enables wireframe rendering
-	config.setRasterization(
-		VK_POLYGON_MODE_LINE,            /// Draw lines instead of filled polygons
-		VK_CULL_MODE_NONE,               /// Disable culling to see all lines
-		VK_FRONT_FACE_COUNTER_CLOCKWISE  /// Standard winding order
-	);
-
-	/// Configure depth testing
-	/// We want lines to be visible even when they're "behind" other lines
-	config.setDepthState(
-		true,                       /// Enable depth testing
-		true,                       /// Enable depth writes
-		VK_COMPARE_OP_LESS_OR_EQUAL /// Standard depth comparison
-	);
-
-	/// Configure blending for lines
-	/// We use alpha blending to support translucent lines if needed
-	config.setBlendState(
-		true,                                    /// Enable blending
-		VK_BLEND_FACTOR_SRC_ALPHA,              /// Source color factor
-		VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,    /// Destination color factor
-		VK_BLEND_OP_ADD,                        /// Color blend operation
-		VK_BLEND_FACTOR_ONE,                    /// Source alpha factor
-		VK_BLEND_FACTOR_ZERO,                   /// Destination alpha factor
-		VK_BLEND_OP_ADD                         /// Alpha blend operation
-	);
 }
 
 void WireframeMaterial::createDescriptorSetLayout() {
