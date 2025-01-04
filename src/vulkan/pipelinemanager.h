@@ -13,12 +13,37 @@ namespace lillugsi::vulkan {
 
 /// PipelineManager class
 /// Responsible for creating and managing graphics pipelines and shader resources
-/// Centralizes pipeline and shader creation to optimize resource usage
+///
+/// PipelineManager centralizes pipeline creation and management in the rendering system.
+/// It optimizes Vulkan pipeline usage by sharing pipelines between materials with identical
+/// configurations while maintaining separate uniform data.
+///
+/// Key Features:
+/// - Pipeline sharing based on configuration hashes
+/// - RAII resource management through smart pointers
+/// - Reference counting for shared pipeline resources
+/// - Separation of pipeline configuration from material properties
+///
+/// Usage Flow:
+/// 1. Material defines its configuration (shaders, states, etc.)
+/// 2. PipelineManager creates or reuses matching pipeline
+/// 3. Material maintains unique uniforms while sharing pipeline
+///
+/// Resource Management:
+/// - PipelineCache: Stores shared Vulkan pipelines and layouts
+/// - MaterialPipeline: Material-specific RAII handles for shared resources
+/// - Cleanup happens automatically through reference counting
+///
+/// Example:
+/// Multiple PBR materials share one pipeline while having different colors,
+/// metallic values, etc. This minimizes pipeline creation overhead while
+/// maintaining material flexibility.
+
 class PipelineManager {
-public:
-	/// Constructor
-	/// @param device The logical Vulkan device
-	/// @param renderPass The render pass with which the pipelines will be compatible
+	public:
+		/// Constructor
+		/// @param device The logical Vulkan device
+		/// @param renderPass The render pass with which the pipelines will be compatible
 	PipelineManager(VkDevice device, VkRenderPass renderPass);
 
 	/// Destructor
