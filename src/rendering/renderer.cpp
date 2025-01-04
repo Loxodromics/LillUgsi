@@ -1027,11 +1027,13 @@ void Renderer::initializeScene() {
 	metallicMaterial->setRoughness(0.2f);    /// Fairly smooth for good reflection
 	metallicMaterial->setAmbient(1.0f);      /// Full ambient occlusion
 
+	auto wireframeMaterial = this->materialManager->createWireframeMaterial("wireframe");
+
 	/// Add an icosphere to demonstrate spherical geometry
 	/// We place it at the center where it's easy to observe
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
-	auto icosphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.0f, 4);
-	icosphereMesh->setMaterial(metallicMaterial);
+	auto icosphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.0f, 2);
+	icosphereMesh->setMaterial(wireframeMaterial);
 	icosphereNode->setMesh(std::move(icosphereMesh));
 
 	/// Position a large icosphere in the middle of all cubes
@@ -1234,6 +1236,19 @@ void Renderer::initializeMaterials() {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
 			"Failed to create pipeline for blue material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	auto wireframeMaterial = this->materialManager->createWireframeMaterial("wireframe");
+	wireframeMaterial->setColor(glm::vec3(1.0f, 0.0f, 0.0f));
+
+	/// Create pipeline for wireframe material
+	auto wireframePipeline = this->pipelineManager->createPipeline(*wireframeMaterial);
+	if (!wireframePipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for wireframe material",
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}
