@@ -76,6 +76,15 @@ void VulkanDevice::findQueueFamilies(VkPhysicalDevice physicalDevice, uint32_t& 
 }
 
 void VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t graphicsFamily, uint32_t presentFamily, const std::vector<const char*>& requiredExtensions) {
+	/// First, query device features
+	VkPhysicalDeviceFeatures deviceFeatures{};
+	vkGetPhysicalDeviceFeatures(physicalDevice, &deviceFeatures);
+
+	/// Check if non-solid fill modes are supported
+	if (!deviceFeatures.fillModeNonSolid) {
+		spdlog::warn("Device does not support non-solid fill modes (wireframe rendering may not be available)");
+	}
+
 	/// Specify the queues to be created
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	std::set<uint32_t> uniqueQueueFamilies = {graphicsFamily, presentFamily};
@@ -90,8 +99,9 @@ void VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t
 		queueCreateInfos.push_back(queueCreateInfo);
 	}
 
-	/// Specify device features
-	VkPhysicalDeviceFeatures deviceFeatures{};
+	/// Specify device features we want to use
+	VkPhysicalDeviceFeatures enabledFeatures{};
+	enabledFeatures.fillModeNonSolid = VK_TRUE;  /// Enable non-solid fill modes for wireframe rendering
 
 	/// Create the logical device
 	VkDeviceCreateInfo createInfo{};
@@ -114,4 +124,5 @@ void VulkanDevice::createLogicalDevice(VkPhysicalDevice physicalDevice, uint32_t
 
 	spdlog::info("Logical device created successfully");
 }
+
 }
