@@ -41,7 +41,7 @@ void EditorCamera::handleInput(SDL_Window* window, const SDL_Event& event) {
 				/// We use relative mouse motion for smoother control
 			this->updateOrientation(
 				event.motion.xrel * this->mouseSensitivity,
-				-event.motion.yrel * this->mouseSensitivity /// Inverted for natural feel
+				event.motion.yrel * this->mouseSensitivity
 			);
 		}
 		break;
@@ -57,9 +57,9 @@ void EditorCamera::handleInput(SDL_Window* window, const SDL_Event& event) {
 		if (event.key.key == SDLK_D)
 			this->velocity.x = this->movementSpeed;
 		if (event.key.key == SDLK_Q)
-			this->velocity.y = -this->movementSpeed;
-		if (event.key.key == SDLK_E)
 			this->velocity.y = this->movementSpeed;
+		if (event.key.key == SDLK_E)
+			this->velocity.y = -this->movementSpeed;
 		break;
 	case SDL_EVENT_KEY_UP:
 		/// Reset velocity when keys are released
@@ -68,8 +68,10 @@ void EditorCamera::handleInput(SDL_Window* window, const SDL_Event& event) {
 			this->velocity.z = 0.0f;
 		if (event.key.key == SDLK_A || event.key.key == SDLK_D)
 			this->velocity.x = 0.0f;
-		if (event.key.key == SDLK_Q || event.key.key == SDLK_D)
+		if (event.key.key == SDLK_Q || event.key.key == SDLK_D || event.key.key == SDLK_E)
 			this->velocity.y = 0.0f;
+		break;
+	default:
 		break;
 	}
 }
