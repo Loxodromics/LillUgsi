@@ -22,7 +22,7 @@ public:
 	static void applyVisitorToFace(const std::shared_ptr<Face> &face, FaceVisitor& visitor);
 	void applyVisitor(FaceVisitor& visitor) const;
 
-	std::shared_ptr<Face> getFaceAtPoint(const glm::vec3& point) const;
+	[[nodiscard]] std::shared_ptr<Face> getFaceAtPoint(const glm::vec3& point) const;
 
 private:
 	/// Copy constructor
@@ -43,11 +43,11 @@ private:
 	void setNeighborsForBaseFaces() const;
 	void setNeighborsForFace(const std::shared_ptr<Face>& face);
 
-	std::shared_ptr<Face>getFaceAtPointRecursive(const std::shared_ptr<Face>& face,
-												  const glm::vec3& normalizedPoint) const;
+	[[nodiscard]] std::shared_ptr<Face>getFaceAtPointRecursive(const std::shared_ptr<Face>& face,
+															   const glm::vec3& normalizedPoint) const;
 
-	bool intersectsLine(const std::shared_ptr<Face>& face,
-						const glm::vec3& lineStart, const glm::vec3& lineEnd) const;
+	[[nodiscard]] bool intersectsLine(const std::shared_ptr<Face>& face,
+									  const glm::vec3& lineStart, const glm::vec3& lineEnd) const;
 
 	/// Data
 	std::vector<glm::vec3> vertices;

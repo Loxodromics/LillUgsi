@@ -16,14 +16,16 @@ PlanetData::~PlanetData() {
 	/// Cleanup if needed
 }
 
-PlanetData::PlanetData(const PlanetData& other) : vertices(other.vertices), indices(other.indices) {
+PlanetData::PlanetData(const PlanetData& other)
+	: vertices(other.vertices)
+	, indices(other.indices) {
 	/// Copy constructor implementation
 }
 
 PlanetData& PlanetData::operator=(const PlanetData& other) {
 	if (this != &other) {
-		vertices = other.vertices;
-		indices = other.indices;
+		this->vertices = other.vertices;
+		this->indices = other.indices;
 	}
 	return *this;
 }
@@ -33,11 +35,12 @@ std::vector<glm::vec3> PlanetData::getVertices() const {
 }
 
 std::vector<unsigned int> PlanetData::getIndices() const {
-	return indices;
+	return this->indices;
 }
 
 void PlanetData::applyVisitorToFace(const std::shared_ptr<Face> &face, FaceVisitor& visitor) {
-	if (!face) return;
+	if (!face)
+		return;
 	
 	visitor.visit(face); /// Apply the visitor to the current face
 
@@ -49,14 +52,14 @@ void PlanetData::applyVisitorToFace(const std::shared_ptr<Face> &face, FaceVisit
 
 void PlanetData::applyVisitor(FaceVisitor& visitor) const {
 	for (auto& baseFace : this->baseFaces) {
-		applyVisitorToFace(baseFace, visitor);
+		PlanetData::applyVisitorToFace(baseFace, visitor);
 	}
 }
 
 std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
 	glm::vec3 normalizedPoint = glm::normalize(point) * 2.0f;
-	for (const auto& baseFace : baseFaces) {
-		auto result = getFaceAtPointRecursive(baseFace, normalizedPoint);
+	for (const auto& baseFace : this->baseFaces) {
+		auto result = this->getFaceAtPointRecursive(baseFace, normalizedPoint);
 		if (result)
 			return result;
 	}
@@ -64,19 +67,19 @@ std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
 }
 
 unsigned int PlanetData::addVertex(const glm::vec3 vertex) {
-	vertices.push_back(vertex);
+	this->vertices.push_back(vertex);
 	// spdlog::debug("addVertex: {}", vertices.size() - 1);
 	/// Assuming the vertices vector is zero-indexed, the position of the newly added vertex
 	/// is at the size of the vector before the push_back minus 1.
-	return vertices.size() - 1;
+	return this->vertices.size() - 1;
 }
 
 std::shared_ptr<Face> PlanetData::addFace(const unsigned int v1, const unsigned int v2, const unsigned int v3) {
 	spdlog::trace("addFace({}, {}, {})", v1, v2, v3);
 	/// Adding indices for a triangular face
-	indices.push_back(v3);
-	indices.push_back(v2);
-	indices.push_back(v1);
+	this->indices.push_back(v3);
+	this->indices.push_back(v2);
+	this->indices.push_back(v1);
 
 	/// Create and store the Face object
 	std::shared_ptr<Face> face = std::make_shared<Face>(std::array<unsigned int, 3>{v3, v2, v1});
@@ -85,7 +88,7 @@ std::shared_ptr<Face> PlanetData::addFace(const unsigned int v1, const unsigned 
 
 void PlanetData::subdivide(int levels) {
 	for (auto& baseFace : baseFaces) {
-		subdivideFace(baseFace, 0, levels);
+		this->subdivideFace(baseFace, 0, levels);
 	}
 
 	/// After subdivision, we run a separate function
@@ -99,19 +102,19 @@ unsigned int PlanetData::getOrCreateMidpointIndex(unsigned int index1, unsigned 
 	spdlog::trace("getOrCreateMidpointIndex({}, {})", key.first, key.second);
 
 	/// Check if this midpoint has already been created
-	if (midpointIndexCache.find(key) != midpointIndexCache.end()) {
-		spdlog::trace("Found cached midpoint: {}", midpointIndexCache[key]);
-		return midpointIndexCache[key];
+	if (this->midpointIndexCache.find(key) != this->midpointIndexCache.end()) {
+		spdlog::trace("Found cached midpoint: {}", this->midpointIndexCache[key]);
+		return this->midpointIndexCache[key];
 	}
 
 	/// Create a new midpoint vertex, then normalize it to ensure it's on the unit sphere
 	glm::vec3 midpoint = (vertices[index1] + vertices[index2]) * 0.5f;
 	midpoint = glm::normalize(midpoint);
-	unsigned int midpointIndex = addVertex(midpoint);
+	unsigned int midpointIndex = this->addVertex(midpoint);
 	spdlog::trace("Created new midpoint vertex: {}", midpointIndex);
 
 	/// Add to cache
-	midpointIndexCache[key] = midpointIndex;
+	this->midpointIndexCache[key] = midpointIndex;
 
 	return midpointIndex;
 }
@@ -140,26 +143,26 @@ void PlanetData::initializeBaseIcosahedron() {
 	this->addVertex(glm::normalize(glm::vec3(-b, -a, 0))); // v11
 
 	/// Add faces
-	baseFaces.push_back(this->addFace(2, 1, 0));
-	baseFaces.push_back(this->addFace(2, 3, 1));
-	baseFaces.push_back(this->addFace(5, 4, 3));
-	baseFaces.push_back(this->addFace(4, 8, 3));
-	baseFaces.push_back(this->addFace(7, 6, 0));
-	baseFaces.push_back(this->addFace(6, 9, 0));
-	baseFaces.push_back(this->addFace(11, 10, 4));
-	baseFaces.push_back(this->addFace(10, 11, 6));
-	baseFaces.push_back(this->addFace(9, 5, 2));
-	baseFaces.push_back(this->addFace(5, 9, 11));
-	baseFaces.push_back(this->addFace(8, 7, 1));
-	baseFaces.push_back(this->addFace(7, 8, 10));
-	baseFaces.push_back(this->addFace(2, 5, 3));
-	baseFaces.push_back(this->addFace(8, 1, 3));
-	baseFaces.push_back(this->addFace(9, 2, 0));
-	baseFaces.push_back(this->addFace(1, 7, 0));
-	baseFaces.push_back(this->addFace(11, 9, 6));
-	baseFaces.push_back(this->addFace(7, 10, 6));
-	baseFaces.push_back(this->addFace(5, 11, 4));
-	baseFaces.push_back(this->addFace(10, 8, 4));
+	this->baseFaces.push_back(this->addFace(2, 1, 0));
+	this->baseFaces.push_back(this->addFace(2, 3, 1));
+	this->baseFaces.push_back(this->addFace(5, 4, 3));
+	this->baseFaces.push_back(this->addFace(4, 8, 3));
+	this->baseFaces.push_back(this->addFace(7, 6, 0));
+	this->baseFaces.push_back(this->addFace(6, 9, 0));
+	this->baseFaces.push_back(this->addFace(11, 10, 4));
+	this->baseFaces.push_back(this->addFace(10, 11, 6));
+	this->baseFaces.push_back(this->addFace(9, 5, 2));
+	this->baseFaces.push_back(this->addFace(5, 9, 11));
+	this->baseFaces.push_back(this->addFace(8, 7, 1));
+	this->baseFaces.push_back(this->addFace(7, 8, 10));
+	this->baseFaces.push_back(this->addFace(2, 5, 3));
+	this->baseFaces.push_back(this->addFace(8, 1, 3));
+	this->baseFaces.push_back(this->addFace(9, 2, 0));
+	this->baseFaces.push_back(this->addFace(1, 7, 0));
+	this->baseFaces.push_back(this->addFace(11, 9, 6));
+	this->baseFaces.push_back(this->addFace(7, 10, 6));
+	this->baseFaces.push_back(this->addFace(5, 11, 4));
+	this->baseFaces.push_back(this->addFace(10, 8, 4));
 }
 
 void PlanetData::subdivideFace(const std::shared_ptr<Face> &face, unsigned int currentLevel, unsigned int targetLevel) {
@@ -174,9 +177,9 @@ void PlanetData::subdivideFace(const std::shared_ptr<Face> &face, unsigned int c
 		targetLevel);
 
 	/// Calculate midpoints and create new vertices (if necessary)
-	const unsigned int mid1 = getOrCreateMidpointIndex(face->getVertexIndices()[0], face->getVertexIndices()[1]);
-	const unsigned int mid2 = getOrCreateMidpointIndex(face->getVertexIndices()[1], face->getVertexIndices()[2]);
-	const unsigned int mid3 = getOrCreateMidpointIndex(face->getVertexIndices()[2], face->getVertexIndices()[0]);
+	const unsigned int mid1 = this->getOrCreateMidpointIndex(face->getVertexIndices()[0], face->getVertexIndices()[1]);
+	const unsigned int mid2 = this->getOrCreateMidpointIndex(face->getVertexIndices()[1], face->getVertexIndices()[2]);
+	const unsigned int mid3 = this->getOrCreateMidpointIndex(face->getVertexIndices()[2], face->getVertexIndices()[0]);
 
 	/// Create new faces using the original vertices and the new midpoints
 	std::array<std::shared_ptr<Face>, 4> newFaces = {
@@ -194,7 +197,7 @@ void PlanetData::subdivideFace(const std::shared_ptr<Face> &face, unsigned int c
 
 	/// Recursively subdivide the new faces
 	for (auto& newFace : newFaces) {
-		subdivideFace(newFace, currentLevel + 1, targetLevel);
+		this->subdivideFace(newFace, currentLevel + 1, targetLevel);
 	}
 }
 
@@ -236,7 +239,8 @@ void PlanetData::setNeighborsForBaseFaces() const {
 					potentialNeighbor->getVertexIndices()[1],
 					potentialNeighbor->getVertexIndices()[2]);
 				currentFace->setNeighbor(neighborCount++, potentialNeighbor);
-				if (neighborCount == 3) break; /// Each face has exactly 3 neighbors
+				if (neighborCount == 3)
+					break; /// Each face has exactly 3 neighbors
 			}
 		}
 		spdlog::info("Found {} neighbors for base face", neighborCount);
@@ -291,7 +295,6 @@ void PlanetData::setNeighborsForFace(const std::shared_ptr<Face>& face) {
 	/// Now check my cusins 
 	const auto grandparent = parent->getParent();
 	if (grandparent) {
-
 		std::array<std::shared_ptr<Face>, 4> siblings = grandparent->getChildren();
 
 		/// Check siblings of the parent (which are my siblings and cousins) to find neighbors
@@ -354,8 +357,9 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 
 	/// Check children
 	for (const auto& child : face->getChildren()) {
-		auto result = getFaceAtPointRecursive(child, normalizedPoint);
-		if (result) return result;
+		auto result = this->getFaceAtPointRecursive(child, normalizedPoint);
+		if (result)
+			return result;
 	}
 
 	return nullptr;
@@ -403,4 +407,5 @@ bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::ve
 	/// Check if the intersection point is between lineStart and lineEnd
 	return (t >= 0.0f && t <= 1.0f);
 }
+
 } /// namespace lillugsi::planet
