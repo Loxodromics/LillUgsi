@@ -1,5 +1,4 @@
 #include "planetdata.h"
-#include "vector3.h"
 #include "datasettingvisitor.h"
 
 #include <spdlog/spdlog.h>
@@ -29,8 +28,8 @@ PlanetData& PlanetData::operator=(const PlanetData& other) {
 	return *this;
 }
 
-std::vector<Vector3> PlanetData::getVertices() const {
-	return vertices;
+std::vector<glm::vec3> PlanetData::getVertices() const {
+	return this->vertices;
 }
 
 std::vector<unsigned int> PlanetData::getIndices() const {
@@ -54,8 +53,8 @@ void PlanetData::applyVisitor(FaceVisitor& visitor) const {
 	}
 }
 
-std::shared_ptr<Face> PlanetData::getFaceAtPoint(const Vector3 &point) const {
-	Vector3 normalizedPoint = point.normalized() * 2.0f; /// normalized and multiplied by 2 should definitly intersect with a unit sphere
+std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
+	glm::vec3 normalizedPoint = glm::normalize(point) * 2.0f;
 	for (const auto& baseFace : baseFaces) {
 		auto result = getFaceAtPointRecursive(baseFace, normalizedPoint);
 		if (result)
@@ -64,7 +63,7 @@ std::shared_ptr<Face> PlanetData::getFaceAtPoint(const Vector3 &point) const {
 	return nullptr;
 }
 
-unsigned int PlanetData::addVertex(const Vector3 vertex) {
+unsigned int PlanetData::addVertex(const glm::vec3 vertex) {
 	vertices.push_back(vertex);
 	// spdlog::debug("addVertex: {}", vertices.size() - 1);
 	/// Assuming the vertices vector is zero-indexed, the position of the newly added vertex
@@ -106,8 +105,8 @@ unsigned int PlanetData::getOrCreateMidpointIndex(unsigned int index1, unsigned 
 	}
 
 	/// Create a new midpoint vertex, then normalize it to ensure it's on the unit sphere
-	Vector3 midpoint = (vertices[index1] + vertices[index2]) * 0.5f;
-	midpoint.normalize();
+	glm::vec3 midpoint = (vertices[index1] + vertices[index2]) * 0.5f;
+	midpoint = glm::normalize(midpoint);
 	unsigned int midpointIndex = addVertex(midpoint);
 	spdlog::trace("Created new midpoint vertex: {}", midpointIndex);
 
@@ -127,18 +126,18 @@ void PlanetData::initializeBaseIcosahedron() {
 	float b = 1.0f / phi;
 
 	/// Add vertices
-	this->addVertex(Vector3(0, b, -a).normalized());  // v0
-	this->addVertex(Vector3(b, a, 0).normalized());   // v1
-	this->addVertex(Vector3(-b, a, 0).normalized());  // v2
-	this->addVertex(Vector3(0, b, a).normalized());   // v3
-	this->addVertex(Vector3(0, -b, a).normalized());  // v4
-	this->addVertex(Vector3(-a, 0, b).normalized());  // v5
-	this->addVertex(Vector3(0, -b, -a).normalized()); // v6
-	this->addVertex(Vector3(a, 0, -b).normalized());  // v7
-	this->addVertex(Vector3(a, 0, b).normalized());   // v8
-	this->addVertex(Vector3(-a, 0, -b).normalized()); // v9
-	this->addVertex(Vector3(b, -a, 0).normalized());  // v10
-	this->addVertex(Vector3(-b, -a, 0).normalized()); // v11
+	this->addVertex(glm::normalize(glm::vec3(0, b, -a)));  // v0
+	this->addVertex(glm::normalize(glm::vec3(b, a, 0)));   // v1
+	this->addVertex(glm::normalize(glm::vec3(-b, a, 0)));  // v2
+	this->addVertex(glm::normalize(glm::vec3(0, b, a)));   // v3
+	this->addVertex(glm::normalize(glm::vec3(0, -b, a)));  // v4
+	this->addVertex(glm::normalize(glm::vec3(-a, 0, b)));  // v5
+	this->addVertex(glm::normalize(glm::vec3(0, -b, -a))); // v6
+	this->addVertex(glm::normalize(glm::vec3(a, 0, -b)));  // v7
+	this->addVertex(glm::normalize(glm::vec3(a, 0, b)));   // v8
+	this->addVertex(glm::normalize(glm::vec3(-a, 0, -b))); // v9
+	this->addVertex(glm::normalize(glm::vec3(b, -a, 0)));  // v10
+	this->addVertex(glm::normalize(glm::vec3(-b, -a, 0))); // v11
 
 	/// Add faces
 	baseFaces.push_back(this->addFace(2, 1, 0));
@@ -343,8 +342,8 @@ void PlanetData::setNeighborsForFace(const std::shared_ptr<Face>& face) {
 	}
 }
 
-std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<Face> &face, const Vector3 &normalizedPoint) const {
-	if (!intersectsLine(face, Vector3(0,0,0), normalizedPoint)) {
+std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<Face> &face, const glm::vec3 &normalizedPoint) const {
+	if (!intersectsLine(face, glm::vec3(0,0,0), normalizedPoint)) {
 		return nullptr;
 	}
 
@@ -362,24 +361,24 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 	return nullptr;
 }
 
-bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const Vector3 &lineStart,
-	const Vector3 &lineEnd) const {
+bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::vec3 &lineStart,
+	const glm::vec3 &lineEnd) const {
 	/// Möller-Trumbore algorithm for intersecting line - triangle
 	/// Get the vertices of the face
 	std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();
-	const Vector3& v0 = vertices[vertexIndices[0]];
-	const Vector3& v1 = vertices[vertexIndices[1]];
-	const Vector3& v2 = vertices[vertexIndices[2]];
+	const glm::vec3& v0 = vertices[vertexIndices[0]];
+	const glm::vec3& v1 = vertices[vertexIndices[1]];
+	const glm::vec3& v2 = vertices[vertexIndices[2]];
 
-	Vector3 direction = lineEnd - lineStart;
+	glm::vec3 direction = lineEnd - lineStart;
 
 	/// Edge vectors
-	Vector3 e1 = v1 - v0;
-	Vector3 e2 = v2 - v0;
+	glm::vec3 e1 = v1 - v0;
+	glm::vec3 e2 = v2 - v0;
 
 	/// Calculate determinant
-	Vector3 pvec = direction.cross(e2);
-	float det = e1.dot(pvec);
+	glm::vec3 pvec = glm::cross(direction, e2);
+	float det = glm::dot(e1, pvec);
 
 	/// If determinant is near zero, ray lies in plane of triangle
 	if (std::fabs(det) < EPSILON) return false;
@@ -387,19 +386,19 @@ bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const Vector3
 	float invDet = 1.0f / det;
 
 	/// Calculate u parameter and test bounds
-	Vector3 tvec = lineStart - v0;
-	float u = tvec.dot(pvec) * invDet;
+	glm::vec3 tvec = lineStart - v0;
+	float u = glm::dot(tvec, pvec) * invDet;
 	if (u < 0.0f || u > 1.0f) return false;
 
 	/// Prepare to test v parameter
-	Vector3 qvec = tvec.cross(e1);
+	glm::vec3 qvec = glm::cross(tvec, e1);
 
 	/// Calculate v parameter and test bounds
-	float v = direction.dot(qvec) * invDet;
+	float v = glm::dot(direction, qvec) * invDet;
 	if (v < 0.0f || u + v > 1.0f) return false;
 
 	/// Calculate t, ray intersects triangle
-	float t = e2.dot(qvec) * invDet;
+	float t = glm::dot(e2, qvec) * invDet;
 
 	/// Check if the intersection point is between lineStart and lineEnd
 	return (t >= 0.0f && t <= 1.0f);
