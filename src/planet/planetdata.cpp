@@ -31,8 +31,16 @@ PlanetData& PlanetData::operator=(const PlanetData& other) {
 }
 
 std::vector<glm::vec3> PlanetData::getVertices() const {
-	return this->vertices;
+	std::vector<glm::vec3> positions;
+	positions.reserve(this->vertices.size());
+
+	/// Extract positions from VertexData for compatibility
+	for (const auto& vertex : this->vertices) {
+		positions.push_back(vertex->getPosition());
+	}
+	return positions;
 }
+
 
 std::vector<unsigned int> PlanetData::getIndices() const {
 	return this->indices;
@@ -66,11 +74,11 @@ std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
 	return nullptr;
 }
 
-unsigned int PlanetData::addVertex(const glm::vec3 vertex) {
+unsigned int PlanetData::addVertex(const glm::vec3& position) {
+	/// Create new VertexData object with given position
+	auto vertex = std::make_shared<VertexData>(position);
 	this->vertices.push_back(vertex);
-	// spdlog::debug("addVertex: {}", vertices.size() - 1);
-	/// Assuming the vertices vector is zero-indexed, the position of the newly added vertex
-	/// is at the size of the vector before the push_back minus 1.
+
 	return this->vertices.size() - 1;
 }
 
@@ -107,9 +115,12 @@ unsigned int PlanetData::getOrCreateMidpointIndex(unsigned int index1, unsigned 
 		return this->midpointIndexCache[key];
 	}
 
-	/// Create a new midpoint vertex, then normalize it to ensure it's on the unit sphere
-	glm::vec3 midpoint = (vertices[index1] + vertices[index2]) * 0.5f;
+	/// Calculate midpoint between two vertices, then normalize it to ensure it's on the unit sphere
+	const glm::vec3 pos1 = this->vertices[index1]->getPosition();
+	const glm::vec3 pos2 = this->vertices[index2]->getPosition();
+	glm::vec3 midpoint = (pos1 + pos2) * 0.5f;
 	midpoint = glm::normalize(midpoint);
+
 	unsigned int midpointIndex = this->addVertex(midpoint);
 	spdlog::trace("Created new midpoint vertex: {}", midpointIndex);
 
@@ -370,9 +381,9 @@ bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::ve
 	/// Möller-Trumbore algorithm for intersecting line - triangle
 	/// Get the vertices of the face
 	std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();
-	const glm::vec3& v0 = vertices[vertexIndices[0]];
-	const glm::vec3& v1 = vertices[vertexIndices[1]];
-	const glm::vec3& v2 = vertices[vertexIndices[2]];
+	const glm::vec3& v0 = vertices[vertexIndices[0]]->getPosition();
+	const glm::vec3& v1 = vertices[vertexIndices[1]]->getPosition();
+	const glm::vec3& v2 = vertices[vertexIndices[2]]->getPosition();
 
 	glm::vec3 direction = lineEnd - lineStart;
 
