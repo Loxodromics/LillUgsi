@@ -174,6 +174,33 @@ void PlanetData::initializeBaseIcosahedron() {
 	this->baseFaces.push_back(this->addFace(7, 10, 6));
 	this->baseFaces.push_back(this->addFace(5, 11, 4));
 	this->baseFaces.push_back(this->addFace(10, 8, 4));
+
+	/// Set up initial neighbor relationships
+	this->setupInitialVertexNeighbors();
+}
+
+void PlanetData::setupInitialVertexNeighbors() {
+	/// Must be called after vertices and faces are created but before subdivision
+	/// For each face in the initial icosahedron, establish neighbor relationships
+	/// between its vertices. Each original vertex will end up with exactly 5 neighbors.
+	for (const auto& face : this->baseFaces) {
+		const auto indices = face->getVertexIndices();
+
+		/// For each vertex in the face, connect it to the other two vertices
+		/// We use all combinations since neighbor relationships are bidirectional
+		this->vertices[indices[0]]->addNeighbor(this->vertices[indices[1]]);
+		this->vertices[indices[0]]->addNeighbor(this->vertices[indices[2]]);
+		this->vertices[indices[1]]->addNeighbor(this->vertices[indices[2]]);
+	}
+
+	/// Verify each original vertex has exactly 5 neighbors
+	for (size_t i = 0; i < 12; ++i) {  /// First 12 vertices are from original icosahedron
+		const auto neighbors = this->vertices[i]->getNeighbors();
+		if (neighbors.size() != 5) {
+			spdlog::warn("Initial vertex {} has {} neighbors instead of expected 5",
+				i, neighbors.size());
+		}
+	}
 }
 
 void PlanetData::subdivideFace(const std::shared_ptr<Face> &face, unsigned int currentLevel, unsigned int targetLevel) {

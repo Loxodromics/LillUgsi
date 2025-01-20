@@ -34,6 +34,9 @@ private:
 
 	void initializeBaseIcosahedron();
 
+	/// Set up neighbor relationships for initial icosahedron vertices
+	void setupInitialVertexNeighbors();
+
 	/// Helper methods
 	/// Returns index of the new vertex in vertices vector
 	unsigned int addVertex(const glm::vec3& position);
