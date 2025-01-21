@@ -95,12 +95,15 @@ std::shared_ptr<Face> PlanetData::addFace(const unsigned int v1, const unsigned 
 }
 
 void PlanetData::subdivide(int levels) {
-	for (auto& baseFace : baseFaces) {
+	/// First perform all geometric subdivision
+	for (auto& baseFace : this->baseFaces) {
 		this->subdivideFace(baseFace, 0, levels);
 	}
 
-	/// After subdivision, we run a separate function
-	/// to recursively set neighbors for each face.
+	/// Now rebuild all neighbor relationships for the final mesh
+	this->rebuildAllVertexNeighbors();
+
+	/// After neighbor relationships are established, we can set up face neighbors
 	this->setNeighbors();
 }
 
@@ -199,6 +202,57 @@ void PlanetData::setupInitialVertexNeighbors() {
 		if (neighbors.size() != 5) {
 			spdlog::warn("Initial vertex {} has {} neighbors instead of expected 5",
 				i, neighbors.size());
+		}
+	}
+}
+
+void PlanetData::rebuildAllVertexNeighbors() {
+	/// Clear all existing neighbor relationships since the mesh topology has changed
+	for (auto& vertex : this->vertices) {
+		vertex->clearNeighbors();
+	}
+
+	/// Use face data to establish new neighbor relationships
+	/// We iterate all faces in the mesh, including subdivided faces
+	std::function<void(const std::shared_ptr<Face>&)> processFace =
+		[this](const std::shared_ptr<Face>& face) {
+			const auto indices = face->getVertexIndices();
+
+			/// For each vertex in the face, connect it to the other two vertices
+			this->vertices[indices[0]]->addNeighbor(this->vertices[indices[1]]);
+			this->vertices[indices[0]]->addNeighbor(this->vertices[indices[2]]);
+			this->vertices[indices[1]]->addNeighbor(this->vertices[indices[2]]);
+	};
+
+	/// Process base faces and all their children recursively
+	for (const auto& baseFace : this->baseFaces) {
+		processFace(baseFace);
+
+		/// Lambda to recursively process child faces
+		std::function<void(const std::shared_ptr<Face>&)> processChildren =
+			[&processChildren, &processFace](const std::shared_ptr<Face>& parent) {
+				for (const auto& child : parent->getChildren()) {
+					if (child) {
+						processFace(child);
+						processChildren(child);
+					}
+				}
+		};
+
+		processChildren(baseFace);
+	}
+
+	/// Verify vertex neighbor counts
+	/// Original icosahedron vertices should have 5 neighbors
+	/// All other vertices should have 6 neighbors
+	for (size_t i = 0; i < this->vertices.size(); ++i) {
+		const auto neighbors = this->vertices[i]->getNeighbors();
+		const bool isOriginalVertex = i < 12;
+		const size_t expectedNeighbors = isOriginalVertex ? 5 : 6;
+
+		if (neighbors.size() != expectedNeighbors) {
+			spdlog::warn("Vertex {} has {} neighbors, expected {}",
+				i, neighbors.size(), expectedNeighbors);
 		}
 	}
 }

@@ -37,6 +37,10 @@ private:
 	/// Set up neighbor relationships for initial icosahedron vertices
 	void setupInitialVertexNeighbors();
 
+	/// Rebuilds all vertex neighbor relationships using face data
+	/// Must be called after subdivision is complete
+	void rebuildAllVertexNeighbors();
+
 	/// Helper methods
 	/// Returns index of the new vertex in vertices vector
 	unsigned int addVertex(const glm::vec3& position);

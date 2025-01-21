@@ -105,6 +105,13 @@ void VertexData::recalculateNormal() {
 	normal = glm::normalize(summedNormal);
 }
 
+void VertexData::clearNeighbors() {
+	this->neighbors.clear();
+	this->neighborDistances.clear();
+	this->neighborSlopes.clear();
+	this->slopeDirtyFlags.clear();
+}
+
 void VertexData::calculateSlope(size_t neighborIndex) {
 	/// Get shared_ptr to neighbor, handling expired case
 	auto neighbor = this->neighbors[neighborIndex].lock();

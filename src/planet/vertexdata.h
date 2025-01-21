@@ -41,6 +41,10 @@ public:
 	/// Force recalculation of normal vector based on neighbor positions
 	void recalculateNormal();
 
+	/// Clear all neighbor relationships for this vertex
+	/// Called before rebuilding neighbors after subdivision
+	void clearNeighbors();
+
 private:
 	/// Calculate slope to specific neighbor and cache the result
 	void calculateSlope(size_t neighborIndex);
