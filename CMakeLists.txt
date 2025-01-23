@@ -57,6 +57,7 @@ add_executable(LillUgsi
 		src/planet/face.cpp
 		src/planet/planetdata.cpp
 		src/planet/vertexdata.cpp
+		src/planet/noiseterrainvisitor.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

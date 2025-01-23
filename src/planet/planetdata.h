@@ -2,6 +2,7 @@
 
 #include "face.h"
 #include "vertexdata.h"
+#include "vertexvisitor.h"
 #include <glm/glm.hpp>
 #include <vector>
 #include <map>
@@ -22,7 +23,8 @@ public:
 
 	/// Visitor
 	static void applyVisitorToFace(const std::shared_ptr<Face> &face, FaceVisitor& visitor);
-	void applyVisitor(FaceVisitor& visitor) const;
+	void applyFaceVisitor(FaceVisitor& visitor) const;
+	void applyVertexVisitor(VertexVisitor& visitor) const; ///< Apply a vertex visitor to all vertices in the mesh
 
 	[[nodiscard]] std::shared_ptr<Face> getFaceAtPoint(const glm::vec3& point) const;
 

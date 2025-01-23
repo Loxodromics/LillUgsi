@@ -53,9 +53,18 @@ void PlanetData::applyVisitorToFace(const std::shared_ptr<Face> &face, FaceVisit
 	}
 }
 
-void PlanetData::applyVisitor(FaceVisitor& visitor) const {
+void PlanetData::applyFaceVisitor(FaceVisitor& visitor) const {
 	for (auto& baseFace : this->baseFaces) {
 		PlanetData::applyVisitorToFace(baseFace, visitor);
+	}
+}
+
+void PlanetData::applyVertexVisitor(VertexVisitor& visitor) const {
+	/// Process all vertices in order
+	/// Order might matter for some algorithms, so we maintain the same
+	/// traversal order for consistency
+	for (auto& vertex : this->vertices) {
+		visitor.visit(vertex);
 	}
 }
 
