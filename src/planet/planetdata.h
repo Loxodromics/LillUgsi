@@ -10,7 +10,7 @@ namespace lillugsi::planet {
 class PlanetData {
 public:
 	PlanetData();
-	~PlanetData();
+	~PlanetData() = default;
 
 	/// Methods for icosphere generation and manipulation
 	void subdivide(int levels);

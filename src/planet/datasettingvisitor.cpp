@@ -9,7 +9,7 @@ void DataSettingVisitor::visit(const std::shared_ptr<Face> face) {
 
 	/// Example operation: Set face data based on some criteria
 	/// This is where you implement the logic to set the data for the face
-	const float data = this->calculateDataForFace(face);
+	const float data = DataSettingVisitor::calculateDataForFace(face);
 	face->setData(data);
 	spdlog::trace("calculateDataForFace Face object: {}", *face);
 }

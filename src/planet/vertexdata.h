@@ -58,7 +58,7 @@ private:
 	
 	/// Calculate initial distance to a neighbor
 	/// Called once during neighbor setup since lateral positions don't change
-	float calculateDistanceToNeighbor(const VertexData& neighbor) const;
+	[[nodiscard]] float calculateDistanceToNeighbor(const VertexData& neighbor) const;
 
 	/// Physical properties
 	float elevation{0.0f};

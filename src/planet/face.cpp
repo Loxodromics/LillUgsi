@@ -21,7 +21,7 @@ std::ostream& operator<<(std::ostream& os, const Face& face) {
 }
 
 /// Setters
-void Face::setData(float value) {
+void Face::setData(const float value) {
 	this->data = value;
 }
 
@@ -32,8 +32,8 @@ void Face::setNeighbor(const unsigned int index, std::shared_ptr<Face> neighbor)
 }
 
 void Face::addNeighbor(const std::shared_ptr<Face>& neighbor) {
-	for (size_t index = 0; index < this->neighbors.size(); ++index) {
-		if (neighbor == this->neighbors[index]) {
+	for (const auto & index : this->neighbors) {
+		if (neighbor == index) {
 			spdlog::trace("addNeighbor: neighbor already exists");
 			return;
 		}
@@ -47,7 +47,7 @@ void Face::addNeighbor(const std::shared_ptr<Face>& neighbor) {
 	}
 }
 
-void Face::setChild(unsigned int index, std::shared_ptr<Face> child) {
+void Face::setChild(const unsigned int index, std::shared_ptr<Face> child) {
 	if (index < this->children.size()) {
 		this->children[index] = std::move(child);
 	}

@@ -3,15 +3,13 @@
 #include <algorithm>
 #include <glm/geometric.hpp>
 
-namespace lillugsi::planet
-{
+namespace lillugsi::planet {
 VertexData::VertexData(const glm::vec3& position)
 	: position(position) {
 	/// Position is set in initializer list since it's constant after creation
 }
 
-void VertexData::setElevation(float newElevation)
-{
+void VertexData::setElevation(float newElevation) {
 	/// Only update and trigger recalculations if elevation actually changes
 	if (std::abs(this->elevation - newElevation) > EPSILON) {
 		this->elevation = newElevation;
@@ -20,8 +18,7 @@ void VertexData::setElevation(float newElevation)
 	}
 }
 
-void VertexData::addNeighbor(const std::shared_ptr<VertexData>& neighbor)
-{
+void VertexData::addNeighbor(const std::shared_ptr<VertexData>& neighbor) {
 	/// Skip if neighbor is null or already exists
 	if (!neighbor) {
 		spdlog::warn("Attempted to add null neighbor to vertex");
@@ -39,10 +36,10 @@ void VertexData::addNeighbor(const std::shared_ptr<VertexData>& neighbor)
 	}
 
 	/// Add new neighbor and initialize associated data
-	neighbors.push_back(neighbor);
-	neighborDistances.push_back(calculateDistanceToNeighbor(*neighbor));
-	neighborSlopes.push_back(0.0f);
-	slopeDirtyFlags.push_back(true);
+	this->neighbors.push_back(neighbor);
+	this->neighborDistances.push_back(calculateDistanceToNeighbor(*neighbor));
+	this->neighborSlopes.push_back(0.0f);
+	this->slopeDirtyFlags.push_back(true);
 
 	spdlog::trace("Added new neighbor to vertex");
 }
@@ -83,7 +80,7 @@ void VertexData::recalculateNormal() {
 	/// the average surface orientation at this point.
 
 	glm::vec3 summedNormal(0.0f);
-	auto currentNeighbors = getNeighbors();
+	const auto currentNeighbors = getNeighbors();
 
 	/// Need at least 2 neighbors to calculate a meaningful normal
 	if (currentNeighbors.size() < 2) {
@@ -93,16 +90,16 @@ void VertexData::recalculateNormal() {
 
 	/// For each consecutive pair of neighbors, calculate cross product
 	for (size_t i = 0; i < currentNeighbors.size(); ++i) {
-		size_t nextIndex = (i + 1) % currentNeighbors.size();
+		const size_t nextIndex = (i + 1) % currentNeighbors.size();
 
-		glm::vec3 v1 = currentNeighbors[i]->position - position;
-		glm::vec3 v2 = currentNeighbors[nextIndex]->position - position;
+		glm::vec3 v1 = currentNeighbors[i]->position - this->position;
+		glm::vec3 v2 = currentNeighbors[nextIndex]->position - this->position;
 
 		summedNormal += glm::cross(v1, v2);
 	}
 
 	/// Normalize the result to get a unit normal vector
-	normal = glm::normalize(summedNormal);
+	this->normal = glm::normalize(summedNormal);
 }
 
 void VertexData::clearNeighbors() {
@@ -114,7 +111,7 @@ void VertexData::clearNeighbors() {
 
 void VertexData::calculateSlope(size_t neighborIndex) {
 	/// Get shared_ptr to neighbor, handling expired case
-	auto neighbor = this->neighbors[neighborIndex].lock();
+	const auto neighbor = this->neighbors[neighborIndex].lock();
 	if (!neighbor) {
 		spdlog::warn("Neighbor expired when calculating slope");
 		this->neighborSlopes[neighborIndex] = 0.0f;
@@ -122,7 +119,7 @@ void VertexData::calculateSlope(size_t neighborIndex) {
 	}
 
 	/// Calculate slope using elevation difference and stored distance
-	float elevationDiff = neighbor->elevation - this->elevation;
+	const float elevationDiff = neighbor->elevation - this->elevation;
 	float slope = elevationDiff / this->neighborDistances[neighborIndex];
 
 	this->neighborSlopes[neighborIndex] = slope;
@@ -135,7 +132,7 @@ void VertexData::markSlopesDirty() {
 
 	/// Notify neighbors that their slopes to us need recalculation
 	for (const auto& weakNeighbor : this->neighbors) {
-		if (auto neighbor = weakNeighbor.lock()) {
+		if (const auto neighbor = weakNeighbor.lock()) {
 			neighbor->markSlopeDirty(this);
 		}
 	}

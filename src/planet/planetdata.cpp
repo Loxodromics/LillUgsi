@@ -11,11 +11,6 @@ PlanetData::PlanetData() {
 	this->initializeBaseIcosahedron();
 }
 
-
-PlanetData::~PlanetData() {
-	/// Cleanup if needed
-}
-
 PlanetData::PlanetData(const PlanetData& other)
 	: vertices(other.vertices)
 	, indices(other.indices) {
@@ -341,7 +336,7 @@ void PlanetData::setNeighborsForBaseFaces() const {
 
 
 void PlanetData::setNeighborsForFace(const std::shared_ptr<Face>& face) {
-	auto parent = face->getParent();
+	const auto parent = face->getParent();
 	if (!parent) {
 		spdlog::warn("setNeighborsForFace called with null parent");
 		return;
@@ -466,35 +461,35 @@ bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::ve
 	const glm::vec3& v1 = vertices[vertexIndices[1]]->getPosition();
 	const glm::vec3& v2 = vertices[vertexIndices[2]]->getPosition();
 
-	glm::vec3 direction = lineEnd - lineStart;
+	const glm::vec3 direction = lineEnd - lineStart;
 
 	/// Edge vectors
-	glm::vec3 e1 = v1 - v0;
-	glm::vec3 e2 = v2 - v0;
+	const glm::vec3 e1 = v1 - v0;
+	const glm::vec3 e2 = v2 - v0;
 
 	/// Calculate determinant
-	glm::vec3 pvec = glm::cross(direction, e2);
-	float det = glm::dot(e1, pvec);
+	const glm::vec3 pvec = glm::cross(direction, e2);
+	const float det = glm::dot(e1, pvec);
 
 	/// If determinant is near zero, ray lies in plane of triangle
 	if (std::fabs(det) < EPSILON) return false;
 
-	float invDet = 1.0f / det;
+	const float invDet = 1.0f / det;
 
 	/// Calculate u parameter and test bounds
-	glm::vec3 tvec = lineStart - v0;
-	float u = glm::dot(tvec, pvec) * invDet;
+	const glm::vec3 tvec = lineStart - v0;
+	const float u = glm::dot(tvec, pvec) * invDet;
 	if (u < 0.0f || u > 1.0f) return false;
 
 	/// Prepare to test v parameter
-	glm::vec3 qvec = glm::cross(tvec, e1);
+	const glm::vec3 qvec = glm::cross(tvec, e1);
 
 	/// Calculate v parameter and test bounds
-	float v = glm::dot(direction, qvec) * invDet;
+	const float v = glm::dot(direction, qvec) * invDet;
 	if (v < 0.0f || u + v > 1.0f) return false;
 
 	/// Calculate t, ray intersects triangle
-	float t = glm::dot(e2, qvec) * invDet;
+	const float t = glm::dot(e2, qvec) * invDet;
 
 	/// Check if the intersection point is between lineStart and lineEnd
 	return (t >= 0.0f && t <= 1.0f);
