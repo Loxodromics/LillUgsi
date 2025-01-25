@@ -7,14 +7,12 @@ AlignConsecutiveAssignments:
   AcrossEmptyLines: false
   AcrossComments: false
   AlignCompound: false
-  AlignFunctionPointers: false
   PadOperators: true
 AlignConsecutiveDeclarations:
   Enabled: false
   AcrossEmptyLines: false
   AcrossComments: false
   AlignCompound: false
-  AlignFunctionPointers: false
   PadOperators: true
 AlignEscapedNewlines: DontAlign
 AlignOperands: Align
