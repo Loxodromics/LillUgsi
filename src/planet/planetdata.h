@@ -28,6 +28,18 @@ public:
 
 	[[nodiscard]] std::shared_ptr<Face> getFaceAtPoint(const glm::vec3& point) const;
 
+	/// Get the height at a specific point on the planet surface
+	/// Returns the elevation of the nearest vertex to maintain data integrity
+	/// @param point Any point in space (will be normalized to unit sphere)
+	/// @return The elevation at the nearest vertex, or 0.0f if no face found
+	[[nodiscard]] float getHeightAt(const glm::vec3& point) const;
+
+	/// Get interpolated height at a specific point on the planet surface
+	/// Uses barycentric coordinates to smoothly blend between vertex elevations
+	/// @param point Any point in space (will be normalized to unit sphere)
+	/// @return The interpolated elevation, or 0.0f if no face found
+	[[nodiscard]] float getInterpolatedHeightAt(const glm::vec3& point) const;
+
 private:
 	/// Copy constructor
 	PlanetData(const PlanetData& other);
@@ -60,6 +72,14 @@ private:
 
 	[[nodiscard]] bool intersectsLine(const std::shared_ptr<Face>& face,
 									  const glm::vec3& lineStart, const glm::vec3& lineEnd) const;
+
+	/// Calculate barycentric coordinates for a point within a face
+	/// @param face The face containing the point
+	/// @param point The point to calculate coordinates for (must be normalized)
+	/// @return Barycentric coordinates (u,v,w) for the point
+	[[nodiscard]] glm::vec3 calculateBarycentricCoords(
+		const std::shared_ptr<Face>& face,
+		const glm::vec3& point) const;
 
 	/// Data
 	/// Store VertexData objects instead of just positions

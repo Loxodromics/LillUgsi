@@ -1,8 +1,10 @@
 #pragma once
+
 #include "planetdata.h"
 #include "face.h"
-#include <glm/glm.hpp>
+#include "rendering/icospheremesh.h"
 
+#include <glm/glm.hpp>
 
 namespace lillugsi::planet {
 
@@ -16,20 +18,37 @@ public:
 		float lacunarity{2.0f};
 	};
 
-	explicit PlanetGenerator(std::shared_ptr<PlanetData> planetData);
+	/// Create generator with planet data and mesh to modify
+	/// @param planetData The planet data to generate terrain for
+	/// @param mesh The mesh to visualize the terrain
+	PlanetGenerator(
+		std::shared_ptr<PlanetData> planetData,
+		std::shared_ptr<rendering::IcosphereMesh>& mesh);
 
-	/// Generate terrain using current settings
+	/// Generate terrain and update mesh
 	void generateTerrain() const;
 
-	/// Set generator settings
+	/// Modify terrain at a specific point
+	/// @param position The point to modify (will be normalized)
+	/// @param amount Amount of elevation change
+	void modifyTerrain(const glm::vec3& position, float amount);
+
+	/// Update settings and regenerate terrain
+	/// @param settings New generator settings
 	void setSettings(const GeneratorSettings& settings);
 
 	/// Get current settings
+	/// @return Current generator settings
 	[[nodiscard]] const GeneratorSettings& getSettings() const;
 
 private:
 	std::shared_ptr<PlanetData> planetData;
+	std::weak_ptr<rendering::IcosphereMesh> mesh;
 	GeneratorSettings settings;
+
+	/// Update mesh vertices from current planet data
+	/// @return true if mesh was updated successfully
+	bool updateMesh() const;
 };
 
 } /// namespace lillugsi::planet

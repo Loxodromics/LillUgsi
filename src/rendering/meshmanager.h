@@ -35,7 +35,7 @@ public:
 	/// @param args Constructor arguments forwarded to mesh creation
 	/// @return A unique pointer to the created mesh
 	template<typename T, typename... Args>
-	[[nodiscard]] std::unique_ptr<Mesh> createMesh(Args&&... args);
+	[[nodiscard]] std::shared_ptr<Mesh> createMesh(Args&&... args);
 
 private:
 	/// Vulkan device references

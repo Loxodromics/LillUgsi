@@ -6,7 +6,7 @@
 
 namespace lillugsi::rendering {
 
-IcosphereMesh::IcosphereMesh(float radius, uint32_t subdivisions) 
+IcosphereMesh::IcosphereMesh(float radius, uint32_t subdivisions)
 	: radius(radius)
 	, subdivisions(subdivisions) {
 	/// Validate input parameters to ensure we create a valid mesh
@@ -41,6 +41,46 @@ void IcosphereMesh::generateGeometry() {
 		spdlog::debug("Performing subdivision {}/{}", i + 1, this->subdivisions);
 		this->subdivide();
 	}
+}
+
+void IcosphereMesh::applyVertexTransforms(const std::vector<VertexTransform> &transforms)
+{
+	/// Verify transform count matches vertex count
+	/// This ensures we have exactly one transform per vertex
+	if (transforms.size() != this->vertices.size()) {
+		throw vulkan::VulkanException(
+			VK_ERROR_VALIDATION_FAILED_EXT,
+			"Transform count must match vertex count",
+			__FUNCTION__,
+			__FILE__,
+			__LINE__);
+	}
+
+	/// Apply each transform to its corresponding vertex
+	/// We update all vertex properties to maintain consistency
+	for (size_t i = 0; i < transforms.size(); ++i) {
+		const auto &transform = transforms[i];
+		auto &vertex = this->vertices[i];
+
+		vertex.position = transform.position;
+		vertex.normal = transform.normal;
+		vertex.color = transform.color;
+	}
+
+	spdlog::debug("Applied {} vertex transforms to icosphere", transforms.size());
+}
+
+std::vector<glm::vec3> IcosphereMesh::getVertexPositions() const {
+	/// Extract positions from vertices for external use
+	/// This allows transform calculations without exposing internal vertex format
+	std::vector<glm::vec3> positions;
+	positions.reserve(this->vertices.size());
+
+	for (const auto& vertex : this->vertices) {
+		positions.push_back(vertex.position);
+	}
+
+	return positions;
 }
 
 void IcosphereMesh::initializeBaseIcosahedron() {

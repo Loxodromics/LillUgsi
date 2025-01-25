@@ -43,7 +43,7 @@ void MeshManager::cleanup() {
 }
 
 template <typename T, typename... Args>
-std::unique_ptr<Mesh> MeshManager::createMesh(Args&&... args) {
+std::shared_ptr<Mesh> MeshManager::createMesh(Args&&... args) {
 	/// Create the mesh instance with provided parameters
 	/// We use perfect forwarding to pass constructor arguments exactly as received
 	auto mesh = std::make_unique<T>(std::forward<Args>(args)...);
@@ -221,7 +221,7 @@ uint32_t MeshManager::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags 
 /// This would still work in our case because we're not doing any special move semantics with the parameters.
 /// The && version is more technically correct when working with perfect forwarding, but for simple types like float
 /// and int, there's no practical difference.
-template std::unique_ptr<Mesh> MeshManager::createMesh<CubeMesh>();
-template std::unique_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float&&, int&&);
+template std::shared_ptr<Mesh> MeshManager::createMesh<CubeMesh>();
+template std::shared_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float&&, int&&);
 
 } /// namespace lillugsi::rendering

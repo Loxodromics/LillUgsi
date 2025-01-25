@@ -1,12 +1,14 @@
 #include "renderer.h"
 #include "rendering/cubemesh.h"
 #include "rendering/icospheremesh.h"
-#include "vulkan/vertexbuffer.h"
 #include "vulkan/indexbuffer.h"
-#include <glm/gtc/matrix_transform.hpp>
-#include <spdlog/spdlog.h>
+#include "vulkan/vertexbuffer.h"
 #include <SDL3/SDL_vulkan.h>
 #include <fstream>
+#include <glm/gtc/matrix_transform.hpp>
+#include <planet/datasettingvisitor.h>
+#include <planet/planetgenerator.h>
+#include <spdlog/spdlog.h>
 
 /// Helper function to read a file
 static std::vector<char> readFile(const std::string& filename) {
@@ -1032,9 +1034,23 @@ void Renderer::initializeScene() {
 	/// Add an icosphere to demonstrate spherical geometry
 	/// We place it at the center where it's easy to observe
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
-	auto icosphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.0f, 2);
-	icosphereMesh->setMaterial(wireframeMaterial);
+	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(this->meshManager->createMesh<IcosphereMesh>(1.0f, 2));
+	icosphereMesh->setMaterial(metallicMaterial);
+
+	this->icosphere = std::make_shared<planet::PlanetData>();
+	// icosphere->subdivide(2);
+
+	// lillugsi::planet::DataSettingVisitor dataVisitor;
+	// icosphere->applyFaceVisitor(dataVisitor);
+	//
+	// std::shared_ptr<lillugsi::rendering::IcosphereMesh> icosphereMesh2;
+	// icosphereMesh = std::make_shared<lillugsi::rendering::IcosphereMesh>(1.0f, 2);
+
+	// planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh2);
+	// planetGenerator.generateTerrain();
+
 	icosphereNode->setMesh(std::move(icosphereMesh));
+
 
 	/// Position a large icosphere in the middle of all cubes
 	/// It intersects some of the cude to see, that depth rendering works correctly

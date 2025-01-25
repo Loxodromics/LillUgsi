@@ -1,9 +1,28 @@
 #include "core/application.h"
+#include "planet/planetdata.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
 int main(int argc, char* argv[]) {
 	try {
+		spdlog::set_level(spdlog::level::trace);
+		const std::shared_ptr<lillugsi::planet::PlanetData> icosphere = std::make_shared<lillugsi::planet::PlanetData>();
+		// icosphere->subdivide(2);
+
+		// lillugsi::planet::DataSettingVisitor dataVisitor;
+		// icosphere->applyFaceVisitor(dataVisitor);
+		//
+		// // lillugsi::planet::NoiseTerrainVisitor noiseVisitor;
+		// // icosphere.applyVertexVisitor(noiseVisitor);
+		//
+		// std::shared_ptr<lillugsi::rendering::IcosphereMesh> icosphereMesh;
+		// icosphereMesh = std::make_shared<lillugsi::rendering::IcosphereMesh>(1.0f, 2);
+		//
+		// lillugsi::planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
+		// planetGenerator.generateTerrain();
+		return 0;
+
+
 		/// Initialize spdlog
 		spdlog::set_level(spdlog::level::debug);
 		spdlog::info("Starting LillUgsi Vulkan Learning Renderer");

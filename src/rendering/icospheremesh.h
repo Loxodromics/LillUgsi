@@ -14,6 +14,15 @@ namespace lillugsi::rendering {
 /// - Efficient memory use (no vertex clustering at poles)
 class IcosphereMesh : public Mesh {
 public:
+	/// Vertex transform data for mesh updates
+	/// This structure contains all data needed to update a vertex's properties
+	/// We use this interface to decouple mesh updates from specific data sources
+	struct VertexTransform {
+		glm::vec3 position;  /// New vertex position
+		glm::vec3 normal;    /// New vertex normal
+		glm::vec3 color;     /// New vertex color
+	};
+
 	/// Create an icosphere with given parameters
 	/// @param radius Controls the size of the sphere
 	/// @param subdivisions Number of times to subdivide the base icosahedron
@@ -24,14 +33,22 @@ public:
 	/// - 3: 642 vertices, 1280 triangles
 	/// - 4: 2562 vertices, 5120 triangles
 	explicit IcosphereMesh(float radius = 1.0f, uint32_t subdivisions = 1);
-	virtual ~IcosphereMesh() = default;
+	~IcosphereMesh() override = default;
 
-	/// Generate the icosphere geometry
-	/// We override this method to create our specialized sphere geometry
 	void generateGeometry() override;
 
+	/// Apply transforms to update mesh vertices
+	/// @param transforms Vector of transforms matching vertex count
+	/// @throws VulkanException if transform count doesn't match vertex count
+	void applyVertexTransforms(const std::vector<VertexTransform>& transforms);
+
+	/// Get current vertex positions
+	/// Useful for computing transforms based on current mesh state
+	/// @return Vector of current vertex positions
+	[[nodiscard]] std::vector<glm::vec3> getVertexPositions() const;
+
 	/// Get the current radius of the icosphere
-	/// @return The sphere's radius
+	/// @return The sphere's base radius
 	[[nodiscard]] float getRadius() const { return this->radius; }
 
 	/// Get the subdivision level
@@ -63,21 +80,21 @@ private:
 	/// @return Index of the midpoint vertex (either existing or newly created)
 	[[nodiscard]] uint32_t getOrCreateMidpoint(uint32_t index1, uint32_t index2);
 
-	float radius;                    /// Radius of the sphere
-	uint32_t subdivisions;          /// Number of subdivision steps
-	
-	/// Cache for midpoint vertices during subdivision
-	/// The key is a 64-bit hash of the two vertex indices
-	/// The value is the index of the midpoint vertex
-	/// We use this to avoid creating duplicate vertices
-	std::map<int64_t, uint32_t> midpointCache;
-
 	/// Generate a unique key for edge midpoint caching
 	/// We need this to efficiently look up existing midpoints
 	/// @param index1 First vertex index
 	/// @param index2 Second vertex index
 	/// @return Unique key for this edge
 	[[nodiscard]] static int64_t generateEdgeKey(uint32_t index1, uint32_t index2);
+
+	/// Cache for midpoint vertices during subdivision
+	/// The key is a 64-bit hash of the two vertex indices
+	/// The value is the index of the midpoint vertex
+	/// We use this to avoid creating duplicate vertices
+	std::map<int64_t, uint32_t> midpointCache;
+
+	float radius;                    /// Base radius of the sphere
+	uint32_t subdivisions;          /// Number of subdivision steps
 };
 
 } /// namespace lillugsi::rendering

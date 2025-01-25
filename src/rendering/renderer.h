@@ -15,6 +15,8 @@
 
 #include "materialmanager.h"
 
+#include <planet/planetdata.h>
+
 namespace lillugsi::rendering {
 
 /// Main renderer class responsible for managing the rendering pipeline
@@ -193,6 +195,8 @@ private:
 
 	/// Material management
 	std::unique_ptr<MaterialManager> materialManager;
+
+	std::shared_ptr<planet::PlanetData> icosphere;
 
 };
 

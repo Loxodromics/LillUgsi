@@ -29,7 +29,7 @@ void VertexData::addNeighbor(const std::shared_ptr<VertexData>& neighbor) {
 	for (const auto& existingNeighbor : this->neighbors) {
 		if (auto locked = existingNeighbor.lock()) {
 			if (locked == neighbor) {
-				spdlog::trace("Neighbor already exists for vertex");
+				spdlog::debug("Neighbor already exists for vertex");
 				return;
 			}
 		}
@@ -41,7 +41,7 @@ void VertexData::addNeighbor(const std::shared_ptr<VertexData>& neighbor) {
 	this->neighborSlopes.push_back(0.0f);
 	this->slopeDirtyFlags.push_back(true);
 
-	spdlog::trace("Added new neighbor to vertex");
+	spdlog::debug("Added new neighbor to vertex");
 }
 
 std::vector<std::shared_ptr<VertexData>> VertexData::getNeighbors() const {

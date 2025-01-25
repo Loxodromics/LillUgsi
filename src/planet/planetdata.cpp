@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 #include <algorithm> /// For std::min and std::max
 #include <map>
+#include <set>
 #include <iostream>
 
 namespace lillugsi::planet {
@@ -76,6 +77,73 @@ std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
 			return result;
 	}
 	return nullptr;
+}
+
+float PlanetData::getHeightAt(const glm::vec3& point) const {
+	/// First find which face contains this point
+	auto face = this->getFaceAtPoint(point);
+	if (!face) {
+		spdlog::warn("No face found for point ({}, {}, {})",
+			point.x, point.y, point.z);
+		return 0.0f;
+	}
+
+	/// Get vertex indices for this face
+	const auto indices = face->getVertexIndices();
+
+	/// Find the closest vertex to our query point
+	float minDistance = std::numeric_limits<float>::max();
+	float nearestElevation = 0.0f;
+
+	/// We check each vertex of the face to find the nearest one
+	/// This ensures we're using actual data points rather than
+	/// potentially invalid interpolated values
+	for (unsigned int index : indices) {
+		const auto& vertex = this->vertices[index];
+		float distance = glm::length(vertex->getPosition() - point);
+
+		if (distance < minDistance) {
+			minDistance = distance;
+			nearestElevation = vertex->getElevation();
+		}
+	}
+
+	spdlog::trace("Found height {} at point ({}, {}, {})",
+		nearestElevation, point.x, point.y, point.z);
+	return nearestElevation;
+}
+
+float PlanetData::getInterpolatedHeightAt(const glm::vec3& point) const {
+	/// Find containing face as before
+	auto face = this->getFaceAtPoint(point);
+	if (!face) {
+		spdlog::warn("No face found for point ({}, {}, {})",
+			point.x, point.y, point.z);
+		return 0.0f;
+	}
+
+	/// Calculate barycentric coordinates for interpolation
+	/// These tell us how much each vertex contributes to our point
+	const glm::vec3 baryCoords = this->calculateBarycentricCoords(face, point);
+
+	/// Get vertex indices and their elevations
+	const auto indices = face->getVertexIndices();
+	const float elevations[3] = {
+		this->vertices[indices[0]]->getElevation(),
+		this->vertices[indices[1]]->getElevation(),
+		this->vertices[indices[2]]->getElevation()
+	};
+
+	/// Blend elevations using barycentric coordinates
+	/// This gives us a smooth interpolation between the vertices
+	const float interpolatedHeight =
+		elevations[0] * baryCoords.x +
+		elevations[1] * baryCoords.y +
+		elevations[2] * baryCoords.z;
+
+	spdlog::trace("Interpolated height {} at point ({}, {}, {})",
+		interpolatedHeight, point.x, point.y, point.z);
+	return interpolatedHeight;
 }
 
 unsigned int PlanetData::addVertex(const glm::vec3& position) {
@@ -211,44 +279,74 @@ void PlanetData::setupInitialVertexNeighbors() {
 }
 
 void PlanetData::rebuildAllVertexNeighbors() {
-	/// Clear all existing neighbor relationships since the mesh topology has changed
+	// Clear existing neighbor relationships
 	for (auto& vertex : this->vertices) {
 		vertex->clearNeighbors();
 	}
 
-	/// Use face data to establish new neighbor relationships
-	/// We iterate all faces in the mesh, including subdivided faces
-	std::function<void(const std::shared_ptr<Face>&)> processFace =
-		[this](const std::shared_ptr<Face>& face) {
-			const auto indices = face->getVertexIndices();
+	// Create a vector of sets to store all vertex connections
+	std::vector<std::set<unsigned int>> vertexConnections(vertices.size());
 
-			/// For each vertex in the face, connect it to the other two vertices
-			this->vertices[indices[0]]->addNeighbor(this->vertices[indices[1]]);
-			this->vertices[indices[0]]->addNeighbor(this->vertices[indices[2]]);
-			this->vertices[indices[1]]->addNeighbor(this->vertices[indices[2]]);
-	};
-
-	/// Process base faces and all their children recursively
+	// First pass: Set up original vertices (0-11) using only base faces
 	for (const auto& baseFace : this->baseFaces) {
-		processFace(baseFace);
-
-		/// Lambda to recursively process child faces
-		std::function<void(const std::shared_ptr<Face>&)> processChildren =
-			[&processChildren, &processFace](const std::shared_ptr<Face>& parent) {
-				for (const auto& child : parent->getChildren()) {
-					if (child) {
-						processFace(child);
-						processChildren(child);
-					}
-				}
-		};
-
-		processChildren(baseFace);
+		const auto indices = baseFace->getVertexIndices();
+		for (int i = 0; i < 3; i++) {
+			unsigned int v1 = indices[i];
+			unsigned int v2 = indices[(i + 1) % 3];
+			vertexConnections[v1].insert(v2);
+			vertexConnections[v2].insert(v1);
+		}
 	}
 
-	/// Verify vertex neighbor counts
-	/// Original icosahedron vertices should have 5 neighbors
-	/// All other vertices should have 6 neighbors
+	// Second pass: Process subdivided faces for new vertices (12+)
+	std::function<void(const std::shared_ptr<Face>&)> processSubdividedFaces;
+	processSubdividedFaces = [&processSubdividedFaces, &vertexConnections, this]
+		(const std::shared_ptr<Face>& face) {
+			const auto indices = face->getVertexIndices();
+
+			// Only create connections if at least one vertex is new (index >= 12)
+			bool hasNewVertex = false;
+			for (unsigned int idx : indices) {
+				if (idx >= 12) {
+					hasNewVertex = true;
+					break;
+				}
+			}
+
+			if (hasNewVertex) {
+				for (int i = 0; i < 3; i++) {
+					unsigned int v1 = indices[i];
+					unsigned int v2 = indices[(i + 1) % 3];
+					if (v1 >= 12) vertexConnections[v1].insert(v2);
+					if (v2 >= 12) vertexConnections[v2].insert(v1);
+				}
+			}
+
+			// Process children
+			for (const auto& child : face->getChildren()) {
+				if (child) {
+					processSubdividedFaces(child);
+				}
+			}
+		};
+
+	// Process all subdivided faces
+	for (const auto& baseFace : this->baseFaces) {
+		for (const auto& child : baseFace->getChildren()) {
+			if (child) {
+				processSubdividedFaces(child);
+			}
+		}
+	}
+
+	// Create the actual neighbor relationships
+	for (size_t i = 0; i < vertexConnections.size(); i++) {
+		for (unsigned int neighborIdx : vertexConnections[i]) {
+			this->vertices[i]->addNeighbor(this->vertices[neighborIdx]);
+		}
+	}
+
+	// Verify neighbor counts
 	for (size_t i = 0; i < this->vertices.size(); ++i) {
 		const auto neighbors = this->vertices[i]->getNeighbors();
 		const bool isOriginalVertex = i < 12;
@@ -453,6 +551,10 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 
 	/// Check children
 	for (const auto& child : face->getChildren()) {
+		if (!child) {
+			spdlog::info("Oppsie no child!");
+			continue;
+		}
 		auto result = this->getFaceAtPointRecursive(child, normalizedPoint);
 		if (result)
 			return result;
@@ -461,14 +563,15 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 	return nullptr;
 }
 
-bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::vec3 &lineStart,
-	const glm::vec3 &lineEnd) const {
+bool PlanetData::intersectsLine(
+	const std::shared_ptr<Face> &face, const glm::vec3 &lineStart, const glm::vec3 &lineEnd) const
+{
 	/// Möller-Trumbore algorithm for intersecting line - triangle
 	/// Get the vertices of the face
 	std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();
-	const glm::vec3& v0 = vertices[vertexIndices[0]]->getPosition();
-	const glm::vec3& v1 = vertices[vertexIndices[1]]->getPosition();
-	const glm::vec3& v2 = vertices[vertexIndices[2]]->getPosition();
+	const glm::vec3 &v0 = vertices[vertexIndices[0]]->getPosition();
+	const glm::vec3 &v1 = vertices[vertexIndices[1]]->getPosition();
+	const glm::vec3 &v2 = vertices[vertexIndices[2]]->getPosition();
 
 	const glm::vec3 direction = lineEnd - lineStart;
 
@@ -481,27 +584,60 @@ bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::ve
 	const float det = glm::dot(e1, pvec);
 
 	/// If determinant is near zero, ray lies in plane of triangle
-	if (std::fabs(det) < EPSILON) return false;
+	if (std::fabs(det) < EPSILON)
+		return false;
 
 	const float invDet = 1.0f / det;
 
 	/// Calculate u parameter and test bounds
 	const glm::vec3 tvec = lineStart - v0;
 	const float u = glm::dot(tvec, pvec) * invDet;
-	if (u < 0.0f || u > 1.0f) return false;
+	if (u < 0.0f || u > 1.0f)
+		return false;
 
 	/// Prepare to test v parameter
 	const glm::vec3 qvec = glm::cross(tvec, e1);
 
 	/// Calculate v parameter and test bounds
 	const float v = glm::dot(direction, qvec) * invDet;
-	if (v < 0.0f || u + v > 1.0f) return false;
+	if (v < 0.0f || u + v > 1.0f)
+		return false;
 
 	/// Calculate t, ray intersects triangle
 	const float t = glm::dot(e2, qvec) * invDet;
 
 	/// Check if the intersection point is between lineStart and lineEnd
 	return (t >= 0.0f && t <= 1.0f);
+}
+
+glm::vec3 PlanetData::calculateBarycentricCoords(
+	const std::shared_ptr<Face>& face,
+	const glm::vec3& point) const {
+	/// Get the vertices of the face
+	const auto indices = face->getVertexIndices();
+	const glm::vec3& a = this->vertices[indices[0]]->getPosition();
+	const glm::vec3& b = this->vertices[indices[1]]->getPosition();
+	const glm::vec3& c = this->vertices[indices[2]]->getPosition();
+
+	/// Calculate vectors from point to vertices
+	const glm::vec3 v0 = b - a;
+	const glm::vec3 v1 = c - a;
+	const glm::vec3 v2 = point - a;
+
+	/// Calculate dot products for barycentric computation
+	const float d00 = glm::dot(v0, v0);
+	const float d01 = glm::dot(v0, v1);
+	const float d11 = glm::dot(v1, v1);
+	const float d20 = glm::dot(v2, v0);
+	const float d21 = glm::dot(v2, v1);
+
+	/// Calculate barycentric coordinates using Cramer's rule
+	const float denom = d00 * d11 - d01 * d01;
+	const float v = (d11 * d20 - d01 * d21) / denom;
+	const float w = (d00 * d21 - d01 * d20) / denom;
+	const float u = 1.0f - v - w;
+
+	return glm::vec3(u, v, w);
 }
 
 } /// namespace lillugsi::planet
