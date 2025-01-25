@@ -258,14 +258,28 @@ void PlanetData::setupInitialVertexNeighbors() {
 	/// Must be called after vertices and faces are created but before subdivision
 	/// For each face in the initial icosahedron, establish neighbor relationships
 	/// between its vertices. Each original vertex will end up with exactly 5 neighbors.
+	// First pass: Build a map of vertex connections
+	std::vector<std::set<unsigned int>> vertexConnections(12); /// 12 vertices in icosahedron
+
 	for (const auto& face : this->baseFaces) {
 		const auto indices = face->getVertexIndices();
 
+		/// Add all connections for this face
 		/// For each vertex in the face, connect it to the other two vertices
 		/// We use all combinations since neighbor relationships are bidirectional
-		this->vertices[indices[0]]->addNeighbor(this->vertices[indices[1]]);
-		this->vertices[indices[0]]->addNeighbor(this->vertices[indices[2]]);
-		this->vertices[indices[1]]->addNeighbor(this->vertices[indices[2]]);
+		for (int i = 0; i < 3; i++) {
+			unsigned int v1 = indices[i];
+			unsigned int v2 = indices[(i + 1) % 3];
+			vertexConnections[v1].insert(v2);
+			vertexConnections[v2].insert(v1);
+		}
+	}
+
+	/// Second pass: Create neighbor relationships
+	for (size_t i = 0; i < vertexConnections.size(); i++) {
+		for (unsigned int neighborIdx : vertexConnections[i]) {
+			this->vertices[i]->addNeighbor(this->vertices[neighborIdx]);
+		}
 	}
 
 	/// Verify each original vertex has exactly 5 neighbors
