@@ -559,27 +559,26 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 	}
 
 	/// If this is a leaf face, return it
-	if (face->getChildren().empty()) {
+	if (face->isLeaf()) {
 		return face;
 	}
 
 	/// Check children
 	for (const auto& child : face->getChildren()) {
-		if (!child) {
-			spdlog::info("Oppsie no child!");
-			continue;
-		}
+		if (child) {
 		auto result = this->getFaceAtPointRecursive(child, normalizedPoint);
 		if (result)
 			return result;
 	}
+	}
 
-	return nullptr;
+	/// This should not really happen, if this face interects and is no leaf, then one of the
+	/// children should intersect. But maybe due to limited float point precision this might happen
+	return face;
 }
 
-bool PlanetData::intersectsLine(
-	const std::shared_ptr<Face> &face, const glm::vec3 &lineStart, const glm::vec3 &lineEnd) const
-{
+bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::vec3 &lineStart,
+	const glm::vec3 &lineEnd) const {
 	/// Möller-Trumbore algorithm for intersecting line - triangle
 	/// Get the vertices of the face
 	std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();
