@@ -50,6 +50,7 @@ void Face::addNeighbor(const std::shared_ptr<Face>& neighbor) {
 void Face::setChild(const unsigned int index, std::shared_ptr<Face> child) {
 	if (index < this->children.size()) {
 		this->children[index] = std::move(child);
+		this->leaf = false; /// once we have a child, we are not a leaf anymore
 	}
 }
 

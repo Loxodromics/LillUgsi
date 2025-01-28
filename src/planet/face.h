@@ -41,6 +41,8 @@ public:
 	void setVertexIndices(const std::array<unsigned int, 3>& indices);
 	[[nodiscard]] std::array<unsigned int, 3> getVertexIndices() const;
 
+	[[nodiscard]] bool isLeaf() const { return this->leaf; };
+
 private:
 	/// Default constructor
 	Face() = default;
@@ -51,6 +53,7 @@ private:
 	std::weak_ptr<Face> parent; /// weak_ptr for a non-owning, nullable reference to the parent
 	float data{0.0f};
 	std::array<unsigned int, 3> vertexIndices{{0, 0, 0}};
+	bool leaf{true};
 };
 
 class FaceVisitor {
