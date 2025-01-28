@@ -5,8 +5,8 @@
 
 int main(int argc, char* argv[]) {
 	try {
-		spdlog::set_level(spdlog::level::trace);
-		const std::shared_ptr<lillugsi::planet::PlanetData> icosphere = std::make_shared<lillugsi::planet::PlanetData>();
+		// spdlog::set_level(spdlog::level::trace);
+		// const std::shared_ptr<lillugsi::planet::PlanetData> icosphere = std::make_shared<lillugsi::planet::PlanetData>();
 		// icosphere->subdivide(2);
 
 		// lillugsi::planet::DataSettingVisitor dataVisitor;
@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
 		//
 		// lillugsi::planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
 		// planetGenerator.generateTerrain();
-		return 0;
+		// return 0;
 
 
 		/// Initialize spdlog

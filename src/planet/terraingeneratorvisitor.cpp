@@ -7,6 +7,7 @@ namespace lillugsi::planet
 {
 TerrainGeneratorVisitor::TerrainGeneratorVisitor(const PlanetGenerator::GeneratorSettings& settings)
 	: settings(settings) {
+	this->noise = FastNoise::New<FastNoise::Simplex>();
 }
 
 void TerrainGeneratorVisitor::visit(const std::shared_ptr<VertexData> vertex) {
@@ -18,14 +19,14 @@ void TerrainGeneratorVisitor::visit(const std::shared_ptr<VertexData> vertex) {
 	const glm::vec3 position = glm::normalize(vertex->getPosition());
 
 	/// Generate base noise value
-	const float noiseValue = this->generateNoiseValue(position);
+	const float noiseValue = this->noise->GenSingle3D(position.x, position.y, position.z, this->settings.seed);
 
 	/// Apply the noise value as an elevation change
 	/// The current elevation is preserved to allow for cumulative changes
 	const float newElevation = vertex->getElevation() + noiseValue;
 	vertex->setElevation(newElevation);
 
-	spdlog::trace("Applied elevation {} to vertex at position ({}, {}, {})",
+	spdlog::debug("Applied elevation {} to vertex at position ({}, {}, {})",
 		newElevation, position.x, position.y, position.z);
 }
 

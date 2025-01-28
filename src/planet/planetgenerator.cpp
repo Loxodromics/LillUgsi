@@ -55,11 +55,11 @@ bool PlanetGenerator::updateMesh() const {
 
 	/// Process each vertex
 	for (const auto& position : positions) {
-		rendering::IcosphereMesh::VertexTransform transform;
+		rendering::IcosphereMesh::VertexTransform transform{};
 
 		/// Calculate new position based on elevation
 		const float elevation = this->planetData->getInterpolatedHeightAt(position);
-		transform.position = position * (1.0f + elevation);
+		transform.position = position  * (1.0f + elevation * 0.15f);
 
 		/// Calculate normal as normalized position
 		/// This creates smooth lighting across the sphere

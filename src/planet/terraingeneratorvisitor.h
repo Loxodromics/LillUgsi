@@ -3,8 +3,9 @@
 #include "planetgenerator.h"
 #include "vertexdata.h"
 #include "vertexvisitor.h"
-#include <glm/glm.hpp>
 
+#include <glm/glm.hpp>
+#include <FastNoise/FastNoise.h>
 
 namespace lillugsi::planet
 {
@@ -14,8 +15,11 @@ public:
 	void visit(std::shared_ptr<VertexData> vertex) override;
 
 private:
-	PlanetGenerator::GeneratorSettings settings;
 	[[nodiscard]] float generateNoiseValue(const glm::vec3& position) const;
+
+
+	PlanetGenerator::GeneratorSettings settings;
+	FastNoise::SmartNode<> noise;
 };
 
 } /// namespace lillugsi::planet

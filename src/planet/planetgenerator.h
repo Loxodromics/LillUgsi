@@ -16,6 +16,7 @@ public:
 		uint32_t octaves{4};
 		float persistence{0.5f};
 		float lacunarity{2.0f};
+		int seed{54321};
 	};
 
 	/// Create generator with planet data and mesh to modify
