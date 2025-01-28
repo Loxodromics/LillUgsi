@@ -517,7 +517,7 @@ void PlanetData::setNeighborsForFace(const std::shared_ptr<Face>& face) {
 			}
 		}
 	}
-	spdlog::info("Found {} total neighbors", neighborCount);
+	spdlog::trace("Found {} total neighbors", neighborCount);
 
 	/// Recursively set neighbors for children
 	for (int i = 0; i < 4; ++i) { /// Updated to iterate over all 4 children

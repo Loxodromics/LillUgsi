@@ -41,7 +41,7 @@ void VertexData::addNeighbor(const std::shared_ptr<VertexData>& neighbor) {
 	this->neighborSlopes.push_back(0.0f);
 	this->slopeDirtyFlags.push_back(true);
 
-	spdlog::debug("Added new neighbor to vertex");
+	spdlog::trace("Added new neighbor to vertex");
 }
 
 std::vector<std::shared_ptr<VertexData>> VertexData::getNeighbors() const {
