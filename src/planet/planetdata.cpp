@@ -4,8 +4,8 @@
 #include <spdlog/spdlog.h>
 #include <algorithm> /// For std::min and std::max
 #include <map>
-#include <set>
 #include <iostream>
+#include <set>
 
 namespace lillugsi::planet {
 PlanetData::PlanetData() {
@@ -293,74 +293,49 @@ void PlanetData::setupInitialVertexNeighbors() {
 }
 
 void PlanetData::rebuildAllVertexNeighbors() {
-	// Clear existing neighbor relationships
-	for (auto& vertex : this->vertices) {
+	/// Clear existing relationships
+	for (const auto & vertex : this->vertices) {
 		vertex->clearNeighbors();
 	}
 
-	// Create a vector of sets to store all vertex connections
-	std::vector<std::set<unsigned int>> vertexConnections(vertices.size());
+	/// Create a temporary map to store vertex connections
+	std::vector<std::set<unsigned int>> vertexConnections(this->vertices.size());
 
-	// First pass: Set up original vertices (0-11) using only base faces
-	for (const auto& baseFace : this->baseFaces) {
-		const auto indices = baseFace->getVertexIndices();
-		for (int i = 0; i < 3; i++) {
-			unsigned int v1 = indices[i];
-			unsigned int v2 = indices[(i + 1) % 3];
-			vertexConnections[v1].insert(v2);
-			vertexConnections[v2].insert(v1);
-		}
-	}
-
-	// Second pass: Process subdivided faces for new vertices (12+)
-	std::function<void(const std::shared_ptr<Face>&)> processSubdividedFaces;
-	processSubdividedFaces = [&processSubdividedFaces, &vertexConnections, this]
-		(const std::shared_ptr<Face>& face) {
+	/// Process all leaf faces to build the final mesh topology
+	std::function<void(const std::shared_ptr<Face>&)> processLeafFaces;
+	processLeafFaces = [&processLeafFaces, &vertexConnections](const std::shared_ptr<Face>& face) {
+		if (face->isLeaf()) {
+			/// For each edge in the face, connect its vertices
 			const auto indices = face->getVertexIndices();
-
-			// Only create connections if at least one vertex is new (index >= 12)
-			bool hasNewVertex = false;
-			for (unsigned int idx : indices) {
-				if (idx >= 12) {
-					hasNewVertex = true;
-					break;
-				}
+			for (int i = 0; i < 3; i++) {
+				const unsigned int v1 = indices[i];
+				const unsigned int v2 = indices[(i + 1) % 3];
+				vertexConnections[v1].insert(v2);
+				vertexConnections[v2].insert(v1);
 			}
-
-			if (hasNewVertex) {
-				for (int i = 0; i < 3; i++) {
-					unsigned int v1 = indices[i];
-					unsigned int v2 = indices[(i + 1) % 3];
-					if (v1 >= 12) vertexConnections[v1].insert(v2);
-					if (v2 >= 12) vertexConnections[v2].insert(v1);
-				}
-			}
-
-			// Process children
+		} else {
+			/// Recursively process children until we reach leaf faces
 			for (const auto& child : face->getChildren()) {
 				if (child) {
-					processSubdividedFaces(child);
+					processLeafFaces(child);
 				}
 			}
-		};
-
-	// Process all subdivided faces
-	for (const auto& baseFace : this->baseFaces) {
-		for (const auto& child : baseFace->getChildren()) {
-			if (child) {
-				processSubdividedFaces(child);
-			}
 		}
+	};
+
+	/// Process all base faces and their descendants
+	for (const auto& baseFace : this->baseFaces) {
+		processLeafFaces(baseFace);
 	}
 
-	// Create the actual neighbor relationships
+	/// Create the actual vertex relationships
 	for (size_t i = 0; i < vertexConnections.size(); i++) {
-		for (unsigned int neighborIdx : vertexConnections[i]) {
+		for (const unsigned int neighborIdx : vertexConnections[i]) {
 			this->vertices[i]->addNeighbor(this->vertices[neighborIdx]);
 		}
 	}
 
-	// Verify neighbor counts
+	/// Verify topology
 	for (size_t i = 0; i < this->vertices.size(); ++i) {
 		const auto neighbors = this->vertices[i]->getNeighbors();
 		const bool isOriginalVertex = i < 12;
@@ -566,10 +541,10 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 	/// Check children
 	for (const auto& child : face->getChildren()) {
 		if (child) {
-		auto result = this->getFaceAtPointRecursive(child, normalizedPoint);
-		if (result)
-			return result;
-	}
+			auto result = this->getFaceAtPointRecursive(child, normalizedPoint);
+			if (result)
+				return result;
+		}
 	}
 
 	/// This should not really happen, if this face interects and is no leaf, then one of the
@@ -582,9 +557,9 @@ bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::ve
 	/// Möller-Trumbore algorithm for intersecting line - triangle
 	/// Get the vertices of the face
 	std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();
-	const glm::vec3 &v0 = vertices[vertexIndices[0]]->getPosition();
-	const glm::vec3 &v1 = vertices[vertexIndices[1]]->getPosition();
-	const glm::vec3 &v2 = vertices[vertexIndices[2]]->getPosition();
+	const glm::vec3& v0 = vertices[vertexIndices[0]]->getPosition();
+	const glm::vec3& v1 = vertices[vertexIndices[1]]->getPosition();
+	const glm::vec3& v2 = vertices[vertexIndices[2]]->getPosition();
 
 	const glm::vec3 direction = lineEnd - lineStart;
 
