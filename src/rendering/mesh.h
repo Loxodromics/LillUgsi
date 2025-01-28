@@ -1,11 +1,13 @@
 #pragma once
 
-#include "vertex.h"
 #include "material.h"
-#include <glm/glm.hpp>
+#include "vertex.h"
 #include <glm/ext/matrix_transform.hpp>
-#include <vector>
+#include <glm/glm.hpp>
 #include <memory>
+#include <spdlog/spdlog.h>
+#include <utility>
+#include <vector>
 
 namespace lillugsi::vulkan {
 class VertexBuffer;
@@ -83,7 +85,7 @@ public:
 	/// The material defines how the mesh is rendered
 	/// @param material Shared pointer to the material to use
 	void setMaterial(std::shared_ptr<Material> material) {
-		this->material = material;
+		this->material = std::move(material);
 	}
 
 	/// Get the current material
@@ -91,6 +93,27 @@ public:
 	[[nodiscard]] std::shared_ptr<Material> getMaterial() const {
 		return this->material;
 	}
+
+	/// Mark mesh buffers as needing update
+	/// This signals to the rendering system that GPU buffers need to be rebuilt
+	void markBuffersDirty() {
+		this->buffersDirty = true;
+		spdlog::trace("Marked buffers dirty for mesh");
+	}
+
+	/// Check if buffers need updating
+	/// @return true if buffers need to be rebuilt
+	[[nodiscard]] bool needsBufferUpdate() const {
+		return this->buffersDirty;
+	}
+
+	/// Reset dirty flag after buffer update
+	/// Called by buffer management system after update is complete
+	void clearBuffersDirty() {
+		this->buffersDirty = false;
+		spdlog::trace("Cleared buffers dirty flag for mesh");
+	}
+
 
 protected:
 	/// Vertex data stored in CPU memory
@@ -105,6 +128,10 @@ protected:
 	/// GPU buffers
 	std::shared_ptr<vulkan::VertexBuffer> vertexBuffer;
 	std::shared_ptr<vulkan::IndexBuffer> indexBuffer;
+
+	/// Flag indicating if GPU buffers need updating
+	/// Set when vertex data changes, cleared after buffer rebuild
+	bool buffersDirty{false};
 
 	/// We use a shared_ptr to share materials between meshes and ensure proper lifecycle management
 	std::shared_ptr<Material> material;

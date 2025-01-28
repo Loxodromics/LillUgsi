@@ -37,6 +37,13 @@ public:
 	template<typename T, typename... Args>
 	[[nodiscard]] std::shared_ptr<Mesh> createMesh(Args&&... args);
 
+	void updateBuffers(const std::shared_ptr<Mesh>& mesh);
+
+	/// Update GPU buffers for a mesh if needed
+	/// @param mesh The mesh whose buffers might need updating
+	/// @throws VulkanException if buffer update fails
+	void updateBuffersIfNeeded(const std::shared_ptr<Mesh>& mesh);
+
 private:
 	/// Vulkan device references
 	VkDevice device;
@@ -67,6 +74,7 @@ private:
 	/// @return Index of a suitable memory type
 	/// @throws VulkanException if no suitable memory type is found
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
+
 };
 
 } /// namespace lillugsi::rendering

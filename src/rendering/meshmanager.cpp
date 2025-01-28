@@ -42,6 +42,36 @@ void MeshManager::cleanup() {
 	spdlog::info("MeshManager cleanup completed");
 }
 
+void MeshManager::updateBuffers(const std::shared_ptr<Mesh>& mesh) {
+	if (!mesh) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Cannot update buffers for null mesh",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create and copy vertex buffer
+	auto vertexBuffer = this->bufferCache->getOrCreateVertexBuffer(
+		mesh->getVertices().size() * sizeof(Vertex));
+	this->copyToBuffer(mesh->getVertices().data(),
+					  mesh->getVertices().size() * sizeof(Vertex),
+					  vertexBuffer->get());
+
+	/// Create and copy index buffer
+	auto indexBuffer = this->bufferCache->getOrCreateIndexBuffer(
+		mesh->getIndices().size() * sizeof(uint32_t));
+	this->copyToBuffer(mesh->getIndices().data(),
+					  mesh->getIndices().size() * sizeof(uint32_t),
+					  indexBuffer->get());
+
+	/// Update mesh with new buffers
+	mesh->setBuffers(std::move(vertexBuffer), std::move(indexBuffer));
+
+	spdlog::debug("Updated buffers for mesh: {} vertices, {} indices",
+		mesh->getVertices().size(), mesh->getIndices().size());
+}
+
 template <typename T, typename... Args>
 std::shared_ptr<Mesh> MeshManager::createMesh(Args&&... args) {
 	/// Create the mesh instance with provided parameters
@@ -196,10 +226,10 @@ uint32_t MeshManager::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags 
 		/// Two conditions must be met:
 		/// 1. typeFilter has a bit set for this memory type (indicates Vulkan can use it)
 		/// 2. The memory type must have all the properties we need
-		if ((typeFilter & (1 << i)) &&
-			(memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+		if ((typeFilter & (1 << i))
+			&& (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
 			return i;
-			}
+		}
 	}
 
 	/// If we reach here, no suitable memory type was found
@@ -207,8 +237,44 @@ uint32_t MeshManager::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags 
 	throw vulkan::VulkanException(
 		VK_ERROR_FEATURE_NOT_PRESENT,
 		"Failed to find suitable memory type for buffer allocation",
-		__FUNCTION__, __FILE__, __LINE__
-	);
+		__FUNCTION__,
+		__FILE__,
+		__LINE__);
+}
+
+void MeshManager::updateBuffersIfNeeded(const std::shared_ptr<Mesh>& mesh) {
+	/// Early out if no update needed
+	/// This allows for efficient batching of changes
+	if (!mesh || !mesh->needsBufferUpdate()) {
+		return;
+	}
+
+	/// Create and copy new vertex buffer
+	auto vertexBuffer = this->bufferCache->getOrCreateVertexBuffer(
+		mesh->getVertices().size() * sizeof(Vertex));
+
+	this->copyToBuffer(
+		mesh->getVertices().data(),
+		mesh->getVertices().size() * sizeof(Vertex),
+		vertexBuffer->get());
+
+	/// Create and copy new index buffer
+	auto indexBuffer = this->bufferCache->getOrCreateIndexBuffer(
+		mesh->getIndices().size() * sizeof(uint32_t));
+
+	this->copyToBuffer(
+		mesh->getIndices().data(),
+		mesh->getIndices().size() * sizeof(uint32_t),
+		indexBuffer->get());
+
+	/// Update mesh with new buffers
+	mesh->setBuffers(std::move(vertexBuffer), std::move(indexBuffer));
+
+	/// Clear dirty flag now that buffers are updated
+	mesh->clearBuffersDirty();
+
+	spdlog::debug("Updated GPU buffers for mesh: {} vertices, {} indices",
+		mesh->getVertices().size(), mesh->getIndices().size());
 }
 
 /// Explicit template instantiations for known mesh types

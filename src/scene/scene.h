@@ -60,15 +60,12 @@ public:
 	/// @return Shared pointer to the terrain root node
 	std::shared_ptr<SceneNode> getTerrainRoot() const { return this->terrainRoot; }
 
+	/// Apply function to every mesh in the scene
+	/// @param fn Function to apply to each mesh
+	/// Allows performing operations on all meshes in the scene hierarchy
+	void forEachMesh(const std::function<void(const std::shared_ptr<rendering::Mesh>&)>& fn) const;
+
 private:
-	std::shared_ptr<SceneNode> root;        /// Root node of the scene graph
-	std::shared_ptr<SceneNode> terrainRoot; /// Special root for terrain nodes
-	size_t nodeCount;                       /// Total number of nodes in scene
-
-	/// Track if the scene needs a full update
-	/// This is set when structural changes occur
-	bool needsFullUpdate;
-
 	/// Update transforms starting from a specific node
 	/// @param node The node to start updating from
 	/// @param parentTransform The world transform of the parent
@@ -78,11 +75,25 @@ private:
 	/// Create a frustum from camera for culling
 	/// @param camera The camera to create frustum from
 	/// @return A frustum in world space
-	Frustum createFrustumFromCamera(const rendering::Camera& camera) const;
+	[[nodiscard]] Frustum createFrustumFromCamera(const rendering::Camera& camera) const;
 
 	/// Initialize the scene with default nodes
 	/// Called from constructor to set up initial scene structure
 	void initialize();
+
+	/// Helper to recursively visit meshes in a node hierarchy
+	/// @param node Starting node for traversal
+	/// @param fn Function to apply to each mesh found
+	void visitNodeMeshes(const std::shared_ptr<SceneNode>& node,
+		const std::function<void(const std::shared_ptr<rendering::Mesh>&)>& fn) const;
+
+	std::shared_ptr<SceneNode> root;        /// Root node of the scene graph
+	std::shared_ptr<SceneNode> terrainRoot; /// Special root for terrain nodes
+	size_t nodeCount;                       /// Total number of nodes in scene
+
+	/// Track if the scene needs a full update
+	/// This is set when structural changes occur
+	bool needsFullUpdate;
 };
 
 } /// namespace lillugsi::scene

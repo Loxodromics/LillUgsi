@@ -320,6 +320,14 @@ void Renderer::update(float deltaTime) {
 	/// Update camera with the same time step
 	/// Camera movement and transitions use game-scaled time
 	this->camera->update(deltaTime);
+
+	/// Check for meshes that need buffer updates
+	/// We do this after scene update to catch any changes
+	this->scene->forEachMesh([this](const std::shared_ptr<Mesh>& mesh) {
+		if (mesh && mesh->needsBufferUpdate()) {
+			this->meshManager->updateBuffersIfNeeded(mesh);
+		}
+	});
 }
 
 bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {

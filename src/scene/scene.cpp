@@ -24,6 +24,22 @@ void Scene::initialize() {
 	spdlog::info("Scene initialized with root nodes");
 }
 
+void Scene::visitNodeMeshes(const std::shared_ptr<SceneNode>& node,
+	const std::function<void(const std::shared_ptr<rendering::Mesh>&)>& fn) const {
+
+	/// Check if this node has a mesh
+	if (auto mesh = node->getMesh()) {
+		/// Apply the provided function to the mesh
+		fn(mesh);
+	}
+
+	/// Recursively visit all children
+	/// This ensures we process the entire hierarchy
+	for (const auto& child : node->getChildren()) {
+		this->visitNodeMeshes(child, fn);
+	}
+}
+
 std::shared_ptr<SceneNode> Scene::createNode(const std::string& name, std::shared_ptr<SceneNode> parent) {
 	/// Create the new node
 	auto node = std::make_shared<SceneNode>(name);
@@ -105,6 +121,14 @@ void Scene::update(float deltaTime) {
 		}
 		spdlog::trace("Updated dirty nodes in scene");
 	}
+}
+
+void Scene::forEachMesh(const std::function<void(const std::shared_ptr<rendering::Mesh>&)>& fn) const {
+	/// Start traversal from root node
+	/// This ensures we visit every node in the scene graph
+	this->visitNodeMeshes(this->root, fn);
+
+	spdlog::trace("Completed mesh traversal of scene graph");
 }
 
 void Scene::updateTransforms(const std::shared_ptr<SceneNode>& node,

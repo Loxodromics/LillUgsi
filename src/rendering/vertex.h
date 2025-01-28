@@ -1,4 +1,3 @@
-/// vertex.h
 #pragma once
 
 #include <glm/glm.hpp>
