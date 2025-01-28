@@ -1,7 +1,6 @@
 #include "icospheremesh.h"
 #include "vulkan/vulkanexception.h"
 #include <spdlog/spdlog.h>
-// #include <glm/gtx/normalize.hpp>
 #include <cmath>
 
 namespace lillugsi::rendering {
@@ -43,29 +42,29 @@ void IcosphereMesh::generateGeometry() {
 	}
 }
 
-void IcosphereMesh::applyVertexTransforms(const std::vector<VertexTransform> &transforms)
-{
+void IcosphereMesh::applyVertexTransforms(const std::vector<VertexTransform>& transforms) {
 	/// Verify transform count matches vertex count
-	/// This ensures we have exactly one transform per vertex
 	if (transforms.size() != this->vertices.size()) {
 		throw vulkan::VulkanException(
 			VK_ERROR_VALIDATION_FAILED_EXT,
 			"Transform count must match vertex count",
-			__FUNCTION__,
-			__FILE__,
-			__LINE__);
+			__FUNCTION__, __FILE__, __LINE__
+		);
 	}
 
 	/// Apply each transform to its corresponding vertex
-	/// We update all vertex properties to maintain consistency
 	for (size_t i = 0; i < transforms.size(); ++i) {
-		const auto &transform = transforms[i];
-		auto &vertex = this->vertices[i];
+		const auto& transform = transforms[i];
+		auto& vertex = this->vertices[i];
 
 		vertex.position = transform.position;
 		vertex.normal = transform.normal;
 		vertex.color = transform.color;
 	}
+
+	/// Mark buffers as needing update since vertex data changed
+	/// This signals to the renderer that GPU buffers need rebuilding
+	this->markBuffersDirty();
 
 	spdlog::debug("Applied {} vertex transforms to icosphere", transforms.size());
 }

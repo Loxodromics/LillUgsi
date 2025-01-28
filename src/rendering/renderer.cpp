@@ -1042,20 +1042,17 @@ void Renderer::initializeScene() {
 	/// Add an icosphere to demonstrate spherical geometry
 	/// We place it at the center where it's easy to observe
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
-	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(this->meshManager->createMesh<IcosphereMesh>(1.0f, 2));
+	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
+		this->meshManager->createMesh<IcosphereMesh>(1.0f, 2));
 	icosphereMesh->setMaterial(metallicMaterial);
+	// icosphereMesh->setMaterial(wireframeMaterial);
 
 	this->icosphere = std::make_shared<planet::PlanetData>();
-	// icosphere->subdivide(2);
+	icosphere->subdivide(2);
 
-	// lillugsi::planet::DataSettingVisitor dataVisitor;
-	// icosphere->applyFaceVisitor(dataVisitor);
-	//
-	// std::shared_ptr<lillugsi::rendering::IcosphereMesh> icosphereMesh2;
-	// icosphereMesh = std::make_shared<lillugsi::rendering::IcosphereMesh>(1.0f, 2);
 
-	// planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh2);
-	// planetGenerator.generateTerrain();
+	planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
+	planetGenerator.generateTerrain();
 
 	icosphereNode->setMesh(std::move(icosphereMesh));
 
