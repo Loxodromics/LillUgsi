@@ -40,6 +40,19 @@ public:
 	/// @return The interpolated elevation, or 0.0f if no face found
 	[[nodiscard]] float getInterpolatedHeightAt(const glm::vec3& point) const;
 
+	/// Get the normal at a specific point on the planet surface
+	/// Returns the normal of the nearest vertex to maintain data integrity
+	/// @param point Any point in space (will be normalized to unit sphere)
+	/// @return The normal at the nearest vertex, or up vector if no face found
+	[[nodiscard]] glm::vec3 getNormalAt(const glm::vec3& point) const;
+
+	/// Get interpolated normal at a specific point on the planet surface
+	/// Uses barycentric coordinates to smoothly blend between vertex normals
+	/// The result is normalized to ensure a valid surface normal
+	/// @param point Any point in space (will be normalized to unit sphere)
+	/// @return The interpolated normal, or up vector if no face found
+	[[nodiscard]] glm::vec3 getInterpolatedNormalAt(const glm::vec3& point) const;
+
 private:
 	/// Copy constructor
 	PlanetData(const PlanetData& other);

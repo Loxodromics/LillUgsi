@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 #include <algorithm> /// For std::min and std::max
 #include <map>
+#include <glm/ext/quaternion_geometric.hpp>
 #include <iostream>
 #include <set>
 
@@ -144,6 +145,83 @@ float PlanetData::getInterpolatedHeightAt(const glm::vec3& point) const {
 	spdlog::trace("Interpolated height {} at point ({}, {}, {})",
 		interpolatedHeight, point.x, point.y, point.z);
 	return interpolatedHeight;
+}
+
+glm::vec3 PlanetData::getNormalAt(const glm::vec3& point) const {
+	/// First find which face contains this point
+	/// We reuse the same face finding logic as height calculations
+	auto face = this->getFaceAtPoint(point);
+	if (!face) {
+		spdlog::warn("No face found for normal query at point ({}, {}, {})",
+			point.x, point.y, point.z);
+		return  glm::normalize(point); /// Return point as fallback
+	}
+
+	/// Get vertex indices for this face
+	const auto indices = face->getVertexIndices();
+
+	/// Find the closest vertex to our query point
+	float minDistance = std::numeric_limits<float>::max();
+	glm::vec3 nearestNormal(0.0f, 1.0f, 0.0f);  /// Default to up vector
+
+	/// We check each vertex of the face to find the nearest one
+	/// This ensures we're using actual data points rather than
+	/// potentially invalid interpolated values
+	for (unsigned int index : indices) {
+		const auto& vertex = this->vertices[index];
+		float distance = glm::length(vertex->getPosition() - point);
+
+		if (distance < minDistance) {
+			minDistance = distance;
+			nearestNormal = vertex->getNormal();
+		}
+	}
+
+	spdlog::trace("Found normal ({}, {}, {}) at point ({}, {}, {})",
+		nearestNormal.x, nearestNormal.y, nearestNormal.z,
+		point.x, point.y, point.z);
+	return nearestNormal;
+}
+
+glm::vec3 PlanetData::getInterpolatedNormalAt(const glm::vec3& point) const {
+	/// Find containing face as before
+	auto face = this->getFaceAtPoint(point);
+	if (!face) {
+		spdlog::warn("No face found for normal interpolation at point ({}, {}, {})",
+			point.x, point.y, point.z);
+		return glm::normalize(point); /// Return postion vector as fallback
+	}
+
+	/// Calculate barycentric coordinates for interpolation
+	/// These tell us how much each vertex contributes to our point
+	const glm::vec3 baryCoords = this->calculateBarycentricCoords(face, point);
+
+	/// Get vertex indices and their normals
+	const auto indices = face->getVertexIndices();
+	const std::array<glm::vec3, 3> normals = {
+		this->vertices[indices[0]]->getNormal(),
+		this->vertices[indices[1]]->getNormal(),
+		this->vertices[indices[2]]->getNormal()
+	};
+
+	/// Blend normals using barycentric coordinates
+	/// Unlike height interpolation, we need to normalize the result
+	/// as a linear interpolation of normalized vectors isn't normalized
+	const glm::vec3 interpolatedNormal =
+		normals[0] * baryCoords.x +
+		normals[1] * baryCoords.y +
+		normals[2] * baryCoords.z;
+
+	/// Ensure we return a normalized vector
+	/// We check length to avoid division by zero in case of degenerate geometry
+	const float length = glm::length(interpolatedNormal);
+	if (length > EPSILON) {
+		return interpolatedNormal / length;
+	}
+	else {
+		spdlog::warn("Generated zero-length interpolated normal, falling back to up vector");
+		return normalize(point);
+	}
 }
 
 unsigned int PlanetData::addVertex(const glm::vec3& position) {
