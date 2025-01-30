@@ -108,12 +108,10 @@ float VertexData::getSlope(size_t neighborIndex) {
 
 void VertexData::recalculateNormal() {
 	/// Get the current neighbors that will be used for normal calculation
-	/// We do this first to avoid locking weak_ptrs multiple times
 	const auto currentNeighbors = this->getNeighbors();
 
 	/// If we don't have enough neighbors to calculate a meaningful normal,
-	/// we fall back to using the normalized position vector
-	/// This ensures we always have a valid normal, even during mesh construction
+	/// we use the normalized position vector as this is correct for a sphere
 	if (currentNeighbors.size() < 2) {
 		this->normal = glm::normalize(this->position);
 		spdlog::warn("Insufficient neighbors ({}) to calculate normal, using normalized position",
@@ -121,21 +119,17 @@ void VertexData::recalculateNormal() {
 		return;
 	}
 
+	/// For a sphere, the correct normal should point in the same direction as the position vector
+	/// We use this reference direction to ensure consistent orientation
+	const glm::vec3 desiredDirection = glm::normalize(this->position);
+
 	/// Calculate the normal by averaging cross products of vectors to adjacent vertices
-	/// We use each pair of consecutive neighbors to form triangles with this vertex
-	/// This approach:
-	/// 1. Handles irregular vertex arrangements
-	/// 2. Produces smooth normals that account for local surface curvature
-	/// 3. Weights each triangle's contribution equally
 	glm::vec3 summedNormal(0.0f);
 
-	/// For each consecutive pair of neighbors, calculate their contribution to the normal
 	for (size_t i = 0; i < currentNeighbors.size(); ++i) {
-		/// Get the next neighbor index, wrapping around to 0 at the end
 		const size_t nextIndex = (i + 1) % currentNeighbors.size();
 
 		/// Calculate vectors from this vertex to its neighbors
-		/// We incorporate elevation by adding it along the base position vector
 		const glm::vec3 basePos = this->position * (1.0f + this->elevation);
 		const glm::vec3 neighborPos1 = currentNeighbors[i]->getPosition() *
 			(1.0f + currentNeighbors[i]->getElevation());
@@ -146,24 +140,32 @@ void VertexData::recalculateNormal() {
 		const glm::vec3 edge1 = neighborPos1 - basePos;
 		const glm::vec3 edge2 = neighborPos2 - basePos;
 
-		/// Calculate the cross product of these edges
-		/// The cross product gives us a vector perpendicular to both edges,
-		/// which is the normal of the triangle formed by these three points
-		const glm::vec3 triangleNormal = glm::cross(edge1, edge2);
+		/// Calculate cross product
+		glm::vec3 triangleNormal = glm::cross(edge1, edge2);
 
-		/// Only add non-zero contributions to avoid numerical issues
-		/// This can happen if two vertices are at the same position
+		/// Check if this normal points in roughly the same direction as our position
+		/// If not, flip it to ensure consistent orientation
+		if (glm::dot(triangleNormal, desiredDirection) < 0.0f) {
+			triangleNormal = -triangleNormal;
+		}
+
+		/// Only add non-zero contributions
 		if (glm::length2(triangleNormal) > EPSILON) {
 			summedNormal += triangleNormal;
 		}
 	}
 
-	/// If we got a valid normal (non-zero length), normalize it
-	/// Otherwise, fall back to normalized position as a safety measure
+	/// If we got a valid normal, normalize it
+	/// Otherwise, use normalized position as fallback
 	if (glm::length2(summedNormal) > EPSILON) {
 		this->normal = glm::normalize(summedNormal);
+
+		/// Double-check orientation
+		if (glm::dot(this->normal, desiredDirection) < 0.0f) {
+			this->normal = -this->normal;
+		}
 	} else {
-		this->normal = glm::normalize(this->position);
+		this->normal = desiredDirection;
 		spdlog::warn("Failed to calculate valid normal, falling back to normalized position");
 	}
 
