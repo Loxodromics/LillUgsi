@@ -270,8 +270,8 @@ glm::dvec3 PlanetData::getInterpolatedNormalAt(const glm::dvec3& point) const {
 }
 
 unsigned int PlanetData::addVertex(const glm::dvec3& position) {
-	/// Create new VertexData object with given position
-	auto vertex = std::make_shared<VertexData>(position);
+	/// Create new VertexData object with given position and current index
+	auto vertex = std::make_shared<VertexData>(position, this->vertices.size());
 	this->vertices.push_back(vertex);
 
 	return this->vertices.size() - 1;
@@ -287,7 +287,7 @@ std::shared_ptr<Face> PlanetData::addFace(const unsigned int v1, const unsigned 
 	/// Create and store the Face object
 	std::shared_ptr<Face> face = std::make_shared<Face>(std::array<unsigned int, 3>{v3, v2, v1});
 	face->calculateMidpoint(this->getVertices());
-	face->calculateNormal(this->getVertices());
+	face->calculateNormal(this->vertices);
 	return face;
 }
 

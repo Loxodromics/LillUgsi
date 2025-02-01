@@ -1,9 +1,9 @@
 #include "face.h"
 
-#include <spdlog/spdlog.h>
-#include <glm/glm.hpp>
 #include <cstddef>
+#include <glm/glm.hpp>
 #include <iostream>
+#include <spdlog/spdlog.h>
 
 namespace lillugsi::planet {
 Face::Face(const std::array<unsigned int, 3>& vertexIndices)
@@ -114,12 +114,20 @@ void Face::calculateMidpoint(const std::vector<glm::dvec3>& vertices) {
 						  vertices[this->vertexIndices[0]]) / 3.0;
 }
 
-void Face::calculateNormal(const std::vector<glm::dvec3>& vertices) {
-	/// We calculate the face normal using cross product of two edges
-	/// This gives us a vector perpendicular to the face surface
-	const glm::dvec3& v0 = vertices[this->vertexIndices[0]];
-	const glm::dvec3& v1 = vertices[this->vertexIndices[1]];
-	const glm::dvec3& v2 = vertices[this->vertexIndices[2]];
+void Face::calculateNormal(const std::vector<std::shared_ptr<VertexData>>& vertices) {
+	/// Get vertices with their elevations applied
+	const glm::dvec3& baseV0 = vertices[this->vertexIndices[0]]->getPosition();
+	const glm::dvec3& baseV1 = vertices[this->vertexIndices[1]]->getPosition();
+	const glm::dvec3& baseV2 = vertices[this->vertexIndices[2]]->getPosition();
+
+	/// Apply elevation to each vertex position
+	const double elev0 = vertices[this->vertexIndices[0]]->getElevation();
+	const double elev1 = vertices[this->vertexIndices[1]]->getElevation();
+	const double elev2 = vertices[this->vertexIndices[2]]->getElevation();
+
+	const glm::dvec3 v0 = baseV0 * (1.0 + elev0);
+	const glm::dvec3 v1 = baseV1 * (1.0 + elev1);
+	const glm::dvec3 v2 = baseV2 * (1.0 + elev2);
 
 	/// Calculate edges from first vertex to others
 	const glm::dvec3 edge1 = v1 - v0;
@@ -128,12 +136,6 @@ void Face::calculateNormal(const std::vector<glm::dvec3>& vertices) {
 	/// Cross product gives us normal vector
 	/// Order matters for consistent outward-facing normals
 	this->normal = glm::normalize(glm::cross(edge1, edge2));
-
-	/// Ensure normal points outward from sphere center
-	/// We use the midpoint as a reference for orientation
-	if (glm::dot(this->normal, this->midpoint) < 0.0) {
-		this->normal = -this->normal;
-	}
 }
 
 } /// namespace lillugsi::planet

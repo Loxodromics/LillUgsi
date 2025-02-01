@@ -1,12 +1,15 @@
 #include "vertexdata.h"
+#include "face.h"
+
 #include <algorithm>
 #include <glm/geometric.hpp>
 #include <glm/gtx/norm.hpp>
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::planet {
-VertexData::VertexData(const glm::dvec3& position)
-	: position(position) {
+VertexData::VertexData(const glm::dvec3& position, size_t index)
+	: position(position)
+	, index(index) {
 	/// Position is set in initializer list since it's constant after creation
 }
 
@@ -114,7 +117,8 @@ void VertexData::recalculateNormal() {
 	/// we use the normalized position vector as this is correct for a sphere
 	if (currentNeighbors.size() < 2) {
 		this->normal = glm::normalize(this->position);
-		spdlog::warn("Insufficient neighbors ({}) to calculate normal, using normalized position",
+		spdlog::warn(
+			"Insufficient neighbors ({}) to calculate normal, using normalized position",
 			currentNeighbors.size());
 		return;
 	}
@@ -131,10 +135,10 @@ void VertexData::recalculateNormal() {
 
 		/// Calculate vectors from this vertex to its neighbors
 		const glm::dvec3 basePos = this->position * (1.0 + this->elevation);
-		const glm::dvec3 neighborPos1 = currentNeighbors[i]->getPosition() *
-			(1.0 + currentNeighbors[i]->getElevation());
-		const glm::dvec3 neighborPos2 = currentNeighbors[nextIndex]->getPosition() *
-			(1.0 + currentNeighbors[nextIndex]->getElevation());
+		const glm::dvec3 neighborPos1 = currentNeighbors[i]->getPosition()
+										* (1.0 + currentNeighbors[i]->getElevation());
+		const glm::dvec3 neighborPos2 = currentNeighbors[nextIndex]->getPosition()
+										* (1.0 + currentNeighbors[nextIndex]->getElevation());
 
 		/// Calculate vectors forming the triangle
 		const glm::dvec3 edge1 = neighborPos1 - basePos;
@@ -169,8 +173,81 @@ void VertexData::recalculateNormal() {
 		spdlog::info("Failed to calculate valid normal, falling back to normalized position");
 	}
 
-	spdlog::trace("Recalculated normal for vertex at position ({}, {}, {})",
-		this->position.x, this->position.y, this->position.z);
+	spdlog::trace(
+		"Recalculated normal for vertex at position ({}, {}, {})",
+		this->position.x,
+		this->position.y,
+		this->position.z);
+}
+
+glm::dvec3 VertexData::calculateNormalFromFaces(
+	const std::vector<std::shared_ptr<Face>>& faces,
+	const std::vector<std::shared_ptr<VertexData>>& vertices) const {
+
+	/// Start with zero vector to accumulate weighted normals
+	glm::dvec3 summedNormal(0.0, 0.0, 0.0);
+
+	/// Use position with elevation for calculations
+	const glm::dvec3 elevatedPosition = this->position * (1.0 + this->elevation);
+
+	for (const auto& face : faces) {
+		/// Skip invalid faces
+		if (!face) continue;
+
+		/// Get face normal
+		const glm::dvec3& faceNormal = face->getNormal();
+
+		/// Get face vertex indices
+		const auto indices = face->getVertexIndices();
+
+		/// Find the other two vertex indices for this face
+		size_t v1Index, v2Index;
+		if (indices[0] == this->index) {
+			v1Index = indices[1];
+			v2Index = indices[2];
+		} else if (indices[1] == this->index) {
+			v1Index = indices[2];
+			v2Index = indices[0];
+		} else if (indices[2] == this->index) {
+			v1Index = indices[0];
+			v2Index = indices[1];
+		} else {
+			/// This face doesn't contain our vertex - skip it
+			spdlog::warn("Face does not contain vertex {}", this->index);
+			continue;
+		}
+
+		/// Calculate vectors to neighboring vertices
+		const glm::dvec3 edge1 = vertices[v1Index]->getPosition() *
+			(1.0 + vertices[v1Index]->getElevation()) - elevatedPosition;
+		const glm::dvec3 edge2 = vertices[v2Index]->getPosition() *
+			(1.0 + vertices[v2Index]->getElevation()) - elevatedPosition;
+
+		/// Calculate angle at this vertex
+		const double angle = std::acos(glm::dot(
+			glm::normalize(edge1),
+			glm::normalize(edge2)
+		));
+
+		/// Weight face normal by angle
+		summedNormal += faceNormal * angle;
+	}
+
+	/// Check if we got any valid contribution
+	if (glm::length2(summedNormal) > EPSILON) {
+		return glm::normalize(summedNormal);
+	}
+
+	/// Fallback to normalized position if no valid faces
+	return glm::normalize(this->position);
+}
+
+void VertexData::recalculateNormalFromFaces(
+	const std::vector<std::shared_ptr<Face>>& faces,
+	const std::vector<std::shared_ptr<VertexData>>& vertices) {
+
+	this->normal = this->calculateNormalFromFaces(faces, vertices);
+	this->normalDirty = false;
 }
 
 void VertexData::clearNeighbors() {

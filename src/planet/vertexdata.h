@@ -6,13 +6,17 @@
 
 namespace lillugsi::planet {
 
+class Face;
+
 /// VertexData represents a single vertex in our planetary surface mesh.
 /// It stores elevation data and maintains relationships with neighboring vertices,
 /// providing efficient slope calculations through caching and dirty flags.
 class VertexData {
 public:
-	/// Create a vertex at the given position with default elevation of 0
-	explicit VertexData(const glm::dvec3& position);
+	/// Create a vertex at the given position with default elevation of -2.0 with a specific index
+	/// @param position Initial vertex position on unit sphere
+	/// @param index Index of this vertex in the mesh
+	explicit VertexData(const glm::dvec3& position, size_t index);
 
 	/// Rule of five - we manage complex relationships between vertices
 	~VertexData() = default;
@@ -20,6 +24,10 @@ public:
 	VertexData& operator=(const VertexData& other) = delete;
 	VertexData(VertexData&& other) noexcept = default;
 	VertexData& operator=(VertexData&& other) noexcept = default;
+
+	/// Get this vertex's index in the mesh
+	/// @return Index of this vertex
+	[[nodiscard]] size_t getIndex() const { return this->index; }
 
 	/// Elevation accessors
 	[[nodiscard]] double getElevation() const { return elevation; }
@@ -42,6 +50,23 @@ public:
 
 	/// Force recalculation of normal vector based on neighbor positions
 	void recalculateNormal();
+
+	/// Calculate normal based on face normals
+	/// This provides an alternative to the existing normal calculation
+	/// @param faces List of faces that share this vertex
+	/// @param vertices List of all verticies
+	/// @return Normal vector calculated from surrounding face normals
+	[[nodiscard]] glm::dvec3 calculateNormalFromFaces(
+	    const std::vector<std::shared_ptr<Face>>& faces,
+	    const std::vector<std::shared_ptr<VertexData>>& vertices) const;
+
+	/// Recalculate normal using face normals instead of neighbors
+	/// @param faces List of faces that share this vertex
+	/// @param vertices List of all verticies
+	void recalculateNormalFromFaces(
+		const std::vector<std::shared_ptr<Face>>& faces,
+		const std::vector<std::shared_ptr<VertexData>>& vertices);
+
 
 	/// Clear all neighbor relationships for this vertex
 	/// Called before rebuilding neighbors after subdivision
@@ -89,6 +114,8 @@ private:
 	/// Track if the normal needs recalculation due to elevation changes
 	/// We use this to avoid unnecessary normal recalculations
 	bool normalDirty{true};
+	/// Index of this vertex in the mesh
+	size_t index;
 
 	/// Constant used for floating point comparisons
 	static constexpr double EPSILON = 0.0000001;

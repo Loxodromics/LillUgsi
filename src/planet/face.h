@@ -1,5 +1,7 @@
 #pragma once
 
+#include "vertexdata.h"
+
 #include <array>
 #include <glm/vec3.hpp>
 #include <iostream>
@@ -46,7 +48,7 @@ public:
 
 	/// Calculate and update the face normal using vertex positions
 	/// @param vertices Vector of vertex positions used for calculation
-	void calculateNormal(const std::vector<glm::dvec3>& vertices);
+	void calculateNormal(const std::vector<std::shared_ptr<VertexData>>& vertices);
 
 	/// Get the current face normal
 	/// @return Normalized vector perpendicular to face surface
