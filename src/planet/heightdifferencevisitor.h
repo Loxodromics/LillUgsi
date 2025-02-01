@@ -17,7 +17,7 @@ public:
 	void visit(std::shared_ptr<VertexData> vertex) override {
 		/// Get current vertex height and position for reference
 		const float currentHeight = vertex->getElevation();
-		const glm::vec3 currentPos = vertex->getPosition();
+		const glm::dvec3 currentPos = vertex->getPosition();
 		
 		/// Check against all neighbors
 		const auto neighbors = vertex->getNeighbors();

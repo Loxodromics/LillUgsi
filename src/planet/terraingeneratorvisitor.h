@@ -15,7 +15,7 @@ public:
 	void visit(std::shared_ptr<VertexData> vertex) override;
 
 private:
-	[[nodiscard]] float generateNoiseValue(const glm::vec3& position) const;
+	[[nodiscard]] double generateNoiseValue(const glm::dvec3& position) const;
 
 
 	PlanetGenerator::GeneratorSettings settings;

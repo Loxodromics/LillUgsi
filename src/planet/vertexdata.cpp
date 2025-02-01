@@ -5,12 +5,12 @@
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::planet {
-VertexData::VertexData(const glm::vec3& position)
+VertexData::VertexData(const glm::dvec3& position)
 	: position(position) {
 	/// Position is set in initializer list since it's constant after creation
 }
 
-void VertexData::setElevation(float newElevation) {
+void VertexData::setElevation(double newElevation) {
 	/// Only update and trigger recalculations if elevation actually changes
 	if (std::abs(this->elevation - newElevation) > EPSILON) {
 		this->elevation = newElevation;
@@ -24,7 +24,7 @@ void VertexData::setElevation(float newElevation) {
 	}
 }
 
-glm::vec3 VertexData::getNormal() {
+glm::dvec3 VertexData::getNormal() {
 	/// Check if we need to recalculate the normal
 	/// This lazy evaluation approach ensures we only recalculate when necessary
 	if (this->normalDirty) {
@@ -90,7 +90,7 @@ std::vector<std::shared_ptr<VertexData>> VertexData::getNeighbors() const {
 	return result;
 }
 
-float VertexData::getSlope(size_t neighborIndex) {
+double VertexData::getSlope(size_t neighborIndex) {
 	/// Ensure index is valid
 	if (neighborIndex >= neighbors.size()) {
 		spdlog::error("Invalid neighbor index {} requested", neighborIndex);
@@ -121,27 +121,27 @@ void VertexData::recalculateNormal() {
 
 	/// For a sphere, the correct normal should point in the same direction as the position vector
 	/// We use this reference direction to ensure consistent orientation
-	const glm::vec3 desiredDirection = glm::normalize(this->position);
+	const glm::dvec3 desiredDirection = glm::normalize(this->position);
 
 	/// Calculate the normal by averaging cross products of vectors to adjacent vertices
-	glm::vec3 summedNormal(0.0f);
+	glm::dvec3 summedNormal(0.0f);
 
 	for (size_t i = 0; i < currentNeighbors.size(); ++i) {
 		const size_t nextIndex = (i + 1) % currentNeighbors.size();
 
 		/// Calculate vectors from this vertex to its neighbors
-		const glm::vec3 basePos = this->position * (1.0f + this->elevation);
-		const glm::vec3 neighborPos1 = currentNeighbors[i]->getPosition() *
-			(1.0f + currentNeighbors[i]->getElevation());
-		const glm::vec3 neighborPos2 = currentNeighbors[nextIndex]->getPosition() *
-			(1.0f + currentNeighbors[nextIndex]->getElevation());
+		const glm::dvec3 basePos = this->position * (1.0 + this->elevation);
+		const glm::dvec3 neighborPos1 = currentNeighbors[i]->getPosition() *
+			(1.0 + currentNeighbors[i]->getElevation());
+		const glm::dvec3 neighborPos2 = currentNeighbors[nextIndex]->getPosition() *
+			(1.0 + currentNeighbors[nextIndex]->getElevation());
 
 		/// Calculate vectors forming the triangle
-		const glm::vec3 edge1 = neighborPos1 - basePos;
-		const glm::vec3 edge2 = neighborPos2 - basePos;
+		const glm::dvec3 edge1 = neighborPos1 - basePos;
+		const glm::dvec3 edge2 = neighborPos2 - basePos;
 
 		/// Calculate cross product
-		glm::vec3 triangleNormal = glm::cross(edge1, edge2);
+		glm::dvec3 triangleNormal = glm::cross(edge1, edge2);
 
 		/// Check if this normal points in roughly the same direction as our position
 		/// If not, flip it to ensure consistent orientation
@@ -190,8 +190,8 @@ void VertexData::calculateSlope(size_t neighborIndex) {
 	}
 
 	/// Calculate slope using elevation difference and stored distance
-	const float elevationDiff = neighbor->elevation - this->elevation;
-	float slope = elevationDiff / this->neighborDistances[neighborIndex];
+	const double elevationDiff = neighbor->elevation - this->elevation;
+	double slope = elevationDiff / this->neighborDistances[neighborIndex];
 
 	this->neighborSlopes[neighborIndex] = slope;
 	spdlog::trace("Calculated slope {} for neighbor {}", slope, neighborIndex);
@@ -221,7 +221,7 @@ void VertexData::markSlopeDirty(const VertexData* neighbor) {
 	}
 }
 
-float VertexData::calculateDistanceToNeighbor(const VertexData& neighbor) const {
+double VertexData::calculateDistanceToNeighbor(const VertexData& neighbor) const {
 	/// Calculate true 3D distance between vertices on the sphere
 	return glm::length(neighbor.position - this->position);
 }

@@ -32,7 +32,7 @@ public:
 	/// Modify terrain at a specific point
 	/// @param position The point to modify (will be normalized)
 	/// @param amount Amount of elevation change
-	void modifyTerrain(const glm::vec3& position, float amount);
+	void modifyTerrain(const glm::dvec3& position, float amount);
 
 	/// Update settings and regenerate terrain
 	/// @param settings New generator settings

@@ -27,8 +27,8 @@ PlanetData& PlanetData::operator=(const PlanetData& other) {
 	return *this;
 }
 
-std::vector<glm::vec3> PlanetData::getVertices() const {
-	std::vector<glm::vec3> positions;
+std::vector<glm::dvec3> PlanetData::getVertices() const {
+	std::vector<glm::dvec3> positions;
 	positions.reserve(this->vertices.size());
 
 	/// Extract positions from VertexData for compatibility
@@ -70,8 +70,8 @@ void PlanetData::applyVertexVisitor(VertexVisitor& visitor) const {
 	}
 }
 
-std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
-	glm::vec3 normalizedPoint = glm::normalize(point) * 2.0f;
+std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::dvec3 &point) const {
+	glm::dvec3 normalizedPoint = glm::normalize(point) * 2.0;
 
 	for (const auto& baseFace : this->baseFaces) {
 		// Check if face is pointing roughly in the same direction as our point
@@ -89,7 +89,7 @@ std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
 	return nullptr;
 }
 
-float PlanetData::getHeightAt(const glm::vec3& point) const {
+double PlanetData::getHeightAt(const glm::dvec3& point) const {
 	/// First find which face contains this point
 	auto face = this->getFaceAtPoint(point);
 	if (!face) {
@@ -102,15 +102,15 @@ float PlanetData::getHeightAt(const glm::vec3& point) const {
 	const auto indices = face->getVertexIndices();
 
 	/// Find the closest vertex to our query point
-	float minDistance = std::numeric_limits<float>::max();
-	float nearestElevation = 0.0f;
+	double minDistance = std::numeric_limits<double>::max();
+	double nearestElevation = 0.0f;
 
 	/// We check each vertex of the face to find the nearest one
 	/// This ensures we're using actual data points rather than
 	/// potentially invalid interpolated values
 	for (unsigned int index : indices) {
 		const auto& vertex = this->vertices[index];
-		float distance = glm::length(vertex->getPosition() - point);
+		double distance = glm::length(vertex->getPosition() - point);
 
 		if (distance < minDistance) {
 			minDistance = distance;
@@ -123,12 +123,12 @@ float PlanetData::getHeightAt(const glm::vec3& point) const {
 	return nearestElevation;
 }
 
-float PlanetData::getHeightAtNearestVertex(const glm::vec3& point) const {
-	float minDistance = std::numeric_limits<float>::max();
-	float nearestElevation = 0.0f;
+double PlanetData::getHeightAtNearestVertex(const glm::dvec3& point) const {
+	double minDistance = std::numeric_limits<double>::max();
+	double nearestElevation = 0.0f;
 
 	for (const auto& vertex : this->vertices) {
-		float distance = glm::length(vertex->getPosition() - point);
+		double distance = glm::length(vertex->getPosition() - point);
 
 		if (distance < minDistance) {
 			minDistance = distance;
@@ -141,7 +141,7 @@ float PlanetData::getHeightAtNearestVertex(const glm::vec3& point) const {
 	return nearestElevation;
 }
 
-float PlanetData::getInterpolatedHeightAt(const glm::vec3& point) const {
+double PlanetData::getInterpolatedHeightAt(const glm::dvec3& point) const {
 	/// Find containing face as before
 	auto face = this->getFaceAtPoint(point);
 	if (!face) {
@@ -152,11 +152,11 @@ float PlanetData::getInterpolatedHeightAt(const glm::vec3& point) const {
 
 	/// Calculate barycentric coordinates for interpolation
 	/// These tell us how much each vertex contributes to our point
-	const glm::vec3 baryCoords = this->calculateBarycentricCoords(face, point);
+	const glm::dvec3 baryCoords = this->calculateBarycentricCoords(face, point);
 
 	/// Get vertex indices and their elevations
 	const auto indices = face->getVertexIndices();
-	const float elevations[3] = {
+	const double elevations[3] = {
 		this->vertices[indices[0]]->getElevation(),
 		this->vertices[indices[1]]->getElevation(),
 		this->vertices[indices[2]]->getElevation()
@@ -164,7 +164,7 @@ float PlanetData::getInterpolatedHeightAt(const glm::vec3& point) const {
 
 	/// Blend elevations using barycentric coordinates
 	/// This gives us a smooth interpolation between the vertices
-	const float interpolatedHeight =
+	const double interpolatedHeight =
 		elevations[0] * baryCoords.x +
 		elevations[1] * baryCoords.y +
 		elevations[2] * baryCoords.z;
@@ -174,7 +174,7 @@ float PlanetData::getInterpolatedHeightAt(const glm::vec3& point) const {
 	return interpolatedHeight;
 }
 
-glm::vec3 PlanetData::getNormalAt(const glm::vec3& point) const {
+glm::dvec3 PlanetData::getNormalAt(const glm::dvec3& point) const {
 	/// First find which face contains this point
 	/// We reuse the same face finding logic as height calculations
 	auto face = this->getFaceAtPoint(point);
@@ -188,15 +188,15 @@ glm::vec3 PlanetData::getNormalAt(const glm::vec3& point) const {
 	const auto indices = face->getVertexIndices();
 
 	/// Find the closest vertex to our query point
-	float minDistance = std::numeric_limits<float>::max();
-	glm::vec3 nearestNormal(0.0f, 1.0f, 0.0f);  /// Default to up vector
+	double minDistance = std::numeric_limits<double>::max();
+	glm::dvec3 nearestNormal(0.0f, 1.0f, 0.0f);  /// Default to up vector
 
 	/// We check each vertex of the face to find the nearest one
 	/// This ensures we're using actual data points rather than
 	/// potentially invalid interpolated values
 	for (unsigned int index : indices) {
 		const auto& vertex = this->vertices[index];
-		float distance = glm::length(vertex->getPosition() - point);
+		double distance = glm::length(vertex->getPosition() - point);
 
 		if (distance < minDistance) {
 			minDistance = distance;
@@ -210,12 +210,12 @@ glm::vec3 PlanetData::getNormalAt(const glm::vec3& point) const {
 	return nearestNormal;
 }
 
-glm::vec3 PlanetData::getNormalAtNearestVertex(const glm::vec3& point) const {
-	float minDistance = std::numeric_limits<float>::max();
-	glm::vec3 nearestNormal(0.0f, 1.0f, 0.0f);  /// Default to up vector
+glm::dvec3 PlanetData::getNormalAtNearestVertex(const glm::dvec3& point) const {
+	double minDistance = std::numeric_limits<double>::max();
+	glm::dvec3 nearestNormal(0.0f, 1.0f, 0.0f);  /// Default to up vector
 
 	for (const auto& vertex : this->vertices) {
-		float distance = glm::length(vertex->getPosition() - point);
+		double distance = glm::length(vertex->getPosition() - point);
 
 		if (distance < minDistance) {
 			minDistance = distance;
@@ -228,22 +228,22 @@ glm::vec3 PlanetData::getNormalAtNearestVertex(const glm::vec3& point) const {
 	return nearestNormal;
 }
 
-glm::vec3 PlanetData::getInterpolatedNormalAt(const glm::vec3& point) const {
+glm::dvec3 PlanetData::getInterpolatedNormalAt(const glm::dvec3& point) const {
 	/// Find containing face as before
 	auto face = this->getFaceAtPoint(point);
 	if (!face) {
 		spdlog::warn("No face found for normal interpolation at point ({}, {}, {})",
 			point.x, point.y, point.z);
-		return glm::normalize(point); /// Return postion vector as fallback
+		return this->getNormalAtNearestVertex(point); /// Return postion vector as fallback
 	}
 
 	/// Calculate barycentric coordinates for interpolation
 	/// These tell us how much each vertex contributes to our point
-	const glm::vec3 baryCoords = this->calculateBarycentricCoords(face, point);
+	const glm::dvec3 baryCoords = this->calculateBarycentricCoords(face, point);
 
 	/// Get vertex indices and their normals
 	const auto indices = face->getVertexIndices();
-	const std::array<glm::vec3, 3> normals = {
+	const std::array<glm::dvec3, 3> normals = {
 		this->vertices[indices[0]]->getNormal(),
 		this->vertices[indices[1]]->getNormal(),
 		this->vertices[indices[2]]->getNormal()
@@ -252,14 +252,14 @@ glm::vec3 PlanetData::getInterpolatedNormalAt(const glm::vec3& point) const {
 	/// Blend normals using barycentric coordinates
 	/// Unlike height interpolation, we need to normalize the result
 	/// as a linear interpolation of normalized vectors isn't normalized
-	const glm::vec3 interpolatedNormal =
+	const glm::dvec3 interpolatedNormal =
 		normals[0] * baryCoords.x +
 		normals[1] * baryCoords.y +
 		normals[2] * baryCoords.z;
 
 	/// Ensure we return a normalized vector
 	/// We check length to avoid division by zero in case of degenerate geometry
-	const float length = glm::length(interpolatedNormal);
+	const double length = glm::length(interpolatedNormal);
 	if (length > EPSILON) {
 		return interpolatedNormal / length;
 	}
@@ -269,7 +269,7 @@ glm::vec3 PlanetData::getInterpolatedNormalAt(const glm::vec3& point) const {
 	}
 }
 
-unsigned int PlanetData::addVertex(const glm::vec3& position) {
+unsigned int PlanetData::addVertex(const glm::dvec3& position) {
 	/// Create new VertexData object with given position
 	auto vertex = std::make_shared<VertexData>(position);
 	this->vertices.push_back(vertex);
@@ -315,9 +315,9 @@ unsigned int PlanetData::getOrCreateMidpointIndex(unsigned int index1, unsigned 
 	}
 
 	/// Calculate midpoint between two vertices, then normalize it to ensure it's on the unit sphere
-	const glm::vec3 pos1 = this->vertices[index1]->getPosition();
-	const glm::vec3 pos2 = this->vertices[index2]->getPosition();
-	glm::vec3 midpoint = (pos1 + pos2) * 0.5f;
+	const glm::dvec3 pos1 = this->vertices[index1]->getPosition();
+	const glm::dvec3 pos2 = this->vertices[index2]->getPosition();
+	glm::dvec3 midpoint = (pos1 + pos2) * 0.5;
 	midpoint = glm::normalize(midpoint);
 
 	unsigned int midpointIndex = this->addVertex(midpoint);
@@ -334,23 +334,23 @@ void PlanetData::initializeBaseIcosahedron() {
 	this->indices.clear();
 	this->midpointIndexCache.clear();
 
-	float phi = (1.0f + sqrt(5.0f)) * 0.5f; /// golden ratio
-	float a = 1.0f;
-	float b = 1.0f / phi;
+	double phi = (1.0f + sqrt(5.0f)) * 0.5f; /// golden ratio
+	double a = 1.0f;
+	double b = 1.0f / phi;
 
 	/// Add vertices
-	this->addVertex(glm::normalize(glm::vec3(0, b, -a)));  // v0
-	this->addVertex(glm::normalize(glm::vec3(b, a, 0)));   // v1
-	this->addVertex(glm::normalize(glm::vec3(-b, a, 0)));  // v2
-	this->addVertex(glm::normalize(glm::vec3(0, b, a)));   // v3
-	this->addVertex(glm::normalize(glm::vec3(0, -b, a)));  // v4
-	this->addVertex(glm::normalize(glm::vec3(-a, 0, b)));  // v5
-	this->addVertex(glm::normalize(glm::vec3(0, -b, -a))); // v6
-	this->addVertex(glm::normalize(glm::vec3(a, 0, -b)));  // v7
-	this->addVertex(glm::normalize(glm::vec3(a, 0, b)));   // v8
-	this->addVertex(glm::normalize(glm::vec3(-a, 0, -b))); // v9
-	this->addVertex(glm::normalize(glm::vec3(b, -a, 0)));  // v10
-	this->addVertex(glm::normalize(glm::vec3(-b, -a, 0))); // v11
+	this->addVertex(glm::normalize(glm::dvec3(0, b, -a)));  // v0
+	this->addVertex(glm::normalize(glm::dvec3(b, a, 0)));   // v1
+	this->addVertex(glm::normalize(glm::dvec3(-b, a, 0)));  // v2
+	this->addVertex(glm::normalize(glm::dvec3(0, b, a)));   // v3
+	this->addVertex(glm::normalize(glm::dvec3(0, -b, a)));  // v4
+	this->addVertex(glm::normalize(glm::dvec3(-a, 0, b)));  // v5
+	this->addVertex(glm::normalize(glm::dvec3(0, -b, -a))); // v6
+	this->addVertex(glm::normalize(glm::dvec3(a, 0, -b)));  // v7
+	this->addVertex(glm::normalize(glm::dvec3(a, 0, b)));   // v8
+	this->addVertex(glm::normalize(glm::dvec3(-a, 0, -b))); // v9
+	this->addVertex(glm::normalize(glm::dvec3(b, -a, 0)));  // v10
+	this->addVertex(glm::normalize(glm::dvec3(-b, -a, 0))); // v11
 
 	/// Add faces
 	this->baseFaces.push_back(this->addFace(2, 1, 0));
@@ -652,12 +652,11 @@ void PlanetData::setNeighborsForFace(const std::shared_ptr<Face>& face) {
 	}
 }
 
-std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<Face> &face, const glm::vec3 &normalizedPoint) const {
-
+std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<Face> &face, const glm::dvec3 &normalizedPoint) const {
 	/// Bend the test point slightly toward face midpoint
-	glm::vec3 bentPoint = glm::mix(glm::normalize(normalizedPoint), face->getMidpoint(), 0.01f) * 2.0f;
+	glm::dvec3 bentPoint = glm::mix(glm::normalize(normalizedPoint), face->getMidpoint(), 0.01) * 2.0;
 
-	if (!intersectsLine(face, glm::vec3(0,0,0), bentPoint)) {
+	if (!intersectsLine(face, glm::dvec3(0,0,0), bentPoint)) {
 		return nullptr;
 	}
 
@@ -675,97 +674,87 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 		}
 	}
 
-	bentPoint = glm::mix(glm::normalize(normalizedPoint), face->getMidpoint(), 0.5f) * 2.0f;
-	/// Check children again
-	for (const auto& child : face->getChildren()) {
-		if (child) {
-			auto result = this->getFaceAtPointRecursive(child, bentPoint);
-			if (result)
-				return result;
-		}
-	}
-
 	/// This should not really happen, if this face interects and is no leaf, then one of the
 	/// children should intersect. But maybe due to limited float point precision this might happen
 	spdlog::warn("Face intersected but none of its children");
 	return nullptr;
 }
 
-bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::vec3 &lineStart,
-	const glm::vec3 &lineEnd) const {
+bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::dvec3 &lineStart,
+	const glm::dvec3 &lineEnd) const {
 
 	/// Möller-Trumbore algorithm for intersecting line - triangle
 	/// Get the vertices of the face
-	std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();
-	const glm::vec3& v0 = vertices[vertexIndices[0]]->getPosition();
-	const glm::vec3& v1 = vertices[vertexIndices[1]]->getPosition();
-	const glm::vec3& v2 = vertices[vertexIndices[2]]->getPosition();
+	const std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();
+	const glm::dvec3& v0 = vertices[vertexIndices[0]]->getPosition();
+	const glm::dvec3& v1 = vertices[vertexIndices[1]]->getPosition();
+	const glm::dvec3& v2 = vertices[vertexIndices[2]]->getPosition();
 
-	const glm::vec3 direction = lineEnd - lineStart;
+	const glm::dvec3 direction = lineEnd - lineStart;
 
 	/// Edge vectors
-	const glm::vec3 e1 = v1 - v0;
-	const glm::vec3 e2 = v2 - v0;
+	const glm::dvec3 e1 = v1 - v0;
+	const glm::dvec3 e2 = v2 - v0;
 
 	/// Calculate determinant
-	const glm::vec3 pvec = glm::cross(direction, e2);
-	const float det = glm::dot(e1, pvec);
+	const glm::dvec3 pvec = glm::cross(direction, e2);
+	const double det = glm::dot(e1, pvec);
 
 	/// If determinant is near zero, ray lies in plane of triangle
 	if (std::fabs(det) < EPSILON)
 		return false;
 
-	const float invDet = 1.0f / det;
+	const double invDet = 1.0f / det;
 
 	/// Calculate u parameter and test bounds
-	const glm::vec3 tvec = lineStart - v0;
-	const float u = glm::dot(tvec, pvec) * invDet;
+	const glm::dvec3 tvec = lineStart - v0;
+	const double u = glm::dot(tvec, pvec) * invDet;
 	if (u < 0.0f || u > 1.0f)
 		return false;
 
 	/// Prepare to test v parameter
-	const glm::vec3 qvec = glm::cross(tvec, e1);
+	const glm::dvec3 qvec = glm::cross(tvec, e1);
 
 	/// Calculate v parameter and test bounds
-	const float v = glm::dot(direction, qvec) * invDet;
+	const double v = glm::dot(direction, qvec) * invDet;
 	if (v < 0.0f || u + v > 1.0f)
 		return false;
 
 	/// Calculate t, ray intersects triangle
-	const float t = glm::dot(e2, qvec) * invDet;
+	const double t = glm::dot(e2, qvec) * invDet;
 
 	/// Check if the intersection point is between lineStart and lineEnd
 	return (t >= 0.0f && t <= 1.0f);
 }
 
-glm::vec3 PlanetData::calculateBarycentricCoords(
+glm::dvec3 PlanetData::calculateBarycentricCoords(
 	const std::shared_ptr<Face>& face,
-	const glm::vec3& point) const {
+	const glm::dvec3& point) const {
 	/// Get the vertices of the face
 	const auto indices = face->getVertexIndices();
-	const glm::vec3& a = this->vertices[indices[0]]->getPosition();
-	const glm::vec3& b = this->vertices[indices[1]]->getPosition();
-	const glm::vec3& c = this->vertices[indices[2]]->getPosition();
+	const glm::dvec3& a = this->vertices[indices[0]]->getPosition();
+	const glm::dvec3& b = this->vertices[indices[1]]->getPosition();
+	const glm::dvec3& c = this->vertices[indices[2]]->getPosition();
 
 	/// Calculate vectors from point to vertices
-	const glm::vec3 v0 = b - a;
-	const glm::vec3 v1 = c - a;
-	const glm::vec3 v2 = point - a;
+	const glm::dvec3 v0 = b - a;
+	const glm::dvec3 v1 = c - a;
+	const glm::dvec3 v2 = point - a;
 
 	/// Calculate dot products for barycentric computation
-	const float d00 = glm::dot(v0, v0);
-	const float d01 = glm::dot(v0, v1);
-	const float d11 = glm::dot(v1, v1);
-	const float d20 = glm::dot(v2, v0);
-	const float d21 = glm::dot(v2, v1);
+	const double d00 = glm::dot(v0, v0);
+	const double d01 = glm::dot(v0, v1);
+	const double d11 = glm::dot(v1, v1);
+	const double d20 = glm::dot(v2, v0);
+	const double d21 = glm::dot(v2, v1);
 
 	/// Calculate barycentric coordinates using Cramer's rule
-	const float denom = d00 * d11 - d01 * d01;
-	const float v = (d11 * d20 - d01 * d21) / denom;
-	const float w = (d00 * d21 - d01 * d20) / denom;
-	const float u = 1.0f - v - w;
+	const double denom = d00 * d11 - d01 * d01;
+	const double v = (d11 * d20 - d01 * d21) / denom;
+	const double w = (d00 * d21 - d01 * d20) / denom;
+	const double u = 1.0f - v - w;
 
-	return glm::vec3(u, v, w);
+	return glm::dvec3(u, v, w);
 }
 
 } /// namespace lillugsi::planet

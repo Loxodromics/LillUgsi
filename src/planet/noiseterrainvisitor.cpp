@@ -13,7 +13,7 @@ NoiseTerrainVisitor::NoiseTerrainVisitor(const float scale, const float magnitud
 void NoiseTerrainVisitor::visit(const std::shared_ptr<VertexData> vertex) {
 	/// Generate elevation change based on vertex position
 	/// Using position ensures consistent terrain across visits
-	const glm::vec3 pos = vertex->getPosition();
+	const glm::dvec3 pos = vertex->getPosition();
 	
 	/// Create pseudo-random height based on position
 	float height = sin(pos.x * this->scale) * cos(pos.y * this->scale) * sin(pos.z * this->scale);

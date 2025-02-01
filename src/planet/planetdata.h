@@ -18,7 +18,7 @@ public:
 
 	/// Accessors
 	/// Return vertices as vec3 for backwards compatibility with rendering/other systems
-	[[nodiscard]] std::vector<glm::vec3> getVertices() const;
+	[[nodiscard]] std::vector<glm::dvec3> getVertices() const;
 	[[nodiscard]] std::vector<unsigned int> getIndices() const;
 
 	/// Visitor
@@ -26,34 +26,34 @@ public:
 	void applyFaceVisitor(FaceVisitor& visitor) const;
 	void applyVertexVisitor(VertexVisitor& visitor) const; ///< Apply a vertex visitor to all vertices in the mesh
 
-	[[nodiscard]] std::shared_ptr<Face> getFaceAtPoint(const glm::vec3& point) const;
+	[[nodiscard]] std::shared_ptr<Face> getFaceAtPoint(const glm::dvec3& point) const;
 
 	/// Get the height at a specific point on the planet surface
 	/// Returns the elevation of the nearest vertex to maintain data integrity
 	/// @param point Any point in space (will be normalized to unit sphere)
 	/// @return The elevation at the nearest vertex, or 0.0f if no face found
-	[[nodiscard]] float getHeightAt(const glm::vec3& point) const;
-	[[nodiscard]] float getHeightAtNearestVertex(const glm::vec3& point) const;
+	[[nodiscard]] double getHeightAt(const glm::dvec3& point) const;
+	[[nodiscard]] double getHeightAtNearestVertex(const glm::dvec3& point) const;
 
 	/// Get interpolated height at a specific point on the planet surface
 	/// Uses barycentric coordinates to smoothly blend between vertex elevations
 	/// @param point Any point in space (will be normalized to unit sphere)
 	/// @return The interpolated elevation, or 0.0f if no face found
-	[[nodiscard]] float getInterpolatedHeightAt(const glm::vec3& point) const;
+	[[nodiscard]] double getInterpolatedHeightAt(const glm::dvec3& point) const;
 
 	/// Get the normal at a specific point on the planet surface
 	/// Returns the normal of the nearest vertex to maintain data integrity
 	/// @param point Any point in space (will be normalized to unit sphere)
 	/// @return The normal at the nearest vertex, or up vector if no face found
-	[[nodiscard]] glm::vec3 getNormalAt(const glm::vec3& point) const;
-	[[nodiscard]] glm::vec3 getNormalAtNearestVertex(const glm::vec3& point) const;
+	[[nodiscard]] glm::dvec3 getNormalAt(const glm::dvec3& point) const;
+	[[nodiscard]] glm::dvec3 getNormalAtNearestVertex(const glm::dvec3& point) const;
 
 	/// Get interpolated normal at a specific point on the planet surface
 	/// Uses barycentric coordinates to smoothly blend between vertex normals
 	/// The result is normalized to ensure a valid surface normal
 	/// @param point Any point in space (will be normalized to unit sphere)
 	/// @return The interpolated normal, or up vector if no face found
-	[[nodiscard]] glm::vec3 getInterpolatedNormalAt(const glm::vec3& point) const;
+	[[nodiscard]] glm::dvec3 getInterpolatedNormalAt(const glm::dvec3& point) const;
 
 private:
 	/// Copy constructor
@@ -72,7 +72,7 @@ private:
 
 	/// Helper methods
 	/// Returns index of the new vertex in vertices vector
-	unsigned int addVertex(const glm::vec3& position);
+	unsigned int addVertex(const glm::dvec3& position);
 	std::shared_ptr<Face> addFace(unsigned int v1, unsigned int v2, unsigned int v3);
 
 	unsigned int getOrCreateMidpointIndex(unsigned int index1, unsigned int index2);
@@ -83,18 +83,18 @@ private:
 	void setNeighborsForFace(const std::shared_ptr<Face>& face);
 
 	[[nodiscard]] std::shared_ptr<Face> getFaceAtPointRecursive(const std::shared_ptr<Face>& face,
-															   const glm::vec3& normalizedPoint) const;
+															   const glm::dvec3& normalizedPoint) const;
 
 	[[nodiscard]] bool intersectsLine(const std::shared_ptr<Face>& face,
-									  const glm::vec3& lineStart, const glm::vec3& lineEnd) const;
+									  const glm::dvec3& lineStart, const glm::dvec3& lineEnd) const;
 
 	/// Calculate barycentric coordinates for a point within a face
 	/// @param face The face containing the point
 	/// @param point The point to calculate coordinates for (must be normalized)
 	/// @return Barycentric coordinates (u,v,w) for the point
-	[[nodiscard]] glm::vec3 calculateBarycentricCoords(
+	[[nodiscard]] glm::dvec3 calculateBarycentricCoords(
 		const std::shared_ptr<Face>& face,
-		const glm::vec3& point) const;
+		const glm::dvec3& point) const;
 
 	/// Data
 	/// Store VertexData objects instead of just positions
@@ -103,6 +103,6 @@ private:
 	std::map<std::pair<unsigned int, unsigned int>, unsigned int> midpointIndexCache;
 	std::vector<std::shared_ptr<Face>> baseFaces;
 
-	static constexpr float EPSILON = 0.0000001f;
+	static constexpr double EPSILON = 0.0000001;
 };
 } /// namespace lillugsi::planet

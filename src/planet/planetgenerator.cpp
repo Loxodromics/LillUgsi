@@ -64,15 +64,15 @@ bool PlanetGenerator::updateMesh() const {
 		transform.oldPosition = position;
 
 		/// Calculate new position based on elevation
-		const float elevation = this->planetData->getHeightAt(position);
-		transform.position = position  * (1.0f + elevation * 0.15f);
+		const double elevation = this->planetData->getHeightAt(position);
+		transform.position = position * static_cast<float>(1.0 + elevation * 0.15);
 
 		/// Calculate normal as normalized position
 		/// This creates smooth lighting across the sphere
 		/// Could be improved by calculating actual surface normal
-		glm::vec3 normal = this->planetData->getNormalAt(position);
-		glm::vec3 interpolatedNormal = this->planetData->getInterpolatedNormalAt(position);
-		glm::vec3 normalizedPostion = glm::normalize(transform.position);
+		glm::dvec3 normal = this->planetData->getNormalAt(position);
+		glm::dvec3 interpolatedNormal = this->planetData->getInterpolatedNormalAt(position);
+		glm::dvec3 normalizedPostion = glm::normalize(transform.position);
 		transform.normal = this->planetData->getNormalAt(position);
 		// transform.normal = glm::normalize(transform.position);
 
@@ -92,8 +92,8 @@ bool PlanetGenerator::updateMesh() const {
 
 		/// Set color based on elevation
 		/// Simple gradient from dark (low) to light (high)
-		const float normalizedElevation = (elevation + 1.0f) * 0.5f;
-		transform.color = glm::vec3(normalizedElevation);
+		const double normalizedElevation = (elevation + 1.0) * 0.5;
+		transform.color = glm::dvec3(normalizedElevation);
 
 		transforms.push_back(transform);
 	}
