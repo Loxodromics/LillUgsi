@@ -33,7 +33,7 @@ public:
 	/// @param point Any point in space (will be normalized to unit sphere)
 	/// @return The elevation at the nearest vertex, or 0.0f if no face found
 	[[nodiscard]] float getHeightAt(const glm::vec3& point) const;
-	[[nodiscard]] float getHeight2At(const glm::vec3& point) const;
+	[[nodiscard]] float getHeightAtNearestVertex(const glm::vec3& point) const;
 
 	/// Get interpolated height at a specific point on the planet surface
 	/// Uses barycentric coordinates to smoothly blend between vertex elevations
@@ -46,6 +46,7 @@ public:
 	/// @param point Any point in space (will be normalized to unit sphere)
 	/// @return The normal at the nearest vertex, or up vector if no face found
 	[[nodiscard]] glm::vec3 getNormalAt(const glm::vec3& point) const;
+	[[nodiscard]] glm::vec3 getNormalAtNearestVertex(const glm::vec3& point) const;
 
 	/// Get interpolated normal at a specific point on the planet surface
 	/// Uses barycentric coordinates to smoothly blend between vertex normals

@@ -95,7 +95,7 @@ float PlanetData::getHeightAt(const glm::vec3& point) const {
 	if (!face) {
 		spdlog::warn("getHeightAt: No face found for point ({}, {}, {})",
 			point.x, point.y, point.z);
-		return this->getHeight2At(point);
+		return this->getHeightAtNearestVertex(point);
 	}
 
 	/// Get vertex indices for this face
@@ -123,7 +123,7 @@ float PlanetData::getHeightAt(const glm::vec3& point) const {
 	return nearestElevation;
 }
 
-float PlanetData::getHeight2At(const glm::vec3& point) const {
+float PlanetData::getHeightAtNearestVertex(const glm::vec3& point) const {
 	float minDistance = std::numeric_limits<float>::max();
 	float nearestElevation = 0.0f;
 
@@ -179,9 +179,9 @@ glm::vec3 PlanetData::getNormalAt(const glm::vec3& point) const {
 	/// We reuse the same face finding logic as height calculations
 	auto face = this->getFaceAtPoint(point);
 	if (!face) {
-		spdlog::warn("No face found for normal query at point ({}, {}, {})",
+		spdlog::warn("No face found for normal query at point ({}, {}, {}), using fallback",
 			point.x, point.y, point.z);
-		return  glm::normalize(point); /// Return point as fallback
+		return this->getNormalAtNearestVertex(point); /// Return point as fallback
 	}
 
 	/// Get vertex indices for this face
@@ -207,6 +207,24 @@ glm::vec3 PlanetData::getNormalAt(const glm::vec3& point) const {
 	spdlog::trace("Found normal ({}, {}, {}) at point ({}, {}, {})",
 		nearestNormal.x, nearestNormal.y, nearestNormal.z,
 		point.x, point.y, point.z);
+	return nearestNormal;
+}
+
+glm::vec3 PlanetData::getNormalAtNearestVertex(const glm::vec3& point) const {
+	float minDistance = std::numeric_limits<float>::max();
+	glm::vec3 nearestNormal(0.0f, 1.0f, 0.0f);  /// Default to up vector
+
+	for (const auto& vertex : this->vertices) {
+		float distance = glm::length(vertex->getPosition() - point);
+
+		if (distance < minDistance) {
+			minDistance = distance;
+			nearestNormal = vertex->getNormal();
+		}
+	}
+
+	spdlog::trace("Found height ({}, {}, {}) at point ({}, {}, {})",
+		nearestNormal.x, nearestNormal.y, nearestNormal.z, point.x, point.y, point.z);
 	return nearestNormal;
 }
 

@@ -73,8 +73,8 @@ bool PlanetGenerator::updateMesh() const {
 		glm::vec3 normal = this->planetData->getNormalAt(position);
 		glm::vec3 interpolatedNormal = this->planetData->getInterpolatedNormalAt(position);
 		glm::vec3 normalizedPostion = glm::normalize(transform.position);
-		// transform.normal = this->planetData->getNormalAt(position);
-		transform.normal = glm::normalize(transform.position);
+		transform.normal = this->planetData->getNormalAt(position);
+		// transform.normal = glm::normalize(transform.position);
 
 	// 	spdlog::debug("Normal comparison at position ({:.3f}, {:.3f}, {:.3f}):",
 	// position.x, position.y, position.z);
