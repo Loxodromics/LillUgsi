@@ -23,6 +23,9 @@ void PlanetGenerator::generateTerrain() const
 	// HeightDifferenceVisitor visitor2(0.01);
 	// this->planetData->applyVertexVisitor(visitor2);
 
+	/// Update all normals
+	this->planetData->updateNormals();
+
 	/// Then update the mesh to reflect the changes
 	/// A separate update step allows for future optimizations
 	if (!this->updateMesh()) {

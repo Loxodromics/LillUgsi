@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <memory>
 #include <glm/glm.hpp>
 
 namespace lillugsi::planet {
@@ -48,25 +47,25 @@ public:
 	/// Calculates and caches the slope if needed
 	[[nodiscard]] double getSlope(size_t neighborIndex);
 
-	/// Force recalculation of normal vector based on neighbor positions
-	void recalculateNormal();
+	/// Set the vertex normal directly
+	/// @param newNormal The new normal vector to use
+	void setNormal(const glm::dvec3& newNormal) {
+		this->normal = glm::normalize(newNormal);
+	}
+
+	/// Get the current normal vector
+	/// @return Normalized direction vector perpendicular to surface
+	[[nodiscard]] glm::dvec3 getNormal() const {
+		return this->normal;
+	}
 
 	/// Calculate normal based on face normals
-	/// This provides an alternative to the existing normal calculation
 	/// @param faces List of faces that share this vertex
-	/// @param vertices List of all verticies
+	/// @param vertices All vertices in the mesh
 	/// @return Normal vector calculated from surrounding face normals
 	[[nodiscard]] glm::dvec3 calculateNormalFromFaces(
-	    const std::vector<std::shared_ptr<Face>>& faces,
-	    const std::vector<std::shared_ptr<VertexData>>& vertices) const;
-
-	/// Recalculate normal using face normals instead of neighbors
-	/// @param faces List of faces that share this vertex
-	/// @param vertices List of all verticies
-	void recalculateNormalFromFaces(
 		const std::vector<std::shared_ptr<Face>>& faces,
-		const std::vector<std::shared_ptr<VertexData>>& vertices);
-
+		const std::vector<std::shared_ptr<VertexData>>& vertices) const;
 
 	/// Clear all neighbor relationships for this vertex
 	/// Called before rebuilding neighbors after subdivision

@@ -207,7 +207,7 @@ glm::dvec3 PlanetData::getNormalAt(const glm::dvec3& point) const {
 	spdlog::trace("Found normal ({}, {}, {}) at point ({}, {}, {})",
 		nearestNormal.x, nearestNormal.y, nearestNormal.z,
 		point.x, point.y, point.z);
-	return nearestNormal;
+	return nearestNormal * -1.0;
 }
 
 glm::dvec3 PlanetData::getNormalAtNearestVertex(const glm::dvec3& point) const {
@@ -228,12 +228,15 @@ glm::dvec3 PlanetData::getNormalAtNearestVertex(const glm::dvec3& point) const {
 	return nearestNormal;
 }
 
-glm::dvec3 PlanetData::getInterpolatedNormalAt(const glm::dvec3& point) const {
+glm::dvec3 PlanetData::getInterpolatedNormalAt(const glm::dvec3 &point) const {
 	/// Find containing face as before
 	auto face = this->getFaceAtPoint(point);
 	if (!face) {
-		spdlog::warn("No face found for normal interpolation at point ({}, {}, {})",
-			point.x, point.y, point.z);
+		spdlog::warn(
+			"No face found for normal interpolation at point ({}, {}, {})",
+			point.x,
+			point.y,
+			point.z);
 		return this->getNormalAtNearestVertex(point); /// Return postion vector as fallback
 	}
 
@@ -243,30 +246,50 @@ glm::dvec3 PlanetData::getInterpolatedNormalAt(const glm::dvec3& point) const {
 
 	/// Get vertex indices and their normals
 	const auto indices = face->getVertexIndices();
-	const std::array<glm::dvec3, 3> normals = {
-		this->vertices[indices[0]]->getNormal(),
-		this->vertices[indices[1]]->getNormal(),
-		this->vertices[indices[2]]->getNormal()
-	};
+	const std::array<glm::dvec3, 3> normals
+		= {this->vertices[indices[0]]->getNormal(),
+		   this->vertices[indices[1]]->getNormal(),
+		   this->vertices[indices[2]]->getNormal()};
 
 	/// Blend normals using barycentric coordinates
 	/// Unlike height interpolation, we need to normalize the result
 	/// as a linear interpolation of normalized vectors isn't normalized
-	const glm::dvec3 interpolatedNormal =
-		normals[0] * baryCoords.x +
-		normals[1] * baryCoords.y +
-		normals[2] * baryCoords.z;
+	const glm::dvec3 interpolatedNormal = normals[0] * baryCoords.x + normals[1] * baryCoords.y
+										  + normals[2] * baryCoords.z;
 
 	/// Ensure we return a normalized vector
 	/// We check length to avoid division by zero in case of degenerate geometry
 	const double length = glm::length(interpolatedNormal);
 	if (length > EPSILON) {
 		return interpolatedNormal / length;
-	}
-	else {
+	} else {
 		spdlog::warn("Generated zero-length interpolated normal, falling back to up vector");
 		return normalize(point);
 	}
+}
+
+void PlanetData::updateNormals() {
+	/// First update all face normals since vertex normals depend on them
+	for (const auto& face : this->baseFaces) {
+		face->calculateNormal(this->vertices);
+	}
+
+	/// Then update vertex normals
+	for (size_t i = 0; i < this->vertices.size(); ++i) {
+		this->updateNormalsForVertex(i);
+	}
+}
+
+void PlanetData::updateNormalsForVertex(size_t vertexIndex) {
+	auto vertex = this->vertices[vertexIndex];
+	if (!vertex) return;
+
+	/// Get all faces that contain this vertex
+	const auto faces = this->getFacesForVertex(vertexIndex);
+
+	/// Calculate and set the new normal
+	const glm::dvec3 newNormal = vertex->calculateNormalFromFaces(faces, this->vertices);
+	vertex->setNormal(newNormal);
 }
 
 unsigned int PlanetData::addVertex(const glm::dvec3& position) {
@@ -729,13 +752,12 @@ bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::dv
 }
 
 glm::dvec3 PlanetData::calculateBarycentricCoords(
-	const std::shared_ptr<Face>& face,
-	const glm::dvec3& point) const {
+	const std::shared_ptr<Face> &face, const glm::dvec3 &point) const {
 	/// Get the vertices of the face
 	const auto indices = face->getVertexIndices();
-	const glm::dvec3& a = this->vertices[indices[0]]->getPosition();
-	const glm::dvec3& b = this->vertices[indices[1]]->getPosition();
-	const glm::dvec3& c = this->vertices[indices[2]]->getPosition();
+	const glm::dvec3 &a = this->vertices[indices[0]]->getPosition();
+	const glm::dvec3 &b = this->vertices[indices[1]]->getPosition();
+	const glm::dvec3 &c = this->vertices[indices[2]]->getPosition();
 
 	/// Calculate vectors from point to vertices
 	const glm::dvec3 v0 = b - a;
@@ -756,6 +778,36 @@ glm::dvec3 PlanetData::calculateBarycentricCoords(
 	const double u = 1.0f - v - w;
 
 	return glm::dvec3(u, v, w);
+}
+
+std::vector<std::shared_ptr<Face>> PlanetData::getFacesForVertex(size_t vertexIndex) const {
+	std::vector<std::shared_ptr<Face>> faces;
+
+	/// Helper function to process a face and its children recursively
+	std::function<void(const std::shared_ptr<Face>&)> processFace;
+	processFace = [&faces, vertexIndex, &processFace](const std::shared_ptr<Face>& face) {
+		if (!face) return;
+
+		/// Check if this face contains our vertex
+		const auto& indices = face->getVertexIndices();
+		if (std::find(indices.begin(), indices.end(), vertexIndex) != indices.end()) {
+			if (face->isLeaf()) {
+				faces.push_back(face);
+			}
+		}
+
+		/// Process children recursively
+		for (const auto& child : face->getChildren()) {
+			processFace(child);
+		}
+	};
+
+	/// Process all base faces
+	for (const auto& face : this->baseFaces) {
+		processFace(face);
+	}
+
+	return faces;
 }
 
 } /// namespace lillugsi::planet

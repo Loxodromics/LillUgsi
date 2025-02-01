@@ -55,6 +55,14 @@ public:
 	/// @return The interpolated normal, or up vector if no face found
 	[[nodiscard]] glm::dvec3 getInterpolatedNormalAt(const glm::dvec3& point) const;
 
+	/// Update normals for all vertices and faces in the mesh
+	/// We call this after terrain generation or any global mesh changes
+	void updateNormals();
+
+	/// Update normals for a specific vertex and its surrounding faces
+	/// @param vertexIndex Index of the vertex whose normals need updating
+	void updateNormalsForVertex(size_t vertexIndex);
+
 private:
 	/// Copy constructor
 	PlanetData(const PlanetData& other);
@@ -95,6 +103,11 @@ private:
 	[[nodiscard]] glm::dvec3 calculateBarycentricCoords(
 		const std::shared_ptr<Face>& face,
 		const glm::dvec3& point) const;
+
+	/// Get all faces that contain a specific vertex
+	/// @param vertexIndex Index of the vertex to find faces for
+	/// @return Vector of faces that share the specified vertex
+	[[nodiscard]] std::vector<std::shared_ptr<Face>> getFacesForVertex(size_t vertexIndex) const;
 
 	/// Data
 	/// Store VertexData objects instead of just positions

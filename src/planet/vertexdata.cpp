@@ -1,7 +1,6 @@
 #include "vertexdata.h"
 #include "face.h"
 
-#include <algorithm>
 #include <glm/geometric.hpp>
 #include <glm/gtx/norm.hpp>
 #include <spdlog/spdlog.h>
@@ -28,12 +27,6 @@ void VertexData::setElevation(double newElevation) {
 }
 
 glm::dvec3 VertexData::getNormal() {
-	/// Check if we need to recalculate the normal
-	/// This lazy evaluation approach ensures we only recalculate when necessary
-	if (this->normalDirty) {
-		this->recalculateNormal();
-		this->normalDirty = false;
-	}
 	return this->normal;
 }
 
@@ -109,77 +102,6 @@ double VertexData::getSlope(size_t neighborIndex) {
 	return neighborSlopes[neighborIndex];
 }
 
-void VertexData::recalculateNormal() {
-	/// Get the current neighbors that will be used for normal calculation
-	const auto currentNeighbors = this->getNeighbors();
-
-	/// If we don't have enough neighbors to calculate a meaningful normal,
-	/// we use the normalized position vector as this is correct for a sphere
-	if (currentNeighbors.size() < 2) {
-		this->normal = glm::normalize(this->position);
-		spdlog::warn(
-			"Insufficient neighbors ({}) to calculate normal, using normalized position",
-			currentNeighbors.size());
-		return;
-	}
-
-	/// For a sphere, the correct normal should point in the same direction as the position vector
-	/// We use this reference direction to ensure consistent orientation
-	const glm::dvec3 desiredDirection = glm::normalize(this->position);
-
-	/// Calculate the normal by averaging cross products of vectors to adjacent vertices
-	glm::dvec3 summedNormal(0.0f);
-
-	for (size_t i = 0; i < currentNeighbors.size(); ++i) {
-		const size_t nextIndex = (i + 1) % currentNeighbors.size();
-
-		/// Calculate vectors from this vertex to its neighbors
-		const glm::dvec3 basePos = this->position * (1.0 + this->elevation);
-		const glm::dvec3 neighborPos1 = currentNeighbors[i]->getPosition()
-										* (1.0 + currentNeighbors[i]->getElevation());
-		const glm::dvec3 neighborPos2 = currentNeighbors[nextIndex]->getPosition()
-										* (1.0 + currentNeighbors[nextIndex]->getElevation());
-
-		/// Calculate vectors forming the triangle
-		const glm::dvec3 edge1 = neighborPos1 - basePos;
-		const glm::dvec3 edge2 = neighborPos2 - basePos;
-
-		/// Calculate cross product
-		glm::dvec3 triangleNormal = glm::cross(edge1, edge2);
-
-		/// Check if this normal points in roughly the same direction as our position
-		/// If not, flip it to ensure consistent orientation
-		if (glm::dot(triangleNormal, desiredDirection) < 0.0f) {
-			triangleNormal = -triangleNormal;
-		}
-
-		/// Only add non-zero contributions
-		if (glm::length2(triangleNormal) > EPSILON) {
-			summedNormal += triangleNormal;
-		}
-	}
-
-	/// If we got a valid normal, normalize it
-	/// Otherwise, use normalized position as fallback
-	if (glm::length2(summedNormal) > EPSILON) {
-		this->normal = glm::normalize(summedNormal);
-
-		/// Double-check orientation
-		if (glm::dot(this->normal, desiredDirection) < 0.0f) {
-			this->normal = -this->normal;
-		}
-	} else {
-		this->normal = desiredDirection;
-		spdlog::info("Failed to calculate valid normal, falling back to normalized position");
-	}
-
-	spdlog::trace(
-		"Recalculated normal for vertex at position ({}, {}, {})",
-		this->position.x,
-		this->position.y,
-		this->position.z);
-}
-
 glm::dvec3 VertexData::calculateNormalFromFaces(
 	const std::vector<std::shared_ptr<Face>>& faces,
 	const std::vector<std::shared_ptr<VertexData>>& vertices) const {
@@ -240,14 +162,6 @@ glm::dvec3 VertexData::calculateNormalFromFaces(
 
 	/// Fallback to normalized position if no valid faces
 	return glm::normalize(this->position);
-}
-
-void VertexData::recalculateNormalFromFaces(
-	const std::vector<std::shared_ptr<Face>>& faces,
-	const std::vector<std::shared_ptr<VertexData>>& vertices) {
-
-	this->normal = this->calculateNormalFromFaces(faces, vertices);
-	this->normalDirty = false;
 }
 
 void VertexData::clearNeighbors() {
