@@ -126,7 +126,7 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->createSyncObjects();
 
 		/// Initialize camera with default position
-		this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 0.0f, 5.0f));
+		this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 0.0f, 10.0f));
 
 		spdlog::info("Renderer initialized successfully");
 		return true;
@@ -1041,14 +1041,15 @@ void Renderer::initializeScene() {
 
 	/// Add an icosphere to demonstrate spherical geometry
 	/// We place it at the center where it's easy to observe
+	const uint32_t levels = 1;
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
 	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
-		this->meshManager->createMesh<IcosphereMesh>(1.0f, 2));
+		this->meshManager->createMesh<IcosphereMesh>(1.0f, 6));
 	icosphereMesh->setMaterial(metallicMaterial);
 	// icosphereMesh->setMaterial(wireframeMaterial);
 
 	this->icosphere = std::make_shared<planet::PlanetData>();
-	icosphere->subdivide(2);
+	icosphere->subdivide(6);
 
 
 	planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
@@ -1104,31 +1105,31 @@ void Renderer::initializeScene() {
 
 	/// Add more cubes to better show lighting
 	/// Create a grid of cubes to demonstrate lighting from different angles
-	for (int x = -2; x <= 2; x++) {
-		for (int z = -2; z <= 2; z++) {
-			auto cubeNode = this->scene->createNode(
-				"GridCube_" + std::to_string(x) + "_" + std::to_string(z),
-				this->scene->getRoot()
-			);
-
-			auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-
-			/// Assign different materials based on position
-			/// This creates a checkerboard pattern of materials
-			if ((x + z) % 2 == 0) {
-				cubeMesh->setMaterial(redMaterial);
-			} else {
-				cubeMesh->setMaterial(blueMaterial);
-			}
-
-			cubeNode->setMesh(std::move(cubeMesh));
-
-			scene::Transform transform;
-			transform.position = glm::vec3(x * 2.0f, 0.0f, z * 2.0f);
-			transform.scale = glm::vec3(0.5f);
-			cubeNode->setLocalTransform(transform);
-		}
-	}
+	// for (int x = -2; x <= 2; x++) {
+	// 	for (int z = -2; z <= 2; z++) {
+	// 		auto cubeNode = this->scene->createNode(
+	// 			"GridCube_" + std::to_string(x) + "_" + std::to_string(z),
+	// 			this->scene->getRoot()
+	// 		);
+	//
+	// 		auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+	//
+	// 		/// Assign different materials based on position
+	// 		/// This creates a checkerboard pattern of materials
+	// 		if ((x + z) % 2 == 0) {
+	// 			cubeMesh->setMaterial(redMaterial);
+	// 		} else {
+	// 			cubeMesh->setMaterial(blueMaterial);
+	// 		}
+	//
+	// 		cubeNode->setMesh(std::move(cubeMesh));
+	//
+	// 		scene::Transform transform;
+	// 		transform.position = glm::vec3(x * 2.0f, 0.0f, z * 2.0f);
+	// 		transform.scale = glm::vec3(0.5f);
+	// 		cubeNode->setLocalTransform(transform);
+	// 	}
+	// }
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();

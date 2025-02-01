@@ -1,8 +1,9 @@
 #pragma once
 
 #include <array>
-#include <memory> /// Include for smart pointers
+#include <glm/vec3.hpp>
 #include <iostream>
+#include <memory> /// Include for smart pointers
 
 namespace lillugsi::planet {
 class Face {
@@ -40,6 +41,8 @@ public:
 	[[nodiscard]] std::shared_ptr<Face> getParent() const; /// Gets the parent, converting the weak pointer to a shared pointer
 	void setVertexIndices(const std::array<unsigned int, 3>& indices);
 	[[nodiscard]] std::array<unsigned int, 3> getVertexIndices() const;
+	[[nodiscard]] glm::vec3 getMidpoint() const { return this->midpoint; }
+	void calculateMidpoint(const std::vector<glm::vec3>& vertices);
 
 	[[nodiscard]] bool isLeaf() const { return this->leaf; };
 
@@ -54,6 +57,7 @@ private:
 	float data{0.0f};
 	std::array<unsigned int, 3> vertexIndices{{0, 0, 0}};
 	bool leaf{true};
+	glm::vec3 midpoint{0.0f};
 };
 
 class FaceVisitor {

@@ -2,6 +2,7 @@
 
 #include <glm/gtc/noise.hpp>
 #include <spdlog/spdlog.h>
+#include <cmath>
 
 namespace lillugsi::planet
 {
@@ -19,12 +20,14 @@ void TerrainGeneratorVisitor::visit(const std::shared_ptr<VertexData> vertex) {
 	const glm::vec3 position = glm::normalize(vertex->getPosition());
 
 	/// Generate base noise value
-	const float noiseValue = this->noise->GenSingle3D(position.x, position.y, position.z, this->settings.seed);
+	// const float noiseValue = this->noise->GenSingle3D(position.x, position.y, position.z, this->settings.seed);
+	const float noiseValue = sin(position.x * 8.0f) * sin(position.y * 8.0f) * sin(position.z * 8.0f);
+	// const float noiseValue = 1.5f;
 
 	/// Apply the noise value as an elevation change
 	/// The current elevation is preserved to allow for cumulative changes
 	const float newElevation = vertex->getElevation() + noiseValue;
-	vertex->setElevation(newElevation);
+	vertex->setElevation(noiseValue);
 
 	spdlog::debug("Applied elevation {} to vertex at position ({}, {}, {})",
 		newElevation, position.x, position.y, position.z);

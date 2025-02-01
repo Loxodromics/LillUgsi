@@ -71,7 +71,7 @@ private:
 	[[nodiscard]] float calculateDistanceToNeighbor(const VertexData& neighbor) const;
 
 	/// Physical properties
-	float elevation{0.0f};
+	float elevation{-2.0f};
 
 	/// Vector fields
 	glm::vec3 position;

@@ -18,6 +18,7 @@ public:
 	/// This structure contains all data needed to update a vertex's properties
 	/// We use this interface to decouple mesh updates from specific data sources
 	struct VertexTransform {
+		glm::vec3 oldPosition;
 		glm::vec3 position;  /// New vertex position
 		glm::vec3 normal;    /// New vertex normal
 		glm::vec3 color;     /// New vertex color
@@ -86,6 +87,8 @@ private:
 	/// @param index2 Second vertex index
 	/// @return Unique key for this edge
 	[[nodiscard]] static int64_t generateEdgeKey(uint32_t index1, uint32_t index2);
+
+	void debugVertexOutliers();
 
 	/// Cache for midpoint vertices during subdivision
 	/// The key is a 64-bit hash of the two vertex indices

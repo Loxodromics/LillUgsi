@@ -105,4 +105,11 @@ std::shared_ptr<Face> Face::getParent() const {
 std::array<unsigned int, 3> Face::getVertexIndices() const {
 	return this->vertexIndices;
 }
+
+void Face::calculateMidpoint(const std::vector<glm::vec3>& vertices) {
+		/// We calculate the midpoint by averaging all vertex positions
+		this->midpoint = (vertices[this->vertexIndices[0]] +
+						  vertices[this->vertexIndices[0]] +
+						  vertices[this->vertexIndices[0]]) / 3.0f;
+}
 } /// namespace lillugsi::planet

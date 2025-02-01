@@ -72,11 +72,20 @@ void PlanetData::applyVertexVisitor(VertexVisitor& visitor) const {
 
 std::shared_ptr<Face> PlanetData::getFaceAtPoint(const glm::vec3 &point) const {
 	glm::vec3 normalizedPoint = glm::normalize(point) * 2.0f;
+
 	for (const auto& baseFace : this->baseFaces) {
-		auto result = this->getFaceAtPointRecursive(baseFace, normalizedPoint);
-		if (result)
-			return result;
+		// Check if face is pointing roughly in the same direction as our point
+		// We use a dot product threshold slightly less than 0 to account for faces
+		// that might be partially visible from this direction
+		if (glm::dot(glm::normalize(baseFace->getMidpoint()), glm::normalize(normalizedPoint)) > -0.2f) {
+			auto result = this->getFaceAtPointRecursive(baseFace, normalizedPoint);
+			if (result)
+				return result;
+		}
+		else {
+		}
 	}
+	spdlog::warn("baseFaces test failed");
 	return nullptr;
 }
 
@@ -84,9 +93,9 @@ float PlanetData::getHeightAt(const glm::vec3& point) const {
 	/// First find which face contains this point
 	auto face = this->getFaceAtPoint(point);
 	if (!face) {
-		spdlog::warn("No face found for point ({}, {}, {})",
+		spdlog::warn("getHeightAt: No face found for point ({}, {}, {})",
 			point.x, point.y, point.z);
-		return 0.0f;
+		return this->getHeight2At(point);
 	}
 
 	/// Get vertex indices for this face
@@ -114,11 +123,29 @@ float PlanetData::getHeightAt(const glm::vec3& point) const {
 	return nearestElevation;
 }
 
+float PlanetData::getHeight2At(const glm::vec3& point) const {
+	float minDistance = std::numeric_limits<float>::max();
+	float nearestElevation = 0.0f;
+
+	for (const auto& vertex : this->vertices) {
+		float distance = glm::length(vertex->getPosition() - point);
+
+		if (distance < minDistance) {
+			minDistance = distance;
+			nearestElevation = vertex->getElevation();
+		}
+	}
+
+	spdlog::trace("Found height {} at point ({}, {}, {})",
+		nearestElevation, point.x, point.y, point.z);
+	return nearestElevation;
+}
+
 float PlanetData::getInterpolatedHeightAt(const glm::vec3& point) const {
 	/// Find containing face as before
 	auto face = this->getFaceAtPoint(point);
 	if (!face) {
-		spdlog::warn("No face found for point ({}, {}, {})",
+		spdlog::warn("getInterpolatedHeightAt: No face found for point ({}, {}, {})",
 			point.x, point.y, point.z);
 		return 0.0f;
 	}
@@ -241,6 +268,7 @@ std::shared_ptr<Face> PlanetData::addFace(const unsigned int v1, const unsigned 
 
 	/// Create and store the Face object
 	std::shared_ptr<Face> face = std::make_shared<Face>(std::array<unsigned int, 3>{v3, v2, v1});
+	face->calculateMidpoint(this->getVertices());
 	return face;
 }
 
@@ -607,7 +635,11 @@ void PlanetData::setNeighborsForFace(const std::shared_ptr<Face>& face) {
 }
 
 std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<Face> &face, const glm::vec3 &normalizedPoint) const {
-	if (!intersectsLine(face, glm::vec3(0,0,0), normalizedPoint)) {
+
+	/// Bend the test point slightly toward face midpoint
+	glm::vec3 bentPoint = glm::mix(glm::normalize(normalizedPoint), face->getMidpoint(), 0.01f) * 2.0f;
+
+	if (!intersectsLine(face, glm::vec3(0,0,0), bentPoint)) {
 		return nullptr;
 	}
 
@@ -619,7 +651,17 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 	/// Check children
 	for (const auto& child : face->getChildren()) {
 		if (child) {
-			auto result = this->getFaceAtPointRecursive(child, normalizedPoint);
+			auto result = this->getFaceAtPointRecursive(child, bentPoint);
+			if (result)
+				return result;
+		}
+	}
+
+	bentPoint = glm::mix(glm::normalize(normalizedPoint), face->getMidpoint(), 0.5f) * 2.0f;
+	/// Check children again
+	for (const auto& child : face->getChildren()) {
+		if (child) {
+			auto result = this->getFaceAtPointRecursive(child, bentPoint);
 			if (result)
 				return result;
 		}
@@ -627,11 +669,13 @@ std::shared_ptr<Face> PlanetData::getFaceAtPointRecursive(const std::shared_ptr<
 
 	/// This should not really happen, if this face interects and is no leaf, then one of the
 	/// children should intersect. But maybe due to limited float point precision this might happen
-	return face;
+	spdlog::warn("Face intersected but none of its children");
+	return nullptr;
 }
 
 bool PlanetData::intersectsLine(const std::shared_ptr<Face> &face, const glm::vec3 &lineStart,
 	const glm::vec3 &lineEnd) const {
+
 	/// Möller-Trumbore algorithm for intersecting line - triangle
 	/// Get the vertices of the face
 	std::array<unsigned int, 3> vertexIndices = face->getVertexIndices();

@@ -1,7 +1,14 @@
 #include "icospheremesh.h"
 #include "vulkan/vulkanexception.h"
-#include <spdlog/spdlog.h>
 #include <cmath>
+#include <glm/gtx/dual_quaternion.hpp>
+#include <spdlog/spdlog.h>
+
+bool compareVec3(const glm::vec3& v1, const glm::vec3& v2, float epsilon = 0.0001f) {
+	return std::abs(v1.x - v2.x) < epsilon &&
+		   std::abs(v1.y - v2.y) < epsilon &&
+		   std::abs(v1.z - v2.z) < epsilon;
+}
 
 namespace lillugsi::rendering {
 
@@ -57,14 +64,21 @@ void IcosphereMesh::applyVertexTransforms(const std::vector<VertexTransform>& tr
 		const auto& transform = transforms[i];
 		auto& vertex = this->vertices[i];
 
+		if (!compareVec3(vertex.position, transform.oldPosition)) {
+			spdlog::warn("We are not the same!");
+		}
+
 		vertex.position = transform.position;
 		vertex.normal = transform.normal;
 		vertex.color = transform.color;
 	}
+	// this->debugVertexOutliers();
+	// this->debugVertexOutliers();
 
 	/// Mark buffers as needing update since vertex data changed
 	/// This signals to the renderer that GPU buffers need rebuilding
 	this->markBuffersDirty();
+
 
 	spdlog::debug("Applied {} vertex transforms to icosphere", transforms.size());
 }
@@ -271,6 +285,44 @@ void IcosphereMesh::subdivide() {
 
 	spdlog::debug("Subdivision complete: {} vertices, {} triangles",
 		this->vertices.size(), this->indices.size() / 3);
+}
+
+void IcosphereMesh::debugVertexOutliers() {
+	spdlog::warn("debugVertexOutliers()");
+	const auto& indices = this->getIndices();
+	const auto& vertices = this->getVertices();
+
+	std::map<uint32_t, std::vector<uint32_t>> neighbors;
+	for (size_t i = 0; i < indices.size(); i += 3) {
+		for (int j = 0; j < 3; j++) {
+			uint32_t v1 = indices[i + j];
+			uint32_t v2 = indices[i + (j + 1) % 3];
+			neighbors[v1].push_back(v2);
+		}
+	}
+
+	float avgRadius = 0.0f;
+	for (const auto& vertex : vertices) {
+		avgRadius += glm::length(vertex.position);
+	}
+	avgRadius /= vertices.size();
+
+	for (const auto& [vertex, neighborList] : neighbors) {
+		float vertexRadius = glm::length(vertices[vertex].position);
+
+		float avgNeighborRadius = 0.0f;
+		for (uint32_t n : neighborList) {
+			avgNeighborRadius += glm::length(vertices[n].position);
+		}
+		avgNeighborRadius /= neighborList.size();
+
+		float radiusRatio = vertexRadius / avgNeighborRadius;
+		if (std::abs(vertexRadius - avgNeighborRadius) > 0.0025f) {
+			spdlog::warn("Vertex {} radius={} avg_neighbor_radius={} ratio={}",
+				vertex, vertexRadius, avgNeighborRadius, radiusRatio);
+			this->vertices[vertex].position = glm::normalize(vertices[vertex].position) * avgNeighborRadius;
+		}
+	}
 }
 
 } /// namespace lillugsi::rendering

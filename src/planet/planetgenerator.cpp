@@ -1,5 +1,6 @@
 #include "planetgenerator.h"
 #include "terraingeneratorvisitor.h"
+#include "heightdifferencevisitor.h"
 
 #include <spdlog/spdlog.h>
 
@@ -18,6 +19,9 @@ void PlanetGenerator::generateTerrain() const
 	/// This ensures our core data structure is updated first
 	TerrainGeneratorVisitor visitor(this->settings);
 	this->planetData->applyVertexVisitor(visitor);
+
+	// HeightDifferenceVisitor visitor2(0.01);
+	// this->planetData->applyVertexVisitor(visitor2);
 
 	/// Then update the mesh to reflect the changes
 	/// A separate update step allows for future optimizations
@@ -57,14 +61,34 @@ bool PlanetGenerator::updateMesh() const {
 	for (const auto& position : positions) {
 		rendering::IcosphereMesh::VertexTransform transform{};
 
+		transform.oldPosition = position;
+
 		/// Calculate new position based on elevation
-		const float elevation = this->planetData->getInterpolatedHeightAt(position);
+		const float elevation = this->planetData->getHeightAt(position);
 		transform.position = position  * (1.0f + elevation * 0.15f);
 
 		/// Calculate normal as normalized position
 		/// This creates smooth lighting across the sphere
 		/// Could be improved by calculating actual surface normal
+		glm::vec3 normal = this->planetData->getNormalAt(position);
+		glm::vec3 interpolatedNormal = this->planetData->getInterpolatedNormalAt(position);
+		glm::vec3 normalizedPostion = glm::normalize(transform.position);
+		// transform.normal = this->planetData->getNormalAt(position);
 		transform.normal = glm::normalize(transform.position);
+
+	// 	spdlog::debug("Normal comparison at position ({:.3f}, {:.3f}, {:.3f}):",
+	// position.x, position.y, position.z);
+	// 	spdlog::debug("\tNearest vertex normal:     ({:.3f}, {:.3f}, {:.3f})",
+	// 		normal.x, normal.y, normal.z);
+	// 	spdlog::debug("\tInterpolated normal:       ({:.3f}, {:.3f}, {:.3f})",
+	// 		interpolatedNormal.x, interpolatedNormal.y, interpolatedNormal.z);
+	// 	spdlog::debug("\tNormalized position:       ({:.3f}, {:.3f}, {:.3f})",
+	// 		normalizedPostion.x, normalizedPostion.y, normalizedPostion.z);
+	// 	spdlog::debug("\tDifference from position:  ({:.3f}, {:.3f}, {:.3f})",
+	// 		normal.x - normalizedPostion.x,
+	// 		normal.y - normalizedPostion.y,
+	// 		normal.z - normalizedPostion.z);
+
 
 		/// Set color based on elevation
 		/// Simple gradient from dark (low) to light (high)

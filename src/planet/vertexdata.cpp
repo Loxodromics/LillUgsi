@@ -166,7 +166,7 @@ void VertexData::recalculateNormal() {
 		}
 	} else {
 		this->normal = desiredDirection;
-		spdlog::warn("Failed to calculate valid normal, falling back to normalized position");
+		spdlog::info("Failed to calculate valid normal, falling back to normalized position");
 	}
 
 	spdlog::trace("Recalculated normal for vertex at position ({}, {}, {})",
