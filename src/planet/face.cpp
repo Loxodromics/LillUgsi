@@ -1,6 +1,7 @@
 #include "face.h"
 
 #include <spdlog/spdlog.h>
+#include <glm/glm.hpp>
 #include <cstddef>
 #include <iostream>
 
@@ -112,4 +113,27 @@ void Face::calculateMidpoint(const std::vector<glm::dvec3>& vertices) {
 						  vertices[this->vertexIndices[0]] +
 						  vertices[this->vertexIndices[0]]) / 3.0;
 }
+
+void Face::calculateNormal(const std::vector<glm::dvec3>& vertices) {
+	/// We calculate the face normal using cross product of two edges
+	/// This gives us a vector perpendicular to the face surface
+	const glm::dvec3& v0 = vertices[this->vertexIndices[0]];
+	const glm::dvec3& v1 = vertices[this->vertexIndices[1]];
+	const glm::dvec3& v2 = vertices[this->vertexIndices[2]];
+
+	/// Calculate edges from first vertex to others
+	const glm::dvec3 edge1 = v1 - v0;
+	const glm::dvec3 edge2 = v2 - v0;
+
+	/// Cross product gives us normal vector
+	/// Order matters for consistent outward-facing normals
+	this->normal = glm::normalize(glm::cross(edge1, edge2));
+
+	/// Ensure normal points outward from sphere center
+	/// We use the midpoint as a reference for orientation
+	if (glm::dot(this->normal, this->midpoint) < 0.0) {
+		this->normal = -this->normal;
+	}
+}
+
 } /// namespace lillugsi::planet

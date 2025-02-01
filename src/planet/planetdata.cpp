@@ -287,6 +287,7 @@ std::shared_ptr<Face> PlanetData::addFace(const unsigned int v1, const unsigned 
 	/// Create and store the Face object
 	std::shared_ptr<Face> face = std::make_shared<Face>(std::array<unsigned int, 3>{v3, v2, v1});
 	face->calculateMidpoint(this->getVertices());
+	face->calculateNormal(this->getVertices());
 	return face;
 }
 

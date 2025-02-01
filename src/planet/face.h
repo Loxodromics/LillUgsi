@@ -44,6 +44,14 @@ public:
 	[[nodiscard]] glm::dvec3 getMidpoint() const { return this->midpoint; }
 	void calculateMidpoint(const std::vector<glm::dvec3>& vertices);
 
+	/// Calculate and update the face normal using vertex positions
+	/// @param vertices Vector of vertex positions used for calculation
+	void calculateNormal(const std::vector<glm::dvec3>& vertices);
+
+	/// Get the current face normal
+	/// @return Normalized vector perpendicular to face surface
+	[[nodiscard]] glm::dvec3 getNormal() const { return this->normal; }
+
 	[[nodiscard]] bool isLeaf() const { return this->leaf; };
 
 private:
@@ -58,6 +66,7 @@ private:
 	std::array<unsigned int, 3> vertexIndices{{0, 0, 0}};
 	bool leaf{true};
 	glm::dvec3 midpoint{0.0f};
+	glm::dvec3 normal{0.0, 1.0, 0.0};
 };
 
 class FaceVisitor {
