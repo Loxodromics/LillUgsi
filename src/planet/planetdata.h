@@ -63,6 +63,8 @@ public:
 	/// @param vertexIndex Index of the vertex whose normals need updating
 	void updateNormalsForVertex(size_t vertexIndex);
 
+	void verifyNormalDirections() const;
+
 private:
 	/// Copy constructor
 	PlanetData(const PlanetData& other);

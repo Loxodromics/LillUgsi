@@ -207,7 +207,27 @@ glm::dvec3 PlanetData::getNormalAt(const glm::dvec3& point) const {
 	spdlog::trace("Found normal ({}, {}, {}) at point ({}, {}, {})",
 		nearestNormal.x, nearestNormal.y, nearestNormal.z,
 		point.x, point.y, point.z);
-	return nearestNormal * -1.0;
+	return nearestNormal;
+}
+
+void PlanetData::verifyNormalDirections() const {
+	for (const auto& vertex : this->vertices) {
+		const glm::dvec3 normalizedPos = glm::normalize(vertex->getPosition());
+		const double dotProduct = glm::dot(vertex->getNormal(), normalizedPos);
+
+		if (dotProduct < 0.0) {
+			spdlog::warn("Inward-facing normal detected at vertex {}", vertex->getIndex());
+			spdlog::warn("Position: ({}, {}, {})",
+				vertex->getPosition().x,
+				vertex->getPosition().y,
+				vertex->getPosition().z);
+			spdlog::warn("Normal: ({}, {}, {})",
+				vertex->getNormal().x,
+				vertex->getNormal().y,
+				vertex->getNormal().z);
+			spdlog::warn("Dot product with position: {}", dotProduct);
+		}
+	}
 }
 
 glm::dvec3 PlanetData::getNormalAtNearestVertex(const glm::dvec3& point) const {
