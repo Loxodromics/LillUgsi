@@ -289,15 +289,13 @@ glm::dvec3 PlanetData::getInterpolatedNormalAt(const glm::dvec3 &point) const {
 }
 
 void PlanetData::updateNormals() {
-	/// First update all face normals since vertex normals depend on them
-	for (const auto& face : this->baseFaces) {
-		face->calculateNormal(this->vertices);
-	}
 
 	/// Then update vertex normals
 	for (size_t i = 0; i < this->vertices.size(); ++i) {
 		this->updateNormalsForVertex(i);
 	}
+
+	// this->verifyNormalDirections();
 }
 
 void PlanetData::updateNormalsForVertex(size_t vertexIndex) {

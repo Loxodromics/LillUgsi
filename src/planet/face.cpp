@@ -136,6 +136,14 @@ void Face::calculateNormal(const std::vector<std::shared_ptr<VertexData>>& verti
 	/// Cross product gives us normal vector
 	/// Order matters for consistent outward-facing normals
 	this->normal = glm::normalize(glm::cross(edge1, edge2));
+
+	/// Ensure normal points outward by comparing with vertex positions
+	/// We can use any vertex since they should all point roughly outward
+	/// It seems on all even subdivision levels is our winding order wrong
+	const glm::dvec3& referencePos = vertices[this->vertexIndices[0]]->getPosition();
+	if (glm::dot(this->normal, glm::normalize(referencePos)) < 0.0) {
+		this->normal = -this->normal;
+	}
 }
 
 } /// namespace lillugsi::planet
