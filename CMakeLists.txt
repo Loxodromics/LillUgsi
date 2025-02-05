@@ -61,6 +61,7 @@ add_executable(LillUgsi
 		src/planet/noiseterrainvisitor.cpp
 		src/planet/planetgenerator.cpp
 		src/planet/terraingeneratorvisitor.cpp
+		src/rendering/terrainmaterial.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
@@ -80,5 +81,7 @@ add_custom_target(Shaders
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/pbr.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/pbr.frag.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/wireframe.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/wireframe.vert.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/wireframe.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/wireframe.frag.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/terrain.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/terrain.vert.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/terrain.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/terrain.frag.spv
 )
 add_dependencies(LillUgsi Shaders)

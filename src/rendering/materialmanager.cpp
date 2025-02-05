@@ -74,38 +74,62 @@ std::shared_ptr<CustomMaterial> MaterialManager::createCustomMaterial(
 	return material;
 }
 
-std::shared_ptr<WireframeMaterial> MaterialManager::createWireframeMaterial(
-	const std::string& name
-) {
+std::shared_ptr<WireframeMaterial> MaterialManager::createWireframeMaterial(const std::string &name) {
 	/// Check if material already exists
 	auto it = this->materials.find(name);
 	if (it != this->materials.end()) {
 		/// Try to cast existing material to PBRMaterial
 		auto wireframeMaterial = std::dynamic_pointer_cast<WireframeMaterial>(it->second);
 		if (wireframeMaterial) {
-			spdlog::debug("Returning existing PBR material '{}'", name);
+			spdlog::debug("Returning existing Wireframe material '{}'", name);
 			return wireframeMaterial;
 		}
 
 		/// Material exists but is not a PBR material
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
-			"Material '" + name + "' exists but is not a PBR material",
-			__FUNCTION__, __FILE__, __LINE__
-		);
+			"Material '" + name + "' exists but is not a Wireframe material",
+			__FUNCTION__,
+			__FILE__,
+			__LINE__);
 	}
 
 	/// Create new Wireframe material
-	auto material = std::make_shared<WireframeMaterial>(
-		this->device,
-		name,
-		this->physicalDevice
-	);
+	auto material = std::make_shared<WireframeMaterial>(this->device, name, this->physicalDevice);
 
 	/// Store in material map
 	this->materials[name] = material;
 
-	spdlog::info("Created new PBR material '{}'", name);
+	spdlog::info("Created new Wireframe material '{}'", name);
+	return material;
+}
+std::shared_ptr<TerrainMaterial> MaterialManager::createTerrainMaterial(const std::string &name) {
+	/// Check if material already exists
+	auto it = this->materials.find(name);
+	if (it != this->materials.end()) {
+		/// Try to cast existing material to PBRMaterial
+		auto terrainMaterial = std::dynamic_pointer_cast<TerrainMaterial>(it->second);
+		if (terrainMaterial) {
+			spdlog::debug("Returning existing Terrain material '{}'", name);
+			return terrainMaterial;
+		}
+
+		/// Material exists but is not a PBR material
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Material '" + name + "' exists but is not a Terrain material",
+			__FUNCTION__,
+			__FILE__,
+			__LINE__);
+	}
+
+	/// Create new Terrain material
+	auto material = std::make_shared<TerrainMaterial>(this->device, name, this->physicalDevice);
+
+	/// Store in material map
+	this->materials[name] = material;
+
+	spdlog::info("Created new Terrain material '{}'", name);
 	return material;
 }
 

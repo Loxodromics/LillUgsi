@@ -4,6 +4,7 @@
 #include "pbrmaterial.h"
 #include "custommaterial.h"
 #include "wireframematerial.h"
+#include "terrainmaterial.h"
 #include "vulkan/vulkanwrappers.h"
 #include <string>
 #include <memory>
@@ -52,6 +53,12 @@ public:
 	/// @param name Unique identifier for the material
 	/// @return Shared pointer to the created or existing material
 	[[nodiscard]] std::shared_ptr<WireframeMaterial> createWireframeMaterial(const std::string& name);
+
+	/// Create a new Terrain material
+	/// If a material with the given name already exists, it will be returned
+	/// @param name Unique identifier for the material
+	/// @return Shared pointer to the created or existing material
+	[[nodiscard]] std::shared_ptr<TerrainMaterial> createTerrainMaterial(const std::string& name);
 
 	/// Get a material by name
 	/// @param name The name of the material to retrieve
