@@ -11,7 +11,7 @@ namespace lillugsi::planet {
 class PlanetGenerator {
 public:
 	struct GeneratorSettings {
-		float baseFrequency{0.1f};
+		float baseFrequency{2.0f};
 		float amplitude{1.0f};
 		uint32_t octaves{4};
 		float persistence{0.5f};

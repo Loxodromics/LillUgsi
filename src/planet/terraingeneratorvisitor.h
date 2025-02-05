@@ -19,7 +19,8 @@ private:
 
 
 	PlanetGenerator::GeneratorSettings settings;
-	FastNoise::SmartNode<> noise;
+	FastNoise::SmartNode<FastNoise::FractalFBm> terrainNoise;
+	FastNoise::SmartNode<FastNoise::FractalFBm> terrainTypeNoise;
 };
 
 } /// namespace lillugsi::planet

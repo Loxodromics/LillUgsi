@@ -1044,12 +1044,12 @@ void Renderer::initializeScene() {
 	const uint32_t levels = 1;
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
 	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
-		this->meshManager->createMesh<IcosphereMesh>(1.0f, 6));
+		this->meshManager->createMesh<IcosphereMesh>(1.0f, 4));
 	icosphereMesh->setMaterial(metallicMaterial);
 	// icosphereMesh->setMaterial(wireframeMaterial);
 
 	this->icosphere = std::make_shared<planet::PlanetData>();
-	icosphere->subdivide(6);
+	icosphere->subdivide(4);
 
 
 	planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);

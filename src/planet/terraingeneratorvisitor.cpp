@@ -1,14 +1,29 @@
 #include "terraingeneratorvisitor.h"
 
-#include <glm/gtc/noise.hpp>
 #include <spdlog/spdlog.h>
-#include <cmath>
 
 namespace lillugsi::planet
 {
 TerrainGeneratorVisitor::TerrainGeneratorVisitor(const PlanetGenerator::GeneratorSettings& settings)
 	: settings(settings) {
-	this->noise = FastNoise::New<FastNoise::Simplex>();
+
+	this->terrainNoise = FastNoise::New<FastNoise::FractalFBm>();
+	const auto terrainNoiseSource = FastNoise::New<FastNoise::Simplex>();
+	this->terrainNoise->SetSource(terrainNoiseSource);
+	this->terrainNoise->SetOctaveCount( 7 );
+	this->terrainNoise->SetLacunarity(2.0);
+	this->terrainNoise->SetGain(0.5);
+	this->terrainNoise->SetWeightedStrength(0.0);
+
+	auto terrainTypeNoiseSource = FastNoise::New<FastNoise::Simplex>();
+	this->terrainTypeNoise = FastNoise::New<FastNoise::FractalFBm>();
+	this->terrainTypeNoise->SetSource(terrainNoiseSource); /// Do I need two different soruces?
+	this->terrainTypeNoise->SetSource(terrainNoiseSource);
+	this->terrainTypeNoise->SetOctaveCount( 7 );
+	this->terrainTypeNoise->SetLacunarity(2.0);
+	this->terrainTypeNoise->SetGain(0.5);
+	this->terrainTypeNoise->SetWeightedStrength(0.07f);
+
 }
 
 void TerrainGeneratorVisitor::visit(const std::shared_ptr<VertexData> vertex) {
@@ -31,10 +46,20 @@ void TerrainGeneratorVisitor::visit(const std::shared_ptr<VertexData> vertex) {
 }
 
 double TerrainGeneratorVisitor::generateNoiseValue(const glm::dvec3& position) const {
-	/// Generate base noise value
-	// const float noiseValue = sin(position.x * 8.0f) * sin(position.y * 8.0f) * sin(position.z * 8.0f);
-	// const float noiseValue = 1.5f;
-	const double noiseValue = this->noise->GenSingle3D(position.x, position.y, position.z, this->settings.seed);
+
+	const float terrainTypeValue = this->terrainTypeNoise->GenSingle3D(
+	static_cast<float>(position.x * this->settings.baseFrequency),
+	static_cast<float>(position.y * this->settings.baseFrequency),
+	static_cast<float>(position.z * this->settings.baseFrequency),
+	this->settings.seed + 100);
+
+	this->terrainNoise->SetGain(terrainTypeValue * 0.60f + 0.1f);
+
+	const double noiseValue = this->terrainNoise->GenSingle3D(
+		static_cast<float>(position.x * this->settings.baseFrequency),
+		static_cast<float>(position.y * this->settings.baseFrequency),
+		static_cast<float>(position.z * this->settings.baseFrequency),
+		this->settings.seed);
 	return noiseValue;
 }
 
