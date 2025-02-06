@@ -70,19 +70,25 @@ vec4 calculateBiomeColor(float height) {
 		/// We use smoothstep for smooth transitions at biome boundaries
 		float weight = 1.0;
 
-		/// Fade in at minimum height
-		weight *= smoothstep(
-		biome.minHeight - 0.02,  /// Add small overlap for smoother transition
-		biome.minHeight + 0.02,
-		height
-		);
+		/// For all biomes, blend with previous if available
+		if (i > 0) {
+			BiomeParameters prevBiome = material.biomes[i - 1];
+			weight *= smoothstep(
+			biome.minHeight,
+			prevBiome.maxHeight,
+			height
+			);
+		}
 
-		/// Fade out at maximum height
-		weight *= 1.0 - smoothstep(
-		biome.maxHeight - 0.02,
-		biome.maxHeight + 0.02,
-		height
-		);
+		/// For all biomes, blend with next if available
+		if (i < 3) {
+			BiomeParameters nextBiome = material.biomes[i + 1];
+			weight *= 1.0 - smoothstep(
+			nextBiome.minHeight,
+			biome.maxHeight,
+			height
+			);
+		}
 
 		/// Accumulate weighted colors
 		finalColor += biome.color * weight;
@@ -91,6 +97,7 @@ vec4 calculateBiomeColor(float height) {
 
 	/// Normalize the result
 	/// This ensures we always get a valid color even with overlapping biomes
+	/// Put pink on error
 	return totalWeight > 0.0 ? finalColor / totalWeight : vec4(1.0, 0.0, 1.0, 1.0);
 }
 
