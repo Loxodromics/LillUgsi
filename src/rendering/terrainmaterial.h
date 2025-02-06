@@ -16,12 +16,9 @@ public:
 	/// This matches the layout expected by our shaders and ensures
 	/// proper memory alignment for uniform buffers
 	struct BiomeParameters {
-		alignas(16) glm::vec4 color;        // 16 bytes
-		alignas(16) struct {                // Next 16-byte block
-			float minHeight;                // 4 bytes
-			float maxHeight;                // 4 bytes
-			float padding[2];               // 8 bytes to complete 16
-		};
+		alignas(16) glm::vec4 color;
+		alignas(16) float minHeight;    // On its own 16-byte boundary
+		float maxHeight;
 	};
 
 	/// Main properties structure for GPU upload

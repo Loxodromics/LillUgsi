@@ -27,7 +27,6 @@ struct BiomeParameters {
 	vec4 color;           /// Base color of the biome
 	float minHeight;      /// Height where biome starts
 	float maxHeight;      /// Height where biome ends
-	float padding[2];     /// Keeps alignment with CPU struct
 };
 
 /// Terrain material properties (set = 2)
