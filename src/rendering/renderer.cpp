@@ -1289,28 +1289,6 @@ void Renderer::initializeMaterials() {
 	/// We create this with its own unique name for easy reference
 	auto terrainMaterial = this->materialManager->createTerrainMaterial("planetTerrain");
 
-	/// Configure biome parameters
-	/// We set up a basic Earth-like gradient of biomes
-	terrainMaterial->setBiome(0,
-		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),  /// Deep ocean blue
-		0.0f, 0.4f                           /// Lower 40% is ocean
-	);
-
-	terrainMaterial->setBiome(1,
-		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),  /// Sandy beaches
-		0.38f, 0.5f                          /// Small beach band with overlap
-	);
-
-	terrainMaterial->setBiome(2,
-		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),  /// Green midlands
-		0.48f, 0.7f                          /// Main terrain band
-	);
-
-	terrainMaterial->setBiome(3,
-		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f),  /// Snowy peaks
-		0.68f, 1.0f                             /// Upper peaks with overlap
-	);
-
 	/// Set the planet's base radius
 	/// This should match the radius used in IcosphereMesh
 	terrainMaterial->setPlanetRadius(2.9f);

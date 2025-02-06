@@ -19,18 +19,18 @@ TerrainMaterial::TerrainMaterial(
 	this->properties.biomes[0] = {
 		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),  /// Deep blue for oceans
 		0.0f,                                /// Start at lowest point
-		0.4f                                 /// Up to 40% height
+		0.50f                                 /// Up to 40% height
 	};
 
 	this->properties.biomes[1] = {
 		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),  /// Sandy color for beaches/lowlands
-		0.38f,                               /// Slight overlap for smooth transition
-		0.5f
+		0.35f,                               /// Slight overlap for smooth transition
+		0.505f
 	};
 
 	this->properties.biomes[2] = {
 		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),  /// Green for midlands
-		0.48f,                               /// Overlap for transition
+		0.495f,                               /// Overlap for transition
 		0.7f
 	};
 
