@@ -1,8 +1,10 @@
 #include "renderer.h"
 #include "rendering/cubemesh.h"
 #include "rendering/icospheremesh.h"
+#include "terrainmaterial.h"
 #include "vulkan/indexbuffer.h"
 #include "vulkan/vertexbuffer.h"
+
 #include <SDL3/SDL_vulkan.h>
 #include <fstream>
 #include <glm/gtc/matrix_transform.hpp>
@@ -1039,13 +1041,21 @@ void Renderer::initializeScene() {
 
 	auto wireframeMaterial = this->materialManager->createWireframeMaterial("wireframe");
 
+	/// Get our terrain material
+	auto terrainMaterial = this->materialManager->getMaterial("planetTerrain");
+	/// Set the planet's base radius
+	/// This should match the radius used in TerrainMaterial
+	float planetRadius = 2.9f;
+	// std::static_pointer_cast<TerrainMaterial>(terrainMaterial)->setPlanetRadius(planetRadius);
+
 	/// Add an icosphere to demonstrate spherical geometry
 	/// We place it at the center where it's easy to observe
 	const uint32_t levels = 1;
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
 	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
 		this->meshManager->createMesh<IcosphereMesh>(1.0f, 4));
-	icosphereMesh->setMaterial(metallicMaterial);
+	icosphereMesh->setMaterial(terrainMaterial);
+	// icosphereMesh->setMaterial(metallicMaterial);
 	// icosphereMesh->setMaterial(wireframeMaterial);
 
 	this->icosphere = std::make_shared<planet::PlanetData>();
@@ -1063,7 +1073,7 @@ void Renderer::initializeScene() {
 	/// This makes it easier to see its relationship to other objects
 	scene::Transform icosphereTransform;
 	icosphereTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	icosphereTransform.scale = glm::vec3(2.9f);
+	icosphereTransform.scale = glm::vec3(planetRadius);
 	icosphereNode->setLocalTransform(icosphereTransform);
 
 	/// Create a node for our test cube
@@ -1271,6 +1281,46 @@ void Renderer::initializeMaterials() {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
 			"Failed to create pipeline for wireframe material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create terrain material for planet visualization
+	/// We create this with its own unique name for easy reference
+	auto terrainMaterial = this->materialManager->createTerrainMaterial("planetTerrain");
+
+	/// Configure biome parameters
+	/// We set up a basic Earth-like gradient of biomes
+	terrainMaterial->setBiome(0,
+		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),  /// Deep ocean blue
+		0.0f, 0.4f                           /// Lower 40% is ocean
+	);
+
+	terrainMaterial->setBiome(1,
+		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),  /// Sandy beaches
+		0.38f, 0.5f                          /// Small beach band with overlap
+	);
+
+	terrainMaterial->setBiome(2,
+		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),  /// Green midlands
+		0.48f, 0.7f                          /// Main terrain band
+	);
+
+	terrainMaterial->setBiome(3,
+		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f),  /// Snowy peaks
+		0.68f, 1.0f                             /// Upper peaks with overlap
+	);
+
+	/// Set the planet's base radius
+	/// This should match the radius used in IcosphereMesh
+	terrainMaterial->setPlanetRadius(2.9f);
+
+	/// Create pipeline for terrain material
+	auto terrainPipeline = this->pipelineManager->createPipeline(*terrainMaterial);
+	if (!terrainPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for terrain material",
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}
