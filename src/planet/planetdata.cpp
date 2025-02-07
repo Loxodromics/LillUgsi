@@ -282,13 +282,19 @@ glm::dvec3 PlanetData::getInterpolatedNormalAt(const glm::dvec3 &point) const {
 	const double length = glm::length(interpolatedNormal);
 	if (length > EPSILON) {
 		return interpolatedNormal / length;
-	} else {
+	}
+	else {
 		spdlog::warn("Generated zero-length interpolated normal, falling back to up vector");
 		return normalize(point);
 	}
 }
 
 void PlanetData::updateNormals() {
+	for (const auto& face : this->faces) {
+		if (face->isLeaf()) {
+			face->calculateNormal(this->vertices);
+		}
+	}
 
 	/// Then update vertex normals
 	for (size_t i = 0; i < this->vertices.size(); ++i) {
@@ -300,7 +306,8 @@ void PlanetData::updateNormals() {
 
 void PlanetData::updateNormalsForVertex(size_t vertexIndex) {
 	auto vertex = this->vertices[vertexIndex];
-	if (!vertex) return;
+	if (!vertex)
+		return;
 
 	/// Get all faces that contain this vertex
 	const auto faces = this->getFacesForVertex(vertexIndex);
@@ -328,7 +335,8 @@ std::shared_ptr<Face> PlanetData::addFace(const unsigned int v1, const unsigned 
 	/// Create and store the Face object
 	std::shared_ptr<Face> face = std::make_shared<Face>(std::array<unsigned int, 3>{v3, v2, v1});
 	face->calculateMidpoint(this->getVertices());
-	face->calculateNormal(this->vertices);
+	this->faces.push_back(face);
+
 	return face;
 }
 

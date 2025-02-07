@@ -117,6 +117,7 @@ private:
 	std::vector<unsigned int> indices;
 	std::map<std::pair<unsigned int, unsigned int>, unsigned int> midpointIndexCache;
 	std::vector<std::shared_ptr<Face>> baseFaces;
+	std::vector<std::shared_ptr<Face>> faces;
 
 	static constexpr double EPSILON = 0.0000001;
 };
