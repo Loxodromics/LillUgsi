@@ -17,8 +17,10 @@ public:
 	/// proper memory alignment for uniform buffers
 	struct BiomeParameters {
 		alignas(16) glm::vec4 color;
-		alignas(16) float minHeight;    // On its own 16-byte boundary
+		alignas(16) float minHeight;    /// On its own 16-byte boundary
 		float maxHeight;
+		float maxSteepness;   /// Maximum steepness where this biome can appear
+		float roughness;      /// Surface roughness for this biome
 	};
 
 	/// Main properties structure for GPU upload

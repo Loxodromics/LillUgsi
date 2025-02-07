@@ -16,28 +16,38 @@ TerrainMaterial::TerrainMaterial(
 	/// Initialize default biome parameters
 	/// We start with a simple height-based gradient from ocean to mountains
 	/// These defaults provide a basic visualization for testing
+	/// Initialize default biome parameters
+	/// We set up a basic Earth-like gradient with steepness constraints
 	this->properties.biomes[0] = {
-		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),  /// Deep blue for oceans
+		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),  /// Deep ocean blue
 		0.0f,                                /// Start at lowest point
-		0.50f                                 /// Up to 40% height
+		0.45f,                               /// Up to 45% height
+		1.0f,                                /// Water appears only on any steepness until we have removed the elevation for water
+		0.1f                                 /// Smooth water surface
 	};
 
 	this->properties.biomes[1] = {
-		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),  /// Sandy color for beaches/lowlands
-		0.35f,                               /// Slight overlap for smooth transition
-		0.505f
+		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),  /// Sandy beaches
+		0.38f,                              /// Slight overlap with water
+		0.5f,                               /// Up to midlands
+		0.4f,                               /// Beaches form on moderate slopes
+		0.7f                                /// Rough sandy texture
 	};
 
 	this->properties.biomes[2] = {
-		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),  /// Green for midlands
-		0.495f,                               /// Overlap for transition
-		0.7f
+		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),  /// Green midlands
+		0.48f,                              /// Overlap with beaches
+		0.7f,                               /// Up to mountain zone
+		0.6f,                               /// Grass grows on most slopes
+		0.5f                                /// Medium roughness
 	};
 
 	this->properties.biomes[3] = {
-		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f),  /// White for mountain peaks
-		0.68f,                                  /// Overlap for transition
-		1.0f
+		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f), /// Snow peaks
+		0.68f,                                /// Overlap with midlands
+		1.0f,                                 /// Up to highest point
+		0.4f,                                 /// Snow only accumulates on gentler slopes
+		0.66f                                 /// Fairly smooth snow surface
 	};
 
 	/// Set default planet radius

@@ -4,6 +4,7 @@
 layout(location = 0) in vec3 fragPosition;  /// World-space position
 layout(location = 1) in vec3 fragNormal;    /// World-space normal
 layout(location = 2) in float fragHeight;   /// Normalized height value
+layout(location = 3) in float fragSteepness; /// Terrain steepness
 
 /// Output color
 layout(location = 0) out vec4 outColor;
@@ -27,6 +28,8 @@ struct BiomeParameters {
 	vec4 color;           /// Base color of the biome
 	float minHeight;      /// Height where biome starts
 	float maxHeight;      /// Height where biome ends
+	float maxSteepness;   /// Maximum steepness where this biome can appear
+	float roughness;      /// Surface roughness for this biome
 };
 
 /// Terrain material properties (set = 2)
@@ -56,9 +59,9 @@ vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 baseColor) {
 	return baseColor * (ambient + diffuse);
 }
 
-/// Calculate biome color based on height
+/// Calculate biome color based on height including steepness influence
 /// We smoothly interpolate between biomes to avoid hard transitions
-vec4 calculateBiomeColor(float height) {
+vec4 calculateBiomeColor(float height, float steepness) {
 	vec4 finalColor = vec4(0.0);
 	float totalWeight = 0.0;
 
@@ -70,6 +73,7 @@ vec4 calculateBiomeColor(float height) {
 		/// We use smoothstep for smooth transitions at biome boundaries
 		float weight = 1.0;
 
+		/// Apply height-based weighting
 		/// For all biomes, blend with previous if available
 		if (i > 0) {
 			BiomeParameters prevBiome = material.biomes[i - 1];
@@ -90,15 +94,27 @@ vec4 calculateBiomeColor(float height) {
 			);
 		}
 
-		/// Accumulate weighted colors
+		/// Apply steepness influence
+		/// We gradually reduce the biome's influence as steepness increases beyond its maximum
+		/// This creates natural-looking rock faces on steep slopes
+		float steepnessWeight = 1.0 - smoothstep(
+		biome.maxSteepness * 0.8, /// Start transition at 80% of max steepness
+		biome.maxSteepness,       /// Complete transition at max steepness
+		steepness
+		);
+		weight *= steepnessWeight;
+
 		finalColor += biome.color * weight;
 		totalWeight += weight;
 	}
 
-	/// Normalize the result
-	/// This ensures we always get a valid color even with overlapping biomes
-	/// Put pink on error
-	return totalWeight > 0.0 ? finalColor / totalWeight : vec4(1.0, 0.0, 1.0, 1.0);
+	/// If no biome has influence, show rock color
+	/// This ensures steep cliffs look like bare rock
+	if (totalWeight < 0.01) {
+		return vec4(0.5, 0.48, 0.45, 1.0); /// Granite-like color for rock faces
+	}
+
+	return finalColor / totalWeight;
 }
 
 void main() {
@@ -106,7 +122,7 @@ void main() {
 	vec3 normal = normalize(fragNormal);
 
 	/// Get the base color from biome calculation
-	vec4 biomeColor = calculateBiomeColor(fragHeight);
+	vec4 biomeColor = calculateBiomeColor(fragHeight, fragSteepness);
 
 	vec3 finalColor = vec3(0.0);
 

@@ -10,6 +10,8 @@ layout(location = 2) in vec3 inColor;    /// R channel contains height data (R8 
 layout(location = 0) out vec3 fragPosition;  /// World-space position for later use
 layout(location = 1) out vec3 fragNormal;    /// World-space normal for lighting
 layout(location = 2) out float fragHeight;   /// Normalized height for biome selection
+layout(location = 3) out float fragSteepness; /// Terrain steepness (0 = flat, 1 = vertical)
+
 
 /// Camera uniform buffer (set = 0)
 /// We keep camera data in its own descriptor set for potential multi-view rendering
@@ -47,10 +49,19 @@ void main() {
 	/// Pass world-space position to fragment shader
 	fragPosition = worldPos.xyz;
 
-	/// Transform normal to world space
+	/// Transform normal to world space and normalize
 	/// We use the inverse transpose of the model matrix to handle non-uniform scaling
 	mat3 normalMatrix = transpose(inverse(mat3(push.model)));
 	fragNormal = normalize(normalMatrix * inNormal);
+
+	/// Calculate steepness from the normal
+	/// We compare the normal to the "up" direction of the planet (normalized position)
+	/// A dot product of 1 means flat terrain, 0 means vertical cliff
+	vec3 up = normalize(inPosition.xyz);
+	float alignment = abs(dot(fragNormal, up));
+	/// Convert alignment to steepness (1 - alignment gives us 0 for flat, 1 for vertical)
+	/// Tweaking factor in the end
+	fragSteepness = (1.0 - alignment) * 0.8;
 
 	/// Extract height from vertex color's red channel
 	/// For now, we use R8 format (0-255 mapped to 0-1)
