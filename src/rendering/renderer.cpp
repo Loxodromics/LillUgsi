@@ -1046,14 +1046,14 @@ void Renderer::initializeScene() {
 	/// Set the planet's base radius
 	/// This should match the radius used in TerrainMaterial
 	float planetRadius = 2.9f;
+	const uint32_t levels = 1;
 	// std::static_pointer_cast<TerrainMaterial>(terrainMaterial)->setPlanetRadius(planetRadius);
 
 	/// Add an icosphere to demonstrate spherical geometry
 	/// We place it at the center where it's easy to observe
-	const uint32_t levels = 1;
 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
 	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
-		this->meshManager->createMesh<IcosphereMesh>(1.0f, 4));
+		this->meshManager->createMesh<IcosphereMesh>(2.9f, 4));
 	icosphereMesh->setMaterial(terrainMaterial);
 	// icosphereMesh->setMaterial(metallicMaterial);
 	// icosphereMesh->setMaterial(wireframeMaterial);
@@ -1073,45 +1073,45 @@ void Renderer::initializeScene() {
 	/// This makes it easier to see its relationship to other objects
 	scene::Transform icosphereTransform;
 	icosphereTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	icosphereTransform.scale = glm::vec3(planetRadius);
+	// icosphereTransform.scale = glm::vec3(planetRadius);
 	icosphereNode->setLocalTransform(icosphereTransform);
 
-	/// Create a node for our test cube
-	auto cubeNode = this->scene->createNode("TestCube", rootNode);
-
-	/// Create and set up the cube mesh using MeshManager
-	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-
-	/// Set the material before adding to scene
-	cubeMesh->setMaterial(defaultMaterial);
-	cubeNode->setMesh(std::move(cubeMesh));
-
-	/// Position the cube slightly offset from center
-	scene::Transform transform;
-	transform.position = glm::vec3(-1.0f, -1.0f, -1.0f);
-	cubeNode->setLocalTransform(transform);
-
-	/// Create a second cube for testing hierarchical transforms
-	auto cubeNode2 = this->scene->createNode("TestCube2", rootNode);
-	auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
-
-	/// Set the material before adding to scene
-	cubeMesh2->setMaterial(defaultMaterial);
-	cubeNode2->setMesh(std::move(cubeMesh2));
-
-	/// Position the second cube offset from the first
-	scene::Transform transform2;
-	transform2.position = glm::vec3(1.5f, 1.5f, 1.5f);
-	cubeNode2->setLocalTransform(transform2);
-
-	/// For the grid of cubes, create some varied materials
-	auto redMaterial = this->materialManager->createPBRMaterial("red");
-	redMaterial->setBaseColor(glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
-	redMaterial->setRoughness(0.7f);
-
-	auto blueMaterial = this->materialManager->createPBRMaterial("blue");
-	blueMaterial->setBaseColor(glm::vec4(0.2f, 0.2f, 1.0f, 1.0f));
-	blueMaterial->setMetallic(0.8f);
+	// /// Create a node for our test cube
+	// auto cubeNode = this->scene->createNode("TestCube", rootNode);
+	//
+	// /// Create and set up the cube mesh using MeshManager
+	// auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+	//
+	// /// Set the material before adding to scene
+	// cubeMesh->setMaterial(defaultMaterial);
+	// cubeNode->setMesh(std::move(cubeMesh));
+	//
+	// /// Position the cube slightly offset from center
+	// scene::Transform transform;
+	// transform.position = glm::vec3(-1.0f, -1.0f, -1.0f);
+	// cubeNode->setLocalTransform(transform);
+	//
+	// /// Create a second cube for testing hierarchical transforms
+	// auto cubeNode2 = this->scene->createNode("TestCube2", rootNode);
+	// auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
+	//
+	// /// Set the material before adding to scene
+	// cubeMesh2->setMaterial(defaultMaterial);
+	// cubeNode2->setMesh(std::move(cubeMesh2));
+	//
+	// /// Position the second cube offset from the first
+	// scene::Transform transform2;
+	// transform2.position = glm::vec3(1.5f, 1.5f, 1.5f);
+	// cubeNode2->setLocalTransform(transform2);
+	//
+	// /// For the grid of cubes, create some varied materials
+	// auto redMaterial = this->materialManager->createPBRMaterial("red");
+	// redMaterial->setBaseColor(glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
+	// redMaterial->setRoughness(0.7f);
+	//
+	// auto blueMaterial = this->materialManager->createPBRMaterial("blue");
+	// blueMaterial->setBaseColor(glm::vec4(0.2f, 0.2f, 1.0f, 1.0f));
+	// blueMaterial->setMetallic(0.8f);
 
 	/// Add more cubes to better show lighting
 	/// Create a grid of cubes to demonstrate lighting from different angles
