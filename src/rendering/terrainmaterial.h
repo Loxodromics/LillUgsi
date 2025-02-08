@@ -17,10 +17,12 @@ public:
 	/// proper memory alignment for uniform buffers
 	struct BiomeParameters {
 		alignas(16) glm::vec4 color;
-		alignas(16) float minHeight;    /// On its own 16-byte boundary
+		alignas(16) glm::vec4 cliffColor;    /// Color for steep areas of this biome
+		alignas(16) float minHeight;
 		float maxHeight;
-		float maxSteepness;   /// Maximum steepness where this biome can appear
-		float roughness;      /// Surface roughness for this biome
+		float maxSteepness;    /// Maximum steepness where this biome can appear
+		float cliffThreshold;  /// When to start blending in cliff material
+		float roughness;       /// Surface roughness for this biome
 	};
 
 	/// Main properties structure for GPU upload
@@ -30,7 +32,8 @@ public:
 	struct Properties {
 		BiomeParameters biomes[4];        /// Fixed array for initial implementation
 		float planetRadius;               /// Used to calculate proper height ranges
-		float padding[3];                 /// Maintain GPU alignment
+		uint32_t numBiomes;               /// Actual number of biomes in use
+		float padding[2];                 /// Maintain GPU alignment
 	};
 
 	/// Create a new terrain material

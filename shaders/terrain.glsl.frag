@@ -26,9 +26,11 @@ layout(set = 1, binding = 0) uniform LightBuffer {
 /// Matches BiomeParameters in TerrainMaterial class
 struct BiomeParameters {
 	vec4 color;           /// Base color of the biome
+	vec4 cliffColor;      /// Color for steep areas of this biome
 	float minHeight;      /// Height where biome starts
 	float maxHeight;      /// Height where biome ends
 	float maxSteepness;   /// Maximum steepness where this biome can appear
+	float cliffThreshold; /// When to start blending in cliff material
 	float roughness;      /// Surface roughness for this biome
 };
 
@@ -37,7 +39,8 @@ struct BiomeParameters {
 layout(set = 2, binding = 0) uniform TerrainMaterialUBO {
 	BiomeParameters biomes[4];  /// Array of biome definitions
 	float planetRadius;         /// Base radius for calculations
-	float padding[3];           /// Keeps alignment with CPU struct
+	uint numBiomes;             /// Number of active biomes
+	float padding[2];           /// Keeps alignment with CPU struct
 } material;
 
 /// Calculate contribution from a single directional light
@@ -59,22 +62,22 @@ vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 baseColor) {
 	return baseColor * (ambient + diffuse);
 }
 
-/// Calculate biome color based on height including steepness influence
-/// We smoothly interpolate between biomes to avoid hard transitions
+/// Calculate biome color based on height and steepness
+/// We blend between normal and cliff colors based on terrain steepness
+/// and smoothly interpolate between biomes to avoid hard transitions
 vec4 calculateBiomeColor(float height, float steepness) {
 	vec4 finalColor = vec4(0.0);
 	float totalWeight = 0.0;
 
-	/// Calculate contribution from each biome
-	for (int i = 0; i < 4; i++) {
+	/// Calculate contribution from each active biome
+	for (uint i = 0; i < material.numBiomes; i++) {
 		BiomeParameters biome = material.biomes[i];
 
 		/// Calculate how much this height belongs to this biome
 		/// We use smoothstep for smooth transitions at biome boundaries
 		float weight = 1.0;
 
-		/// Apply height-based weighting
-		/// For all biomes, blend with previous if available
+		/// Handle height-based blending between biomes
 		if (i > 0) {
 			BiomeParameters prevBiome = material.biomes[i - 1];
 			weight *= smoothstep(
@@ -84,8 +87,7 @@ vec4 calculateBiomeColor(float height, float steepness) {
 			);
 		}
 
-		/// For all biomes, blend with next if available
-		if (i < 3) {
+		if (i < material.numBiomes - 1) {
 			BiomeParameters nextBiome = material.biomes[i + 1];
 			weight *= 1.0 - smoothstep(
 			nextBiome.minHeight,
@@ -94,27 +96,23 @@ vec4 calculateBiomeColor(float height, float steepness) {
 			);
 		}
 
-		/// Apply steepness influence
-		/// We gradually reduce the biome's influence as steepness increases beyond its maximum
-		/// This creates natural-looking rock faces on steep slopes
-		float steepnessWeight = 1.0 - smoothstep(
-		biome.maxSteepness * 0.8, /// Start transition at 80% of max steepness
-		biome.maxSteepness,       /// Complete transition at max steepness
+		/// Calculate cliff blend based on steepness
+		/// This determines how much of the cliff color to show
+		float cliffBlend = smoothstep(
+		biome.cliffThreshold,
+		biome.maxSteepness,
 		steepness
 		);
-		weight *= steepnessWeight;
 
-		finalColor += biome.color * weight;
+		/// Blend between regular and cliff color
+		/// We do this before applying the weight so steep areas still show appropriate colors
+		vec4 biomeColor = mix(biome.color, biome.cliffColor, cliffBlend);
+
+		finalColor += biomeColor * weight;
 		totalWeight += weight;
 	}
 
-	/// If no biome has influence, show rock color
-	/// This ensures steep cliffs look like bare rock
-	if (totalWeight < 0.01) {
-		return vec4(0.5, 0.48, 0.45, 1.0); /// Granite-like color for rock faces
-	}
-
-	return finalColor / totalWeight;
+	return totalWeight > 0.0 ? finalColor / totalWeight : vec4(1.0, 0.0, 1.0, 1.0);
 }
 
 void main() {
@@ -145,5 +143,4 @@ void main() {
 
 	/// Output final color with alpha from biome
 	outColor = vec4(finalColor, biomeColor.a);
-//	outColor = material.biomes[1].color;
 }

@@ -12,43 +12,63 @@ TerrainMaterial::TerrainMaterial(
 	: Material(device, name, physicalDevice, MaterialType::Custom)
 	, vertexShaderPath(DefaultVertexShaderPath)
 	, fragmentShaderPath(DefaultFragmentShaderPath) {
+	/// Initialize default biome parameters
+	/// We create a natural Earth-like terrain progression from ocean to mountain peaks.
+	/// Each biome has specific behaviors for cliffs to create visual variety
 
-	/// Initialize default biome parameters
-	/// We start with a simple height-based gradient from ocean to mountains
-	/// These defaults provide a basic visualization for testing
-	/// Initialize default biome parameters
-	/// We set up a basic Earth-like gradient with steepness constraints
+	/// Deep oceans
+	/// We use dark blue with slightly lighter blue cliffs to suggest underwater formations
 	this->properties.biomes[0] = {
-		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),  /// Deep ocean blue
-		0.0f,                                /// Start at lowest point
-		0.45f,                               /// Up to 45% height
-		1.0f,                                /// Water appears only on any steepness until we have removed the elevation for water
-		0.1f                                 /// Smooth water surface
+		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f), /// Deep ocean blue
+		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f), /// Slightly lighter blue for underwater cliffs
+		0.0f,                              /// Start at lowest point
+		0.4f,                              /// Up to 40% height for ocean-land transition
+		0.3f,                              /// Water appears only on relatively flat areas
+		0.2f,                              /// Start showing underwater formations early
+		0.1f                               /// Smooth water surface
 	};
 
+	/// Coastal regions and beaches
+	/// Sandy beaches transition to reddish sandstone cliffs
+	/// This creates the classic coastal cliff look
 	this->properties.biomes[1] = {
-		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),  /// Sandy beaches
-		0.38f,                              /// Slight overlap with water
-		0.5f,                               /// Up to midlands
-		0.4f,                               /// Beaches form on moderate slopes
-		0.7f                                /// Rough sandy texture
+		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f), /// Sandy beach color
+		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f), /// Reddish sandstone for coastal cliffs
+		0.38f,                             /// Slight overlap with water for smooth shorelines
+		0.5f,                              /// Up to midlands
+		0.6f,                              /// Beaches can form on moderate slopes
+		0.4f,                              /// Transition to cliffs at 40% steepness
+		0.7f                               /// Rough sandy texture
 	};
 
+	/// Midlands and forests
+	/// Green vegetation transitions to grey stone cliffs
+	/// This represents exposed rock where vegetation can't grow
 	this->properties.biomes[2] = {
-		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),  /// Green midlands
-		0.48f,                              /// Overlap with beaches
-		0.7f,                               /// Up to mountain zone
-		0.6f,                               /// Grass grows on most slopes
-		0.5f                                /// Medium roughness
+		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f), /// Green vegetation
+		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f), /// Grey stone cliffs
+		0.48f,                             /// Overlap with beaches for natural transition
+		0.7f,                              /// Up to mountain zone
+		0.7f,                              /// Vegetation grows on most slopes
+		0.5f,                              /// Start showing cliffs at steeper angles
+		0.5f                               /// Medium roughness for varied appearance
 	};
 
+	/// Mountain peaks
+	/// Snow-covered peaks with dark granite cliffs
+	/// The high contrast creates dramatic mountain vistas
 	this->properties.biomes[3] = {
-		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f), /// Snow peaks
+		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f), /// Bright snow
+		glm::vec4(0.3f, 0.3f, 0.3f, 1.0f),    /// Dark granite cliffs
 		0.68f,                                /// Overlap with midlands
 		1.0f,                                 /// Up to highest point
-		0.4f,                                 /// Snow only accumulates on gentler slopes
-		0.66f                                 /// Fairly smooth snow surface
+		0.5f,                                 /// Snow only accumulates on gentler slopes
+		0.3f,                                 /// Quick transition to rock on steeper slopes
+		0.3f                                  /// Fairly smooth snow surface
 	};
+
+	/// Set number of active biomes
+	this->properties.numBiomes = 4;
 
 	/// Set default planet radius
 	/// This can be adjusted later based on actual planet size
