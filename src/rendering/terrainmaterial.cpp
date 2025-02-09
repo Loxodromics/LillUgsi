@@ -16,55 +16,72 @@ TerrainMaterial::TerrainMaterial(
 	/// We create a natural Earth-like terrain progression from ocean to mountain peaks.
 	/// Each biome has specific behaviors for cliffs to create visual variety
 
+	/// Initialize default biome parameters
+	/// Each biome has distinct physical properties that work together with its colors
+	/// to create a convincing material appearance
+
 	/// Deep oceans
-	/// We use dark blue with slightly lighter blue cliffs to suggest underwater formations
+	/// Water is handled as a special case - highly reflective with low roughness
+	/// Underwater cliffs are rough and less metallic to suggest rock formations
 	this->properties.biomes[0] = {
-		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f), /// Deep ocean blue
-		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f), /// Slightly lighter blue for underwater cliffs
-		0.0f,                              /// Start at lowest point
-		0.4f,                              /// Up to 40% height for ocean-land transition
-		0.3f,                              /// Water appears only on relatively flat areas
-		0.2f,                              /// Start showing underwater formations early
-		0.1f                               /// Smooth water surface
+		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),    /// Deep ocean blue
+		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f),    /// Slightly lighter blue for underwater cliffs
+		0.0f,                                  /// Start at lowest point
+		0.4f,                                  /// Up to 40% height
+		0.3f,                                  /// Water appears only on flat areas
+		0.2f,                                  /// Start showing underwater formations early
+		0.1f,                                  /// Smooth water surface
+		0.6f,                                  /// Rough underwater cliff surface
+		0.9f,                                  /// Highly reflective water
+		0.1f                                   /// Less reflective underwater cliffs
 	};
 
 	/// Coastal regions and beaches
-	/// Sandy beaches transition to reddish sandstone cliffs
-	/// This creates the classic coastal cliff look
+	/// Sand is rough and non-metallic, creating a diffuse appearance
+	/// Sandstone cliffs are even rougher but maintain the same non-metallic quality
 	this->properties.biomes[1] = {
-		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f), /// Sandy beach color
-		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f), /// Reddish sandstone for coastal cliffs
-		0.38f,                             /// Slight overlap with water for smooth shorelines
-		0.5f,                              /// Up to midlands
-		0.6f,                              /// Beaches can form on moderate slopes
-		0.4f,                              /// Transition to cliffs at 40% steepness
-		0.7f                               /// Rough sandy texture
+		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),    /// Sandy beach color
+		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f),    /// Reddish sandstone cliffs
+		0.38f,                                 /// Overlap with water for shorelines
+		0.5f,                                  /// Up to midlands
+		0.6f,                                  /// Beaches form on moderate slopes
+		0.4f,                                  /// Transition to cliffs at 40% steepness
+		0.7f,                                  /// Rough sandy texture
+		0.8f,                                  /// Very rough cliff texture
+		0.0f,                                  /// Non-metallic sand
+		0.0f                                   /// Non-metallic cliffs
 	};
 
 	/// Midlands and forests
-	/// Green vegetation transitions to grey stone cliffs
-	/// This represents exposed rock where vegetation can't grow
+	/// Organic materials are non-metallic with medium roughness
+	/// Rock faces are rougher but maintain non-metallic properties
 	this->properties.biomes[2] = {
-		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f), /// Green vegetation
-		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f), /// Grey stone cliffs
-		0.48f,                             /// Overlap with beaches for natural transition
-		0.7f,                              /// Up to mountain zone
-		0.7f,                              /// Vegetation grows on most slopes
-		0.5f,                              /// Start showing cliffs at steeper angles
-		0.5f                               /// Medium roughness for varied appearance
+		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),    /// Green vegetation
+		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f),    /// Grey stone cliffs
+		0.48f,                                 /// Overlap with beaches
+		0.7f,                                  /// Up to mountain zone
+		0.7f,                                  /// Vegetation on most slopes
+		0.5f,                                  /// Show cliffs on steeper angles
+		0.5f,                                  /// Medium vegetation roughness
+		0.75f,                                 /// Rough rock texture
+		0.0f,                                  /// Non-metallic vegetation
+		0.0f                                   /// Non-metallic rock
 	};
 
 	/// Mountain peaks
-	/// Snow-covered peaks with dark granite cliffs
-	/// The high contrast creates dramatic mountain vistas
+	/// Snow is smooth but not metallic
+	/// Exposed granite is very rough and slightly metallic due to mineral content
 	this->properties.biomes[3] = {
 		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f), /// Bright snow
 		glm::vec4(0.3f, 0.3f, 0.3f, 1.0f),    /// Dark granite cliffs
-		0.68f,                                /// Overlap with midlands
-		1.0f,                                 /// Up to highest point
-		0.5f,                                 /// Snow only accumulates on gentler slopes
-		0.3f,                                 /// Quick transition to rock on steeper slopes
-		0.3f                                  /// Fairly smooth snow surface
+		0.68f,                                 /// Overlap with midlands
+		1.0f,                                  /// Up to highest point
+		0.5f,                                  /// Snow on gentler slopes
+		0.3f,                                  /// Quick transition to rock
+		0.3f,                                  /// Smooth snow surface
+		0.9f,                                  /// Very rough granite texture
+		0.0f,                                  /// Non-metallic snow
+		0.1f                                   /// Slightly metallic granite
 	};
 
 	/// Set number of active biomes

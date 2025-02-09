@@ -12,17 +12,20 @@ namespace lillugsi::rendering {
 /// to create basic biome visualization as a foundation for more complex features.
 class TerrainMaterial : public Material {
 public:
-	/// We define our biome parameters in a GPU-friendly structure
-	/// This matches the layout expected by our shaders and ensures
-	/// proper memory alignment for uniform buffers
+	/// BiomeParameters defines both visual and physical properties of a terrain type
+	/// We group properties that influence the final material appearance to keep the
+	/// relationship between color and physical properties clear
 	struct BiomeParameters {
-		alignas(16) glm::vec4 color;
-		alignas(16) glm::vec4 cliffColor;    /// Color for steep areas of this biome
-		alignas(16) float minHeight;
-		float maxHeight;
-		float maxSteepness;    /// Maximum steepness where this biome can appear
-		float cliffThreshold;  /// When to start blending in cliff material
-		float roughness;       /// Surface roughness for this biome
+		alignas(16) glm::vec4 color;           /// Base color of the biome
+		alignas(16) glm::vec4 cliffColor;      /// Color for steep areas of this biome
+		alignas(16) float minHeight;           /// Height where biome starts
+		float maxHeight;                       /// Height where biome ends
+		float maxSteepness;                    /// Maximum steepness where this biome appears
+		float cliffThreshold;                  /// When to start blending cliff material
+		float roughness;                       /// Base surface roughness
+		float cliffRoughness;                  /// Roughness for cliff areas
+		float metallic;                        /// Base metallic value
+		float cliffMetallic;                   /// Metallic value for cliff areas
 	};
 
 	/// Main properties structure for GPU upload
