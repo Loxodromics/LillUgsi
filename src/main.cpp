@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
 
 
 		/// Initialize spdlog
-		spdlog::set_level(spdlog::level::warn);
+		spdlog::set_level(spdlog::level::debug);
 		spdlog::info("Starting LillUgsi Vulkan Learning Renderer");
 
 		/// Create and initialize the application

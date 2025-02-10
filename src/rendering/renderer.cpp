@@ -1293,6 +1293,8 @@ void Renderer::initializeMaterials() {
 	/// This should match the radius used in IcosphereMesh
 	terrainMaterial->setPlanetRadius(2.9f);
 
+	terrainMaterial->setDebugMode(TerrainMaterial::TerrainDebugMode::None);
+
 	/// Create pipeline for terrain material
 	auto terrainPipeline = this->pipelineManager->createPipeline(*terrainMaterial);
 	if (!terrainPipeline) {

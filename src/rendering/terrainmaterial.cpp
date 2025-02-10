@@ -6,16 +6,10 @@
 namespace lillugsi::rendering {
 
 TerrainMaterial::TerrainMaterial(
-	VkDevice device,
-	const std::string& name,
-	VkPhysicalDevice physicalDevice)
+	VkDevice device, const std::string &name, VkPhysicalDevice physicalDevice)
 	: Material(device, name, physicalDevice, MaterialType::Custom)
 	, vertexShaderPath(DefaultVertexShaderPath)
 	, fragmentShaderPath(DefaultFragmentShaderPath) {
-	/// Initialize default biome parameters
-	/// We create a natural Earth-like terrain progression from ocean to mountain peaks.
-	/// Each biome has specific behaviors for cliffs to create visual variety
-
 	/// Initialize default biome parameters
 	/// Each biome has distinct physical properties that work together with its colors
 	/// to create a convincing material appearance
@@ -24,48 +18,78 @@ TerrainMaterial::TerrainMaterial(
 	/// Water is handled as a special case - highly reflective with low roughness
 	/// Underwater cliffs are rough and less metallic to suggest rock formations
 	this->properties.biomes[0] = {
-		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),    /// Deep ocean blue
-		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f),    /// Slightly lighter blue for underwater cliffs
-		0.0f,                                  /// Start at lowest point
-		0.4f,                                  /// Up to 40% height
-		0.3f,                                  /// Water appears only on flat areas
-		0.2f,                                  /// Start showing underwater formations early
-		0.1f,                                  /// Smooth water surface
-		0.6f,                                  /// Rough underwater cliff surface
-		0.9f,                                  /// Highly reflective water
-		0.1f                                   /// Less reflective underwater cliffs
+		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f), /// Deep ocean blue
+		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f), /// Slightly lighter blue for underwater cliffs
+		0.0f,                              /// Start at lowest point
+		0.4f,                              /// Up to 40% height
+		0.3f,                              /// Water appears only on flat areas
+		0.2f,                              /// Start showing underwater formations early
+		0.1f,                              /// Smooth water surface
+		0.6f,                              /// Rough underwater cliff surface
+		0.9f,                              /// Highly reflective water
+		0.1f,                              /// Less reflective underwater cliffs
+		/// Water noise focuses on gentle, large-scale movement
+		{
+			1.0f, /// Lower frequency for broad waves
+			0.3f, /// Subtle amplitude for gentle variation
+			3,    /// Fewer octaves for smoother appearance
+			0.5f, /// Standard persistence
+			2.0f  /// Standard lacunarity
+		},
+		0.1f, /// Very smooth transitions for water
+		5.0f  /// Large scale transitions for natural water boundaries
 	};
 
 	/// Coastal regions and beaches
 	/// Sand is rough and non-metallic, creating a diffuse appearance
 	/// Sandstone cliffs are even rougher but maintain the same non-metallic quality
 	this->properties.biomes[1] = {
-		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),    /// Sandy beach color
-		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f),    /// Reddish sandstone cliffs
-		0.38f,                                 /// Overlap with water for shorelines
-		0.5f,                                  /// Up to midlands
-		0.6f,                                  /// Beaches form on moderate slopes
-		0.4f,                                  /// Transition to cliffs at 40% steepness
-		0.7f,                                  /// Rough sandy texture
-		0.8f,                                  /// Very rough cliff texture
-		0.0f,                                  /// Non-metallic sand
-		0.0f                                   /// Non-metallic cliffs
+		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f), /// Sandy beach color
+		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f), /// Reddish sandstone cliffs
+		0.38f,                             /// Overlap with water for shorelines
+		0.5f,                              /// Up to midlands
+		0.6f,                              /// Beaches form on moderate slopes
+		0.4f,                              /// Transition to cliffs at 40% steepness
+		0.7f,                              /// Rough sandy texture
+		0.8f,                              /// Very rough cliff texture
+		0.0f,                              /// Non-metallic sand
+		0.0f,                              /// Non-metallic cliffs
+		/// Beach noise creates small dunes and ripples
+		{
+			4.0f, /// Higher frequency for sand detail
+			0.7f, /// Strong amplitude for visible sand patterns
+			4,    /// More octaves for detailed sand texture
+			0.6f, /// Slower falloff for richer detail
+			2.5f  /// Wider frequency spread for varied patterns
+		},
+		0.8f, /// Strong noise in transitions for natural beach borders
+		2.0f  /// Medium scale for beach features
 	};
 
 	/// Midlands and forests
 	/// Organic materials are non-metallic with medium roughness
 	/// Rock faces are rougher but maintain non-metallic properties
 	this->properties.biomes[2] = {
-		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),    /// Green vegetation
-		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f),    /// Grey stone cliffs
-		0.48f,                                 /// Overlap with beaches
-		0.7f,                                  /// Up to mountain zone
-		0.7f,                                  /// Vegetation on most slopes
-		0.5f,                                  /// Show cliffs on steeper angles
-		0.5f,                                  /// Medium vegetation roughness
-		0.75f,                                 /// Rough rock texture
-		0.0f,                                  /// Non-metallic vegetation
-		0.0f                                   /// Non-metallic rock
+		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f), /// Green vegetation
+		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f), /// Grey stone cliffs
+		0.48f,                             /// Overlap with beaches
+		0.7f,                              /// Up to mountain zone
+		0.7f,                              /// Vegetation on most slopes
+		0.5f,                              /// Show cliffs on steeper angles
+		0.5f,                              /// Medium vegetation roughness
+		0.75f,                             /// Rough rock texture
+		0.0f,                              /// Non-metallic vegetation
+		0.0f,                              /// Non-metallic rock
+		/// Forest noise creates organic, varied patterns
+		{
+			3.0f, /// Medium frequency for natural variation
+			0.8f, /// Strong amplitude for clear vegetation patterns
+			5,    /// Many octaves for organic detail
+			0.5f, /// Standard persistence
+			2.0f  /// Standard lacunarity
+		},
+		0.6f, /// Medium noise in transitions for natural forest edges
+		3.0f  /// Larger scale for forest regions
 	};
 
 	/// Mountain peaks
@@ -74,14 +98,24 @@ TerrainMaterial::TerrainMaterial(
 	this->properties.biomes[3] = {
 		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f), /// Bright snow
 		glm::vec4(0.3f, 0.3f, 0.3f, 1.0f),    /// Dark granite cliffs
-		0.68f,                                 /// Overlap with midlands
-		1.0f,                                  /// Up to highest point
-		0.5f,                                  /// Snow on gentler slopes
-		0.3f,                                  /// Quick transition to rock
-		0.3f,                                  /// Smooth snow surface
-		0.9f,                                  /// Very rough granite texture
-		0.0f,                                  /// Non-metallic snow
-		0.1f                                   /// Slightly metallic granite
+		0.68f,                                /// Overlap with midlands
+		1.0f,                                 /// Up to highest point
+		0.5f,                                 /// Snow on gentler slopes
+		0.3f,                                 /// Quick transition to rock
+		0.3f,                                 /// Smooth snow surface
+		0.9f,                                 /// Very rough granite texture
+		0.0f,                                 /// Non-metallic snow
+		0.1f,                                 /// Slightly metallic granite
+		/// Mountain noise creates windswept patterns and rocky detail
+		{
+			5.0f, /// High frequency for detailed snow/rock patterns
+			0.9f, /// Strong amplitude for dramatic mountain features
+			6,    /// Many octaves for rich detail
+			0.5f, /// Standard persistence
+			2.2f  /// Slightly higher lacunarity for sharper features
+		},
+		0.7f, /// Strong noise in transitions for jagged mountain edges
+		1.0f  /// Small scale for detailed mountain features
 	};
 
 	/// Set number of active biomes
@@ -90,6 +124,13 @@ TerrainMaterial::TerrainMaterial(
 	/// Set default planet radius
 	/// This can be adjusted later based on actual planet size
 	this->properties.planetRadius = 1.0f;
+
+	/// Start with normal rendering mode
+	this->properties.debugMode = static_cast<uint32_t>(TerrainDebugMode::None);
+
+	spdlog::info("TerrainMaterial initial values - planetRadius: {}, debugMode: {}",
+	this->properties.planetRadius,
+	this->properties.debugMode);
 
 	/// Create descriptor layout first as it's needed for other resources
 	this->createDescriptorSetLayout();
@@ -101,8 +142,7 @@ TerrainMaterial::TerrainMaterial(
 	this->createDescriptorPool();
 	this->createDescriptorSet();
 
-	spdlog::debug("Created terrain material '{}' with default biome parameters",
-		this->name);
+	spdlog::debug("Created terrain material '{}' with default biome parameters", this->name);
 }
 
 TerrainMaterial::~TerrainMaterial() {
@@ -175,15 +215,73 @@ void TerrainMaterial::setPlanetRadius(float radius) {
 		throw vulkan::VulkanException(
 			VK_ERROR_VALIDATION_FAILED_EXT,
 			"Invalid radius in terrain material '" + this->name + "'",
-			__FUNCTION__, __FILE__, __LINE__
-		);
+			__FUNCTION__,
+			__FILE__,
+			__LINE__);
 	}
 
 	this->properties.planetRadius = radius;
 	this->updateUniformBuffer();
 
-	spdlog::debug("Updated planet radius to {} in material '{}'",
-		radius, this->name);
+	spdlog::debug("Updated planet radius to {} in material '{}'", radius, this->name);
+}
+
+void TerrainMaterial::setNoiseParameters(const uint32_t index, const NoiseParameters& params) {
+	/// Validate index before proceeding
+	if (index >= 4) {
+		throw vulkan::VulkanException(
+			VK_ERROR_VALIDATION_FAILED_EXT,
+			"Invalid biome index in terrain material '" + this->name + "'",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Update the parameters for the specified biome
+	this->properties.biomes[index].noise = params;
+
+	/// Sync changes to GPU
+	this->updateUniformBuffer();
+
+	spdlog::debug("Updated noise parameters for biome {} in material '{}'",
+		index, this->name);
+}
+
+void TerrainMaterial::setTransitionParameters(
+	const uint32_t index,
+	const float noiseAmount,
+	const float scale
+) {
+	/// Validate index before proceeding
+	if (index >= 4) {
+		throw vulkan::VulkanException(
+			VK_ERROR_VALIDATION_FAILED_EXT,
+			"Invalid biome index in terrain material '" + this->name + "'",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Clamp noise amount to valid range
+	/// We use clamp to ensure valid values while allowing setter chaining
+	const float clampedNoise = glm::clamp(noiseAmount, 0.0f, 1.0f);
+
+	/// Update transition parameters
+	this->properties.biomes[index].transitionNoise = clampedNoise;
+	this->properties.biomes[index].transitionScale = scale;
+
+	/// Sync changes to GPU
+	this->updateUniformBuffer();
+
+	spdlog::debug("Updated transition parameters for biome {} in material '{}': noise={}, scale={}",
+		index, this->name, clampedNoise, scale);
+}
+
+void TerrainMaterial::setDebugMode(const TerrainDebugMode mode) {
+	/// Update debug mode and sync to GPU
+	this->properties.debugMode = static_cast<uint32_t>(mode);
+	this->updateUniformBuffer();
+
+	spdlog::info("Set debug mode {} for terrain material '{}'",
+		static_cast<uint32_t>(mode), this->name);
 }
 
 void TerrainMaterial::createDescriptorSetLayout() {
@@ -214,12 +312,20 @@ void TerrainMaterial::createDescriptorSetLayout() {
 }
 
 void TerrainMaterial::createUniformBuffer() {
+	/// Verify that Properties structure meets GPU alignment requirements
+	static_assert(sizeof(Properties) % 16 == 0,
+		"Properties structure size must be a multiple of 16 bytes");
+
 	/// Create the uniform buffer for material properties
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = sizeof(Properties);
+	bufferInfo.size = sizeof(Properties);  /// Size now includes new parameters
 	bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	/// Log the buffer size for debugging
+	spdlog::debug("Creating uniform buffer with size: {} bytes", bufferInfo.size);
+
 
 	VkBuffer buffer;
 	VK_CHECK(vkCreateBuffer(this->device, &bufferInfo, nullptr, &buffer));
@@ -250,7 +356,8 @@ void TerrainMaterial::createUniformBuffer() {
 	/// Initialize buffer with default properties
 	this->updateUniformBuffer();
 
-	spdlog::debug("Created uniform buffer for terrain material '{}'", this->name);
+	spdlog::debug("Created uniform buffer for terrain material '{}' with size {} bytes",
+		this->name, bufferInfo.size);
 }
 
 void TerrainMaterial::createDescriptorSet() {
@@ -285,13 +392,16 @@ void TerrainMaterial::createDescriptorSet() {
 }
 
 void TerrainMaterial::updateUniformBuffer() {
-	/// Map memory and update uniform buffer contents
 	void* data;
 	VK_CHECK(vkMapMemory(this->device, this->uniformBufferMemory, 0, sizeof(Properties), 0, &data));
+
+	// Log some values before copying
+	spdlog::debug("Updating uniform buffer - planetRadius: {}, debugMode: {}",
+		this->properties.planetRadius,
+		this->properties.debugMode);
+
 	memcpy(data, &this->properties, sizeof(Properties));
 	vkUnmapMemory(this->device, this->uniformBufferMemory);
-
-	spdlog::trace("Updated uniform buffer for terrain material '{}'", this->name);
 }
 
 } /// namespace lillugsi::rendering

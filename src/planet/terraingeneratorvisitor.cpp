@@ -41,7 +41,7 @@ void TerrainGeneratorVisitor::visit(const std::shared_ptr<VertexData> vertex) {
 	const double newElevation = vertex->getElevation() + noiseValue;
 	vertex->setElevation(noiseValue);
 
-	spdlog::debug("Applied elevation {} to vertex at position ({}, {}, {})",
+	spdlog::trace("Applied elevation {} to vertex at position ({}, {}, {})",
 		newElevation, position.x, position.y, position.z);
 }
 

@@ -600,7 +600,7 @@ void PlanetData::setNeighborsForBaseFaces() const {
 					break; /// Each face has exactly 3 neighbors
 			}
 		}
-		spdlog::info("Found {} neighbors for base face", neighborCount);
+		spdlog::trace("Found {} neighbors for base face", neighborCount);
 	}
 }
 
@@ -681,7 +681,7 @@ void PlanetData::setNeighborsForFace(const std::shared_ptr<Face>& face) {
 
 				/// If exactly two indices match, it's a neighbor
 				if (matches == 2) {
-					spdlog::debug("Setting neighbor: [{}, {}, {}]",
+					spdlog::trace("Setting neighbor: [{}, {}, {}]",
 						sibling->getVertexIndices()[0],
 						sibling->getVertexIndices()[1],
 						sibling->getVertexIndices()[2]);

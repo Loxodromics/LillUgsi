@@ -12,31 +12,69 @@ namespace lillugsi::rendering {
 /// to create basic biome visualization as a foundation for more complex features.
 class TerrainMaterial : public Material {
 public:
-	/// BiomeParameters defines both visual and physical properties of a terrain type
-	/// We group properties that influence the final material appearance to keep the
-	/// relationship between color and physical properties clear
-	struct BiomeParameters {
-		alignas(16) glm::vec4 color;           /// Base color of the biome
-		alignas(16) glm::vec4 cliffColor;      /// Color for steep areas of this biome
-		alignas(16) float minHeight;           /// Height where biome starts
-		float maxHeight;                       /// Height where biome ends
-		float maxSteepness;                    /// Maximum steepness where this biome appears
-		float cliffThreshold;                  /// When to start blending cliff material
-		float roughness;                       /// Base surface roughness
-		float cliffRoughness;                  /// Roughness for cliff areas
-		float metallic;                        /// Base metallic value
-		float cliffMetallic;                   /// Metallic value for cliff areas
+	/// NoiseParameters defines how noise is generated and applied for each biome
+	/// We separate noise parameters to:
+	/// 1. Keep biome parameters organized and focused
+	/// 2. Allow for easy addition of new noise features
+	/// 3. Maintain clear relationships between noise parameters
+	struct NoiseParameters {
+		alignas(16) struct {
+			float baseFrequency{2.0f};    /// Base frequency for noise sampling
+			float amplitude{1.0f};        /// Overall strength of noise effect
+			uint32_t octaves{4};         /// Number of noise layers to combine
+			float persistence{0.5f};     /// How quickly amplitude decreases per octave
+			float lacunarity{2.0f};      /// How quickly frequency increases per octave
+			float padding[3];            /// Pad to 32 bytes
+		};
 	};
 
-	/// Main properties structure for GPU upload
-	/// We keep this separate from the class interface to maintain a clean
-	/// separation between CPU and GPU data layouts. The height values here
-	/// correspond to the normalized height values stored in vertex colors
+	/// BiomeParameters now includes noise control and enhanced transition options
+	/// We extend the existing structure to support more natural-looking terrain
+	/// while maintaining backward compatibility
+	struct BiomeParameters {
+		alignas(16) glm::vec4 color;           /// Base color of the biome
+		alignas(16) glm::vec4 cliffColor;      /// Color for steep areas
+		alignas(16) struct {                   /// 16 bytes total
+			float minHeight;                   /// Height where biome starts
+			float maxHeight;                   /// Height where biome ends
+			float maxSteepness;                /// Maximum steepness where biome appears
+			float cliffThreshold;              /// When to start blending cliff material
+		};
+		alignas(16) struct {                  /// 16 bytes total
+			float roughness;                  /// Base surface roughness
+			float cliffRoughness;             /// Roughness for cliff areas
+			float metallic;                   /// Base metallic value
+			float cliffMetallic;              /// Metallic value for cliff areas
+		};
+		alignas(16) NoiseParameters noise;    /// Noise settings for this biome (32 bytes)
+		alignas(16) struct {                  /// 16 bytes total
+			float transitionNoise;            /// 0.0 = smooth, 1.0 = fully noisy transition
+			float transitionScale;            /// Scale of noise pattern in transitions
+			float padding[2];                 /// Pad to 16 bytes
+		};
+	};
+
+	/// Extended Properties structure to include debug support
+	/// We maintain the same memory layout as before but add new functionality
 	struct Properties {
-		BiomeParameters biomes[4];        /// Fixed array for initial implementation
-		float planetRadius;               /// Used to calculate proper height ranges
-		uint32_t numBiomes;               /// Actual number of biomes in use
-		float padding[2];                 /// Maintain GPU alignment
+		alignas(16) BiomeParameters biomes[4];  /// Fixed array for initial implementation
+		alignas(16) struct {                    /// 16 bytes total
+			float planetRadius{1.0f};           /// Used to calculate proper height ranges
+			uint32_t numBiomes{0};              /// Actual number of biomes in use
+			uint32_t debugMode{0};              /// Current debug visualization mode
+			float padding{0.0f};                /// Pad to 16 bytes
+		};
+	};
+
+	/// Debug modes for terrain visualization
+	/// We use an enum class for type safety and clear intent
+	enum class TerrainDebugMode : uint32_t {
+		None = 0,          /// Normal rendering
+		Height,            /// Show raw height values
+		Steepness,         /// Show slope calculations
+		Normals,           /// Visualize surface normals
+		BiomeBoundaries,   /// Show raw biome transitions
+		NoisePatterns      /// Display noise contribution
 	};
 
 	/// Create a new terrain material
@@ -77,6 +115,30 @@ public:
 	/// @return Current terrain properties
 	[[nodiscard]] const Properties& getProperties() const {
 		return this->properties;
+	}
+
+	/// Set noise parameters for a specific biome
+	/// We provide this method to allow fine-tuning of noise behavior per biome
+	/// @param index Which biome to modify
+	/// @param params New noise parameters for the biome
+	void setNoiseParameters(uint32_t index, const NoiseParameters& params);
+
+	/// Set transition parameters for a biome
+	/// We use these parameters to control how biomes blend together
+	/// @param index Which biome to modify
+	/// @param noiseAmount How much noise to add to transitions (0-1)
+	/// @param scale Scale of the noise pattern
+	void setTransitionParameters(uint32_t index, float noiseAmount, float scale);
+
+	/// Set the debug visualization mode
+	/// We use this for development and tuning of the terrain system
+	/// @param mode The debug mode to enable
+	void setDebugMode(TerrainDebugMode mode);
+
+	/// Get current debug mode
+	/// @return The active debug visualization mode
+	[[nodiscard]] TerrainDebugMode getDebugMode() const {
+		return static_cast<TerrainDebugMode>(this->properties.debugMode);
 	}
 
 protected:
