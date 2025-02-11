@@ -86,11 +86,15 @@ const uint DEBUG_MODE_NORMALS = 3;
 const uint DEBUG_MODE_BIOME_BOUNDARIES = 4;
 const uint DEBUG_MODE_NOISE_PATTERNS = 5;
 
-/// Noise function section
-/// We separate noise functions in a dedicated section to:
-/// 1. Make them easy to find and modify
-/// 2. Keep the main shader logic clean
-/// 3. Allow for easy performance profiling
+/// Function declarations
+/// We declare these early so they can be used by other functions
+float calculateNoiseBasedBlend(float baseBlend, vec3 worldPos, BiomeParameters lowerBiome, BiomeParameters upperBiome);
+TerrainMaterial applyNoiseToMaterial(TerrainMaterial baseMaterial, float noiseValue, BiomeParameters biome);
+float getBiomeNoise(vec3 worldPos, BiomeParameters biome, uint biomeIndex);
+float getOceanNoise(vec3 worldPos, BiomeParameters biome);
+float getBeachNoise(vec3 worldPos, BiomeParameters biome);
+float getForestNoise(vec3 worldPos, BiomeParameters biome);
+float getMountainNoise(vec3 worldPos, BiomeParameters biome);
 
 /// Generate a pseudo-random value from a 2D position
 /// We use this as a basis for more complex noise functions
@@ -333,22 +337,107 @@ vec4 getNoiseTestVisualization(vec3 worldPos) {
 	return vec4(basic, detail * 0.5, fbmNoise, 1.0);
 }
 
-void main() {
-	/// Calculate basic terrain properties first
-	float height = fragHeight;
-	float steepness = fragSteepness;
+/// Calculate noise variations for specific biomes
+/// Each function will be expanded later with more complex noise patterns
+/// For now, we use valueNoise with biome-specific parameters to verify the system
 
-	/// Check for debug visualization
-	vec4 debugColor = getDebugVisualization(fragPosition, height, steepness);
-	if (debugColor.a > 0.0) {
-		outColor = debugColor;
-		return;
+/// Generate ocean surface variation
+/// This will later incorporate wave patterns and surface disturbance
+/// @param worldPos Position in world space for noise sampling
+/// @param biome Ocean biome parameters
+/// @return Noise value for ocean surface
+float getOceanNoise(vec3 worldPos, BiomeParameters biome) {
+	/// Convert world position to noise coordinates
+	/// We use xz plane for horizontal wave patterns
+	/// Scale by planet radius to maintain consistent noise scale
+	vec2 noisePos = worldPos.xz / material.planetRadius;
+
+	/// Sample primary noise for large wave patterns
+	/// We use a lower frequency for ocean to create gentle waves
+	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+
+	/// Apply amplitude adjustment for wave height
+	/// Ocean waves should be subtle to maintain water appearance
+	return baseNoise * biome.noise.amplitude;
+}
+
+/// Generate beach and shoreline noise
+/// This will later create sand patterns and tidal effects
+/// @param worldPos Position in world space for noise sampling
+/// @param biome Beach biome parameters
+/// @return Noise value for beach surface
+float getBeachNoise(vec3 worldPos, BiomeParameters biome) {
+	/// Use xz coordinates for horizontal noise patterns
+	/// Beaches need finer detail, so we use a higher base frequency
+	vec2 noisePos = worldPos.xz / material.planetRadius;
+
+	/// Sample noise for sand patterns
+	/// Higher frequency creates more detailed sand texture
+	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+
+	/// Apply stronger amplitude for visible sand patterns
+	return baseNoise * biome.noise.amplitude;
+}
+
+/// Generate forest and vegetation noise
+/// This will later create organic patterns and vegetation distribution
+/// @param worldPos Position in world space for noise sampling
+/// @param biome Forest biome parameters
+/// @return Noise value for forest surface
+float getForestNoise(vec3 worldPos, BiomeParameters biome) {
+	/// Use xz plane for vegetation distribution
+	vec2 noisePos = worldPos.xz / material.planetRadius;
+
+	/// Sample noise for vegetation patterns
+	/// Medium frequency creates natural-looking variation
+	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+
+	/// Apply moderate amplitude for natural variation
+	return baseNoise * biome.noise.amplitude;
+}
+
+/// Generate mountain and highland noise
+/// This will later handle rocky features and snow distribution
+/// @param worldPos Position in world space for noise sampling
+/// @param biome Mountain biome parameters
+/// @return Noise value for mountain surface
+float getMountainNoise(vec3 worldPos, BiomeParameters biome) {
+	/// Use xz coordinates for horizontal noise
+	vec2 noisePos = worldPos.xz / material.planetRadius;
+
+	/// Sample noise for mountain features
+	/// Higher frequency creates more detailed rock patterns
+	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+
+	/// Apply strong amplitude for dramatic mountain features
+	return baseNoise * biome.noise.amplitude;
+}
+
+/// Select and apply biome-specific noise
+/// This dispatches to the appropriate noise function based on biome index
+/// @param worldPos Position in world space
+/// @param biome Parameters for current biome
+/// @param biomeIndex Index of current biome
+/// @return Final noise value for the biome
+float getBiomeNoise(vec3 worldPos, BiomeParameters biome, uint biomeIndex) {
+	/// Select appropriate noise function based on biome
+	/// We separate noise functions to allow for biome-specific optimizations
+	/// and different noise characteristics
+	switch(biomeIndex) {
+		case 0:
+			return getOceanNoise(worldPos, biome);
+		case 1:
+			return getBeachNoise(worldPos, biome);
+		case 2:
+			return getForestNoise(worldPos, biome);
+		case 3:
+			return getMountainNoise(worldPos, biome);
+		default:
+			/// Fallback to simple noise for unknown biomes
+			/// This helps with debugging and prevents artifacts
+			return valueNoise((worldPos.xz / material.planetRadius) *
+				biome.noise.baseFrequency) * biome.noise.amplitude;
 	}
-
-	/// Normal rendering will go here later
-	/// For now, show noise test pattern
-	outColor = getNoiseTestVisualization(fragPosition);
-//		outColor = vec4(1.0, 0.0, 0.0, 1.0);
 }
 
 /// Calculate complete noise contribution for a terrain position
@@ -391,17 +480,23 @@ vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 baseColor) {
 	return baseColor * (ambient + diffuse);
 }
 
-/// Calculate interpolated material properties for a point on the terrain
-/// We separate this from the main biome calculation to keep the code focused
-/// on one aspect of the material computation
-TerrainMaterial calculateMaterialProperties(float height, float steepness) {
-	TerrainMaterial result;
-	result.color = vec4(0.0);
-	result.roughness = 0.0;
-	result.metallic = 0.0;
+/// Calculate terrain material properties with noise-based variation
+/// This function combines height, steepness, and noise to create
+/// the final material appearance
+/// @param height Normalized terrain height
+/// @param steepness Terrain steepness factor
+/// @param worldPos World space position for noise sampling
+/// @return Final terrain material properties
+TerrainMaterial calculateTerrainMaterial(float height, float steepness, vec3 worldPos) {
+	TerrainMaterial result = TerrainMaterial(
+		vec4(0.0),  /// color
+		0.0,        /// roughness
+		0.0         /// metallic
+	);
 	float totalWeight = 0.0;
 
 	/// Calculate contribution from each active biome
+	/// We process each biome and blend them based on height and steepness
 	for (uint i = 0; i < material.numBiomes; i++) {
 		BiomeParameters biome = material.biomes[i];
 
@@ -412,53 +507,148 @@ TerrainMaterial calculateMaterialProperties(float height, float steepness) {
 		/// Handle height-based blending between biomes
 		if (i > 0) {
 			BiomeParameters prevBiome = material.biomes[i - 1];
-			weight *= smoothstep(
-			biome.minHeight,
-			prevBiome.maxHeight,
-			height
+			float baseBlend = smoothstep(
+				biome.minHeight,
+				prevBiome.maxHeight,
+				height
+			);
+
+			/// Apply noise to the transition
+			/// This breaks up the straight height-based transitions
+			weight *= calculateNoiseBasedBlend(
+				baseBlend,
+				worldPos,
+				prevBiome,
+				biome
 			);
 		}
 
 		if (i < material.numBiomes - 1) {
 			BiomeParameters nextBiome = material.biomes[i + 1];
-			weight *= 1.0 - smoothstep(
-			nextBiome.minHeight,
-			biome.maxHeight,
-			height
+			float baseBlend = 1.0 - smoothstep(
+				nextBiome.minHeight,
+				biome.maxHeight,
+				height
+			);
+
+			weight *= calculateNoiseBasedBlend(
+				baseBlend,
+				worldPos,
+				biome,
+				nextBiome
 			);
 		}
 
 		/// Calculate cliff blend based on steepness
-		/// This determines how much of the cliff color to show
+		/// This determines how much of the cliff material to show
 		float cliffBlend = smoothstep(
-		biome.cliffThreshold,
-		biome.maxSteepness,
-		steepness
+			biome.cliffThreshold,
+			biome.maxSteepness,
+			steepness
 		);
 
+		/// Get noise variation for this biome
+		/// This adds detail and breaks up the uniform appearance
+		float biomeNoise = getBiomeNoise(worldPos, biome, i);
+
+		/// Create base material properties
+		TerrainMaterial biomeMaterial;
+
 		/// Blend between regular and cliff properties
-		vec4 biomeColor = mix(biome.color, biome.cliffColor, cliffBlend);
-		float biomeRoughness = mix(biome.roughness, biome.cliffRoughness, cliffBlend);
-		float biomeMetallic = mix(biome.metallic, biome.cliffMetallic, cliffBlend);
+		biomeMaterial.color = mix(biome.color, biome.cliffColor, cliffBlend);
+		biomeMaterial.roughness = mix(biome.roughness, biome.cliffRoughness, cliffBlend);
+		biomeMaterial.metallic = mix(biome.metallic, biome.cliffMetallic, cliffBlend);
+
+		/// Apply noise-based variation to the material
+		/// This modifies the properties based on the noise pattern
+		biomeMaterial = applyNoiseToMaterial(biomeMaterial, biomeNoise, biome);
 
 		/// Accumulate weighted properties
-		result.color += biomeColor * weight;
-		result.roughness += biomeRoughness * weight;
-		result.metallic += biomeMetallic * weight;
+		result.color += biomeMaterial.color * weight;
+		result.roughness += biomeMaterial.roughness * weight;
+		result.metallic += biomeMaterial.metallic * weight;
 		totalWeight += weight;
 	}
 
-	/// Normalize results
+	/// Normalize results if we have any valid contributions
 	if (totalWeight > 0.0) {
 		result.color /= totalWeight;
 		result.roughness /= totalWeight;
 		result.metallic /= totalWeight;
 	} else {
-		/// Error state - use obvious colors and values
+		/// Fallback material for error cases
+		/// This makes problems visually obvious for debugging
 		result.color = vec4(1.0, 0.0, 1.0, 1.0);
 		result.roughness = 1.0;
 		result.metallic = 0.0;
 	}
+
+	return result;
+}
+
+
+/// Calculate noise-influenced transition between biomes
+/// This creates more natural-looking boundaries between different terrain types
+/// @param baseBlend Original height-based blend factor
+/// @param worldPos World position for noise sampling
+/// @param lowerBiome Lower height biome
+/// @param upperBiome Upper height biome
+/// @return Modified blend factor
+float calculateNoiseBasedBlend(float baseBlend, vec3 worldPos, BiomeParameters lowerBiome, BiomeParameters upperBiome) {
+	/// Skip noise calculation if transition noise is disabled
+	if (lowerBiome.transitionNoise <= 0.0) {
+		return baseBlend;
+	}
+
+	/// Sample noise for transition
+	/// We use the lower biome's transition scale for consistency
+	vec2 noisePos = worldPos.xz * lowerBiome.transitionScale;
+	float transitionNoise = valueNoise(noisePos);
+
+	/// Convert noise to -1 to 1 range for transition offset
+	float noiseOffset = (transitionNoise * 2.0 - 1.0) * lowerBiome.transitionNoise;
+
+	/// Apply noise to base blend factor
+	/// This maintains smooth transitions while adding variation
+	return clamp(baseBlend + noiseOffset, 0.0, 1.0);
+}
+
+/// Apply noise-based variation to material properties
+/// This breaks up the uniform appearance of terrain materials
+/// @param baseMaterial Original material properties
+/// @param noiseValue Value between 0 and 1 that drives material variation:
+///                  - Low values (near 0) make the material darker, rougher, and less metallic
+///                  - Mid values (around 0.5) keep the material close to its base properties
+///                  - High values (near 1) make the material brighter, smoother, and more metallic
+///                  The actual impact is controlled by the biome's noise amplitude
+/// @param biome Current biome parameters
+/// @return Modified material properties
+TerrainMaterial applyNoiseToMaterial(TerrainMaterial baseMaterial, float noiseValue, BiomeParameters biome) {
+	TerrainMaterial result = baseMaterial;
+
+	/// Modify color based on noise
+	/// We apply subtle tinting to break up uniform colors
+	result.color.rgb = mix(
+		baseMaterial.color.rgb,
+		baseMaterial.color.rgb * (0.1 + noiseValue * 0.9),
+		biome.noise.amplitude
+	);
+
+	/// Vary roughness with noise
+	/// This creates areas of different surface texture
+	result.roughness = mix(
+		baseMaterial.roughness,
+		baseMaterial.roughness * (0.8 + noiseValue * 0.4),
+		biome.noise.amplitude * 0.5
+	);
+
+	/// Metallic variation is more subtle
+	/// This maintains material identity while adding interest
+	result.metallic = mix(
+		baseMaterial.metallic,
+		baseMaterial.metallic * (0.95 + noiseValue * 0.1),
+		biome.noise.amplitude * 0.25
+	);
 
 	return result;
 }
@@ -547,12 +737,12 @@ vec3 calculatePBRLighting(Light light, vec3 normal, vec3 baseColor, float roughn
 	return ambient + directLight;
 }
 
-void main2() {
+void main() {
 	/// Normalize the interpolated normal
 	vec3 normal = normalize(fragNormal);
 
 	/// Get all material properties for this point
-	TerrainMaterial terrainMat = calculateMaterialProperties(fragHeight, fragSteepness);
+	TerrainMaterial terrainMat = calculateTerrainMaterial(fragHeight, fragSteepness, fragPosition);
 
 	vec3 finalColor = vec3(0.0);
 
@@ -561,11 +751,11 @@ void main2() {
 		if (lightData.lights[i].colorAndIntensity.a > 0.0) {
 			/// Use both diffuse color and PBR parameters for lighting
 			finalColor += calculatePBRLighting(
-			lightData.lights[i],
-			normal,
-			terrainMat.color.rgb,
-			terrainMat.roughness,
-			terrainMat.metallic
+				lightData.lights[i],
+				normal,
+				terrainMat.color.rgb,
+				terrainMat.roughness,
+				terrainMat.metallic
 			);
 		}
 	}
