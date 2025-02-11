@@ -96,113 +96,160 @@ float getBeachNoise(vec3 worldPos, BiomeParameters biome);
 float getForestNoise(vec3 worldPos, BiomeParameters biome);
 float getMountainNoise(vec3 worldPos, BiomeParameters biome);
 
-/// Generate a pseudo-random value from a 2D position
-/// We use this as a basis for more complex noise functions
-/// The constants are chosen for good distribution and minimal patterns
-float hash2D(vec2 p) {
-	const vec2 magic = vec2(0.1031, 0.1030);
-	p = fract(p * magic);
-	p += dot(p, p.yx + 33.33);
-	return fract((p.x + p.y) * p.x);
+///	Simplex 3D Noise
+///	by Ian McEwan, Ashima Arts
+vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+
+float simplexNoise(vec3 v){
+	const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
+	const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+
+	/// First corner
+	vec3 i  = floor(v + dot(v, C.yyy) );
+	vec3 x0 =   v - i + dot(i, C.xxx) ;
+
+	/// Other corners
+	vec3 g = step(x0.yzx, x0.xyz);
+	vec3 l = 1.0 - g;
+	vec3 i1 = min( g.xyz, l.zxy );
+	vec3 i2 = max( g.xyz, l.zxy );
+
+	///  x0 = x0 - 0. + 0.0 * C
+	vec3 x1 = x0 - i1 + 1.0 * C.xxx;
+	vec3 x2 = x0 - i2 + 2.0 * C.xxx;
+	vec3 x3 = x0 - 1. + 3.0 * C.xxx;
+
+	/// Permutations
+	i = mod(i, 289.0 );
+	vec4 p = permute( permute( permute(
+		i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+		+ i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+		+ i.x + vec4(0.0, i1.x, i2.x, 1.0 )
+	);
+
+	/// Gradients
+	/// ( N*N points uniformly over a square, mapped onto an octahedron.)
+	float n_ = 1.0/7.0; // N=7
+	vec3  ns = n_ * D.wyz - D.xzx;
+
+	vec4 j = p - 49.0 * floor(p * ns.z *ns.z);  ///  mod(p,N*N)
+
+	vec4 x_ = floor(j * ns.z);
+	vec4 y_ = floor(j - 7.0 * x_ );    /// mod(j,N)
+
+	vec4 x = x_ *ns.x + ns.yyyy;
+	vec4 y = y_ *ns.x + ns.yyyy;
+	vec4 h = 1.0 - abs(x) - abs(y);
+
+	vec4 b0 = vec4( x.xy, y.xy );
+	vec4 b1 = vec4( x.zw, y.zw );
+
+	vec4 s0 = floor(b0)*2.0 + 1.0;
+	vec4 s1 = floor(b1)*2.0 + 1.0;
+	vec4 sh = -step(h, vec4(0.0));
+
+	vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+	vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+	vec3 p0 = vec3(a0.xy,h.x);
+	vec3 p1 = vec3(a0.zw,h.y);
+	vec3 p2 = vec3(a1.xy,h.z);
+	vec3 p3 = vec3(a1.zw,h.w);
+
+	/// Normalise gradients
+	vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+	p0 *= norm.x;
+	p1 *= norm.y;
+	p2 *= norm.z;
+	p3 *= norm.w;
+
+	/// Mix final noise value
+	vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+	m = m * m;
+	return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
 }
 
-/// Generate a 2D value noise
-/// This is our basic noise building block, providing smooth random variation
-/// @param p Position to sample noise at
-/// @return Noise value in range [0, 1]
-float valueNoise(vec2 p) {
-	/// Get cell corners for bilinear interpolation
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-
-	/// Sample random values at cell corners
-	float a = hash2D(i);
-	float b = hash2D(i + vec2(1.0, 0.0));
-	float c = hash2D(i + vec2(0.0, 1.0));
-	float d = hash2D(i + vec2(1.0, 1.0));
-
-	/// Smooth interpolation using quintic curve
-	/// We use quintic instead of simple smoothstep for better visual quality
-	vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-
-	/// Interpolate between corner values
-	return mix(mix(a, b, u.x),
-	mix(c, d, u.x), u.y);
+float worleyNoise(vec3 postion) {
+	return simplexNoise(postion);
 }
 
-/// Generate gradient noise (improved Perlin)
-/// This provides more natural-looking variation than value noise
-/// @param p Position to sample noise at
-/// @return Noise value in range [-1, 1]
-float gradientNoise(vec2 p) {
-	/// Get cell corners
-	vec2 i = floor(p);
-	vec2 f = fract(p);
+/// Generate a pseudo-random value from a 3D position
+/// This hash function creates a stippled/salt-and-pepper pattern
+/// that's consistent and suitable for terrain detail
+/// @param p Position in 3D space
+/// @return Random value in range [0,1]
+float hash3D(vec3 p) {
+	/// Use different dot products with irrational numbers
+	/// These constants are chosen to:
+	/// 1. Create minimal directional artifacts
+	/// 2. Spread values evenly in [0,1] range
+	/// 3. Work well when scaled at different frequencies
+	const vec3 magic1 = vec3(0.1031, 0.1030, 0.0973);
+	const vec3 magic2 = vec3(0.1744, 0.1731, 0.1761);
 
-	/// Generate random gradients for corners
-	/// We use hash function to create consistent random vectors
-	vec2 ga = normalize(vec2(hash2D(i) * 2.0 - 1.0,
-	hash2D(i + 0.1) * 2.0 - 1.0));
-	vec2 gb = normalize(vec2(hash2D(i + vec2(1.0, 0.0)) * 2.0 - 1.0,
-	hash2D(i + vec2(1.0, 0.0) + 0.1) * 2.0 - 1.0));
-	vec2 gc = normalize(vec2(hash2D(i + vec2(0.0, 1.0)) * 2.0 - 1.0,
-	hash2D(i + vec2(0.0, 1.0) + 0.1) * 2.0 - 1.0));
-	vec2 gd = normalize(vec2(hash2D(i + vec2(1.0, 1.0)) * 2.0 - 1.0,
-	hash2D(i + vec2(1.0, 1.0) + 0.1) * 2.0 - 1.0));
+	/// Decompose position into integer and fractional parts
+	/// This creates stable cells while maintaining continuity
+	vec3 pi = floor(p);
+	vec3 pf = fract(p);
 
-	/// Calculate dot products with gradients
-	float va = dot(ga, f);
-	float vb = dot(gb, f - vec2(1.0, 0.0));
-	float vc = dot(gc, f - vec2(0.0, 1.0));
-	float vd = dot(gd, f - vec2(1.0, 1.0));
+	/// Combine components using dot products
+	/// We use two different sets of constants to reduce pattern repetition
+	float n1 = dot(pi, magic1);
+	float n2 = dot(pf, magic2);
 
-	/// Interpolate using quintic curve
-	vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-
-	return mix(mix(va, vb, u.x),
-	mix(vc, vd, u.x), u.y);
+	/// Create final hash value
+	/// The sine function helps break up obvious patterns
+	/// while keeping the output in [0,1] range
+	return fract(sin(n1 + n2) * 43758.5453);
 }
 
-/// Generate Worley (cellular) noise
-/// This creates organic-looking patterns perfect for rocky terrain
-/// @param p Position to sample noise at
-/// @return Noise value in range [0, 1]
-float worleyNoise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
+/// Generate stippled noise pattern in 3D space
+/// This creates a more natural variation by blending
+/// multiple layers of hash noise
+/// @param p Position in 3D space
+/// @param frequency Base frequency of the pattern
+/// @param sharpness Controls transition sharpness (0 = smooth, 1 = binary)
+/// @return Noise value in range [0,1]
+float stippledNoise(vec3 p, float frequency, float sharpness) {
+	/// Scale input position by frequency
+	p *= frequency;
 
-	float minDist = 1.0;
+	/// Sample noise at different frequencies
+	/// We use 3 layers to create more natural variation
+	/// while keeping computational cost reasonable
+	float n1 = hash3D(p);
+	float n2 = hash3D(p * 2.0);
+	float n3 = hash3D(p * 4.0);
 
-	/// Check surrounding cells to find nearest feature point
-	/// We use a 3x3 grid for good quality while maintaining performance
-	for(float y = -1.0; y <= 1.0; y++) {
-		for(float x = -1.0; x <= 1.0; x++) {
-			vec2 neighbor = vec2(x, y);
+	/// Combine noise layers with decreasing influence
+	float noise = n1 * 0.5 + n2 * 0.35 + n3 * 0.15;
 
-			/// Generate random feature point in cell
-			vec2 point = neighbor + vec2(
-			hash2D(i + neighbor) * 0.5 + 0.25,
-			hash2D(i + neighbor + 0.1) * 0.5 + 0.25
-			);
+	/// Apply sharpness control
+	/// This allows us to create either smooth or binary patterns
+	/// depending on the desired effect
+	if (sharpness > 0.0) {
+		/// Create sharp transition
+		/// The smoothstep helps avoid aliasing at the transitions
+		float threshold = 0.5;
+		float width = 1.0 - sharpness;
 
-			/// Calculate distance to feature point
-			float dist = length(point - f);
-			minDist = min(minDist, dist);
-		}
+		/// Wider smoothstep for smoother transitions
+		/// Narrow smoothstep for more binary results
+		return smoothstep(threshold - width * 0.5,
+		threshold + width * 0.5,
+		noise);
 	}
 
-	return minDist;
+	return noise;
 }
 
-/// Generate fractal brownian motion (fBm) noise
+/// Generate fractal Brownian motion noise using 3D simplex noise
 /// This combines multiple octaves of noise for natural detail at different scales
 /// @param p Position to sample
-/// @param noiseFunc Function pointer for base noise (value, gradient, or Worley)
-/// @param octaves Number of noise layers to combine
-/// @param persistence How quickly amplitude decreases per octave
-/// @param lacunarity How quickly frequency increases per octave
-/// @return Combined noise value
-float fbm(vec2 p, NoiseParams params) {
+/// @param params Noise generation parameters controlling frequency, detail, and character
+/// @return Combined noise value in range [-1, 1]
+float fbm(vec3 p, NoiseParams params) {
 	float value = 0.0;
 	float amplitude = 1.0;
 	float frequency = 1.0;
@@ -210,17 +257,30 @@ float fbm(vec2 p, NoiseParams params) {
 
 	/// Combine multiple octaves of noise
 	/// Each octave adds finer detail with decreasing influence
+	/// We use params.octaves to control detail level
 	for(int i = 0; i < params.octaves; i++) {
-		/// We use value noise as our base but could be changed
-		value += valueNoise(p * frequency) * amplitude;
+		/// Sample simplex noise at current frequency
+		/// We scale the input position by both the base frequency
+		/// and the current octave's frequency
+		value += simplexNoise(p * frequency * params.baseFrequency) * amplitude;
 
+		/// Track maximum possible value for normalization
 		maxValue += amplitude;
+
+		/// Modify amplitude and frequency for next octave
+		/// - amplitude decreases by persistence to reduce influence of higher frequencies
+		/// - frequency increases by lacunarity to add finer detail
 		amplitude *= params.persistence;
 		frequency *= params.lacunarity;
 	}
 
-	/// Normalize result to [0, 1] range
-	return value / maxValue;
+	/// Normalize result to ensure consistent range regardless of params
+	/// This helps maintain predictable blending between different materials
+	value = value / maxValue;
+
+	/// Apply final amplitude scaling
+	/// This controls the overall strength of the noise effect
+	return value * params.amplitude;
 }
 
 /// Get a color visualization for debug purposes
@@ -238,10 +298,10 @@ vec4 getDebugVisualization(vec3 worldPos, float height, float steepness) {
 
 			/// Sample position based on world coordinates
 			/// We scale by planet radius to maintain consistent noise scale
-			vec2 noisePos = worldPos.xz / material.planetRadius;
+			vec3 noisePos = worldPos / material.planetRadius;
 
 			/// Red channel: Value noise showing basic pattern
-			float valuePattern = valueNoise(noisePos * 5.0);
+			float valuePattern = simplexNoise(noisePos * 5.0);
 
 			/// Green channel: FBM noise showing multi-octave effect
 			/// We use current biome's parameters to verify settings
@@ -270,8 +330,8 @@ vec4 getDebugVisualization(vec3 worldPos, float height, float steepness) {
 					(upper.minHeight - lower.maxHeight);
 
 					/// Sample transition noise
-					vec2 noisePos = worldPos.xz * lower.transitionScale;
-					float transitionNoise = valueNoise(noisePos);
+					vec3 noisePos = worldPos * lower.transitionScale;
+					float transitionNoise = simplexNoise(noisePos);
 
 					/// Show transition zone in yellow, with noise as brightness
 					return vec4(1.0, 1.0, 0.0, 1.0) *
@@ -316,11 +376,11 @@ vec4 getDebugVisualization(vec3 worldPos, float height, float steepness) {
 /// @return Color showing noise pattern
 vec4 getNoiseTestVisualization(vec3 worldPos) {
 	/// Scale position by planet radius for consistent noise scale
-	vec2 noisePos = worldPos.xz / material.planetRadius;
+	vec3 noisePos = worldPos / material.planetRadius;
 
 	/// Generate different types of noise
 	/// We combine them to show how they work together
-	float basic = valueNoise(noisePos * 5.0);
+	float basic = simplexNoise(noisePos * 5.0);
 	float detail = worleyNoise(noisePos * 10.0);
 
 	/// Sample FBM with current biome parameters
@@ -339,7 +399,7 @@ vec4 getNoiseTestVisualization(vec3 worldPos) {
 
 /// Calculate noise variations for specific biomes
 /// Each function will be expanded later with more complex noise patterns
-/// For now, we use valueNoise with biome-specific parameters to verify the system
+/// For now, we use simplexNoise with biome-specific parameters to verify the system
 
 /// Generate ocean surface variation
 /// This will later incorporate wave patterns and surface disturbance
@@ -350,11 +410,11 @@ float getOceanNoise(vec3 worldPos, BiomeParameters biome) {
 	/// Convert world position to noise coordinates
 	/// We use xz plane for horizontal wave patterns
 	/// Scale by planet radius to maintain consistent noise scale
-	vec2 noisePos = worldPos.xz / material.planetRadius;
+	vec3 noisePos = worldPos / material.planetRadius;
 
 	/// Sample primary noise for large wave patterns
 	/// We use a lower frequency for ocean to create gentle waves
-	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+	float baseNoise = simplexNoise(noisePos * biome.noise.baseFrequency);
 
 	/// Apply amplitude adjustment for wave height
 	/// Ocean waves should be subtle to maintain water appearance
@@ -369,11 +429,11 @@ float getOceanNoise(vec3 worldPos, BiomeParameters biome) {
 float getBeachNoise(vec3 worldPos, BiomeParameters biome) {
 	/// Use xz coordinates for horizontal noise patterns
 	/// Beaches need finer detail, so we use a higher base frequency
-	vec2 noisePos = worldPos.xz / material.planetRadius;
+	vec3 noisePos = worldPos / material.planetRadius;
 
 	/// Sample noise for sand patterns
 	/// Higher frequency creates more detailed sand texture
-	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+	float baseNoise = simplexNoise(noisePos * biome.noise.baseFrequency);
 
 	/// Apply stronger amplitude for visible sand patterns
 	return baseNoise * biome.noise.amplitude;
@@ -386,11 +446,11 @@ float getBeachNoise(vec3 worldPos, BiomeParameters biome) {
 /// @return Noise value for forest surface
 float getForestNoise(vec3 worldPos, BiomeParameters biome) {
 	/// Use xz plane for vegetation distribution
-	vec2 noisePos = worldPos.xz / material.planetRadius;
+	vec3 noisePos = worldPos / material.planetRadius;
 
 	/// Sample noise for vegetation patterns
 	/// Medium frequency creates natural-looking variation
-	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+	float baseNoise = simplexNoise(noisePos * biome.noise.baseFrequency);
 
 	/// Apply moderate amplitude for natural variation
 	return baseNoise * biome.noise.amplitude;
@@ -403,11 +463,11 @@ float getForestNoise(vec3 worldPos, BiomeParameters biome) {
 /// @return Noise value for mountain surface
 float getMountainNoise(vec3 worldPos, BiomeParameters biome) {
 	/// Use xz coordinates for horizontal noise
-	vec2 noisePos = worldPos.xz / material.planetRadius;
+	vec3 noisePos = worldPos / material.planetRadius;
 
 	/// Sample noise for mountain features
 	/// Higher frequency creates more detailed rock patterns
-	float baseNoise = valueNoise(noisePos * biome.noise.baseFrequency);
+	float baseNoise = simplexNoise(noisePos * biome.noise.baseFrequency);
 
 	/// Apply strong amplitude for dramatic mountain features
 	return baseNoise * biome.noise.amplitude;
@@ -435,7 +495,7 @@ float getBiomeNoise(vec3 worldPos, BiomeParameters biome, uint biomeIndex) {
 		default:
 			/// Fallback to simple noise for unknown biomes
 			/// This helps with debugging and prevents artifacts
-			return valueNoise((worldPos.xz / material.planetRadius) *
+			return simplexNoise((worldPos / material.planetRadius) *
 				biome.noise.baseFrequency) * biome.noise.amplitude;
 	}
 }
@@ -448,7 +508,7 @@ float getBiomeNoise(vec3 worldPos, BiomeParameters biome, uint biomeIndex) {
 float calculateTerrainNoise(vec3 worldPos, BiomeParameters biome) {
 	/// Convert 3D position to 2D noise coordinates
 	/// We use xz plane for horizontal variation
-	vec2 noisePos = worldPos.xz * biome.noise.baseFrequency;
+	vec3 noisePos = worldPos * biome.noise.baseFrequency;
 
 	/// Start with primary terrain variation
 	float mainNoise = fbm(noisePos, biome.noise);
@@ -602,8 +662,8 @@ float calculateNoiseBasedBlend(float baseBlend, vec3 worldPos, BiomeParameters l
 
 	/// Sample noise for transition
 	/// We use the lower biome's transition scale for consistency
-	vec2 noisePos = worldPos.xz * lowerBiome.transitionScale;
-	float transitionNoise = valueNoise(noisePos);
+	vec3 noisePos = worldPos * lowerBiome.transitionScale;
+	float transitionNoise = simplexNoise(noisePos);
 
 	/// Convert noise to -1 to 1 range for transition offset
 	float noiseOffset = (transitionNoise * 2.0 - 1.0) * lowerBiome.transitionNoise;
@@ -630,7 +690,7 @@ TerrainMaterial applyNoiseToMaterial(TerrainMaterial baseMaterial, float noiseVa
 	/// We apply subtle tinting to break up uniform colors
 	result.color.rgb = mix(
 		baseMaterial.color.rgb,
-		baseMaterial.color.rgb * (0.1 + noiseValue * 0.9),
+		baseMaterial.color.rgb * (0.8 + noiseValue * 0.2),
 		biome.noise.amplitude
 	);
 
