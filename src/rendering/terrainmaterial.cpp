@@ -17,7 +17,8 @@ TerrainMaterial::TerrainMaterial(
 	/// Deep oceans
 	/// Water is handled as a special case - highly reflective with low roughness
 	/// Underwater cliffs are rough and less metallic to suggest rock formations
-	this->properties.biomes[0] = {
+	uint32_t biomeId = 0;
+	this->properties.biomes[biomeId] = {
 		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f), /// Deep ocean blue
 		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f), /// Slightly lighter blue for underwater cliffs
 		0.0f,                              /// Start at lowest point
@@ -37,16 +38,18 @@ TerrainMaterial::TerrainMaterial(
 			2.0f  /// Standard lacunarity
 		},
 		0.1f, /// Very smooth transitions for water
-		5.0f  /// Large scale transitions for natural water boundaries
+		5.0f,  /// Large scale transitions for natural water boundaries
+		biomeId
 	};
 
 	/// Coastal regions and beaches
 	/// Sand is rough and non-metallic, creating a diffuse appearance
 	/// Sandstone cliffs are even rougher but maintain the same non-metallic quality
-	this->properties.biomes[1] = {
+	biomeId++;
+	this->properties.biomes[biomeId] = {
 		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f), /// Sandy beach color
 		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f), /// Reddish sandstone cliffs
-		0.38f,                             /// Overlap with water for shorelines
+		0.35f,                             /// Overlap with water for shorelines
 		0.5f,                              /// Up to midlands
 		0.6f,                              /// Beaches form on moderate slopes
 		0.4f,                              /// Transition to cliffs at 40% steepness
@@ -63,13 +66,15 @@ TerrainMaterial::TerrainMaterial(
 			2.5f  /// Wider frequency spread for varied patterns
 		},
 		0.8f, /// Strong noise in transitions for natural beach borders
-		2.0f  /// Medium scale for beach features
+		2.0f,  /// Medium scale for beach features
+		biomeId
 	};
 
 	/// Midlands and forests
 	/// Organic materials are non-metallic with medium roughness
 	/// Rock faces are rougher but maintain non-metallic properties
-	this->properties.biomes[2] = {
+	biomeId++;
+	this->properties.biomes[biomeId] = {
 		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f), /// Green vegetation
 		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f), /// Grey stone cliffs
 		0.48f,                             /// Overlap with beaches
@@ -89,16 +94,18 @@ TerrainMaterial::TerrainMaterial(
 			2.0f  /// Standard lacunarity
 		},
 		0.6f, /// Medium noise in transitions for natural forest edges
-		3.0f  /// Larger scale for forest regions
+		3.0f,  /// Larger scale for forest regions
+		biomeId
 	};
 
 	/// Mountain peaks
 	/// Snow is smooth but not metallic
 	/// Exposed granite is very rough and slightly metallic due to mineral content
-	this->properties.biomes[3] = {
+	biomeId++;
+	this->properties.biomes[biomeId] = {
 		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f), /// Bright snow
 		glm::vec4(0.3f, 0.3f, 0.3f, 1.0f),    /// Dark granite cliffs
-		0.68f,                                /// Overlap with midlands
+		0.6f,                                /// Overlap with midlands
 		1.0f,                                 /// Up to highest point
 		0.5f,                                 /// Snow on gentler slopes
 		0.3f,                                 /// Quick transition to rock
@@ -115,7 +122,8 @@ TerrainMaterial::TerrainMaterial(
 			2.2f  /// Slightly higher lacunarity for sharper features
 		},
 		0.7f, /// Strong noise in transitions for jagged mountain edges
-		1.0f  /// Small scale for detailed mountain features
+		1.0f,  /// Small scale for detailed mountain features
+		3
 	};
 
 	/// Set number of active biomes

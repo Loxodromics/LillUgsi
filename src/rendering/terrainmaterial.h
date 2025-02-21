@@ -50,7 +50,8 @@ public:
 		alignas(16) struct {                  /// 16 bytes total
 			float transitionNoise;            /// 0.0 = smooth, 1.0 = fully noisy transition
 			float transitionScale;            /// Scale of noise pattern in transitions
-			float padding[2];                 /// Pad to 16 bytes
+			uint32_t biomeId;                 /// Unique number to identify each biome in the shader
+			float padding;                    /// Pad to 16 bytes
 		};
 	};
 

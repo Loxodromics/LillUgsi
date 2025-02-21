@@ -27,6 +27,27 @@ layout(set = 1, binding = 0) uniform LightBuffer {
 const float PI = 3.14159265359;
 const float MIN_ROUGHNESS = 0.04; /// Prevent perfect smoothness for realism
 
+/// Height range constants
+/// These define the valid range for height values and help catch errors
+const float MIN_VALID_HEIGHT = 0.0;
+const float MAX_VALID_HEIGHT = 1.0;
+
+/// Debug colors for error visualization
+/// Using distinct colors helps identify specific issues
+const vec4 ERROR_COLOR_INVALID_RANGE = vec4(1.0, 0.0, 1.0, 1.0);  /// Magenta
+const vec4 ERROR_COLOR_NO_COVERAGE = vec4(1.0, 0.5, 0.0, 1.0);    /// Orange
+
+/// Debug visualization modes
+/// These values must match the C++ TerrainDebugMode enum
+const uint DEBUG_MODE_NONE = 0;
+const uint DEBUG_MODE_HEIGHT = 1;
+const uint DEBUG_MODE_STEEPNESS = 2;
+const uint DEBUG_MODE_NORMALS = 3;
+const uint DEBUG_MODE_BIOME_BOUNDARIES = 4;
+const uint DEBUG_MODE_NOISE_PATTERNS_RAW = 5;       /// Raw simplex noise output
+const uint DEBUG_MODE_NOISE_PATTERNS_FBM = 6;       /// FBM noise with current parameters
+const uint DEBUG_MODE_NOISE_PATTERNS_COLORED = 7;   /// FBM noise with color mapping
+
 /// Combined material properties for a terrain point
 /// We group these properties to make the relationship between them clear
 /// and to simplify passing them between shader functions
@@ -64,8 +85,8 @@ struct BiomeParameters {
 	NoiseParams noise;    /// Noise settings for this biome
 	float transitionNoise; /// 0.0 = smooth, 1.0 = fully noisy transition
 	float transitionScale; /// Scale of noise pattern in transitions
-	float padding1;
-	float padding2;
+	uint biomeId;          /// Unique number to identify each biome
+	float padding;
 };
 
 /// Terrain material properties buffer matches CPU struct
@@ -76,17 +97,6 @@ layout(set = 2, binding = 0) uniform TerrainMaterialUBO {
 	uint debugMode;             /// Current debug visualization mode
 	float padding;              /// Keeps alignment with CPU struct
 } material;
-
-/// Debug visualization modes
-/// These values must match the C++ TerrainDebugMode enum
-const uint DEBUG_MODE_NONE = 0;
-const uint DEBUG_MODE_HEIGHT = 1;
-const uint DEBUG_MODE_STEEPNESS = 2;
-const uint DEBUG_MODE_NORMALS = 3;
-const uint DEBUG_MODE_BIOME_BOUNDARIES = 4;
-const uint DEBUG_MODE_NOISE_PATTERNS_RAW = 5;       /// Raw simplex noise output
-const uint DEBUG_MODE_NOISE_PATTERNS_FBM = 6;       /// FBM noise with current parameters
-const uint DEBUG_MODE_NOISE_PATTERNS_COLORED = 7;   /// FBM noise with color mapping
 
 ///	Simplex 3D Noise
 ///	by Ian McEwan, Ashima Arts
@@ -202,6 +212,30 @@ float fbm(vec3 p, NoiseParams params) {
 	return value * params.amplitude;
 }
 
+/// Helper functions for biome range calculations
+/// These improve code readability and maintenance by centralizing overlap logic
+bool biomesOverlap(BiomeParameters a, BiomeParameters b) {
+	return max(a.minHeight, b.minHeight) <= min(a.maxHeight, b.maxHeight);
+}
+
+float getOverlapStart(BiomeParameters a, BiomeParameters b) {
+	return max(a.minHeight, b.minHeight);
+}
+
+float getOverlapEnd(BiomeParameters a, BiomeParameters b) {
+	return min(a.maxHeight, b.maxHeight);
+}
+
+/// Safely calculate normalized position within a range
+/// Handles edge cases like zero-width ranges to prevent division by zero
+float getNormalizedOverlapPosition(float height, float start, float end) {
+	float range = end - start;
+	if (abs(range) < 0.0001) {
+		return 0.5;  /// Return center point for negligible ranges
+	}
+	return (height - start) / range;
+}
+
 /// Calculate how much influence a biome has at a given height
 /// We handle overlapping height ranges by using the overlap itself as the transition zone
 /// @param biome The biome parameters to evaluate
@@ -209,38 +243,36 @@ float fbm(vec3 p, NoiseParams params) {
 /// @return Influence factor from 0 (no influence) to 1 (full influence)
 float calculateHeightInfluence(BiomeParameters biome, float height) {
 	/// For heights completely outside the biome range, no influence
-	if(height < biome.minHeight || height > biome.maxHeight) {
+	if (height < biome.minHeight || height > biome.maxHeight) {
 		return 0.0;
 	}
 
 	/// For heights in the core range (not in overlap with neighbors), full influence
-	/// We determine this using the biomes array
 	float influence = 1.0;
 
 	/// Check for overlaps with other biomes
-	for(uint i = 0; i < material.numBiomes; i++) {
+	for (uint i = 0; i < material.numBiomes; i++) {
 		BiomeParameters other = material.biomes[i];
 
-		/// Skip self-comparison
-		if(other.minHeight == biome.minHeight && other.maxHeight == biome.maxHeight) {
+		/// Skip self-comparison using biome IDs for safety
+		if (other.biomeId == biome.biomeId) {
 			continue;
 		}
 
 		/// If we overlap with another biome, calculate transition factor
-		if(height >= other.minHeight && height <= other.maxHeight) {
-			/// Calculate where we are in the overlap region
-			/// This creates a smooth transition across the overlapping range
-			if(height < biome.maxHeight && height > other.minHeight) {
-				float overlapStart = max(biome.minHeight, other.minHeight);
-				float overlapEnd = min(biome.maxHeight, other.maxHeight);
-				float t = (height - overlapStart) / (overlapEnd - overlapStart);
+		if (biomesOverlap(biome, other) && height >= other.minHeight && height <= other.maxHeight) {
+			/// Calculate smooth transition through overlap region
+			float overlapStart = getOverlapStart(biome, other);
+			float overlapEnd = getOverlapEnd(biome, other);
 
-				/// Smooth the transition using smoothstep
-				/// This gives us a more natural blend through the overlap
+			if (height < biome.maxHeight && height > other.minHeight) {
+				float t = getNormalizedOverlapPosition(height, overlapStart, overlapEnd);
+
+				/// Smooth the transition
 				t = smoothstep(0.0, 1.0, t);
 
-				/// If we're transitioning to a higher biome, invert the blend
-				if(other.minHeight > biome.minHeight) {
+				/// Invert blend direction for higher biomes
+				if (other.minHeight > biome.minHeight) {
 					t = 1.0 - t;
 				}
 
@@ -250,6 +282,81 @@ float calculateHeightInfluence(BiomeParameters biome, float height) {
 	}
 
 	return influence;
+}
+
+/// Verify biome setup and visualize errors
+/// Returns error color if issues found, otherwise returns vec4(0)
+vec4 debugBiomeValidity() {
+	/// Check for invalid ranges
+	for (uint i = 0; i < material.numBiomes; i++) {
+		if (material.biomes[i].maxHeight < material.biomes[i].minHeight) {
+			return ERROR_COLOR_INVALID_RANGE;
+		}
+	}
+
+	/// Check for height coverage
+	bool heightCovered = false;
+	for (uint i = 0; i < material.numBiomes; i++) {
+		if (fragHeight >= material.biomes[i].minHeight &&
+		fragHeight <= material.biomes[i].maxHeight) {
+			heightCovered = true;
+			break;
+		}
+	}
+
+	if (!heightCovered) {
+		return ERROR_COLOR_NO_COVERAGE;
+	}
+
+	return vec4(0.0);
+}
+
+/// Debug visualization of height bands and overlaps
+/// This helps verify biome height ranges and transitions
+vec4 debugHeightBands() {
+	/// First check for setup errors
+	vec4 errorColor = debugBiomeValidity();
+	if (errorColor.a > 0.0) {
+		return errorColor;
+	}
+
+	/// Show raw height value in grayscale if no biomes defined
+	if (material.numBiomes == 0) {
+		return vec4(vec3(fragHeight), 1.0);
+	}
+
+	/// Count overlaps at current height for visualization
+	int overlapCount = 0;
+	for (uint i = 0; i < material.numBiomes; i++) {
+		for (uint j = i + 1; j < material.numBiomes; j++) {
+			if (biomesOverlap(material.biomes[i], material.biomes[j]) &&
+			fragHeight >= getOverlapStart(material.biomes[i], material.biomes[j]) &&
+			fragHeight <= getOverlapEnd(material.biomes[i], material.biomes[j])) {
+				overlapCount++;
+			}
+		}
+	}
+
+	/// Show overlap intensity in debug color
+	if (overlapCount > 0) {
+		return vec4(1.0, 1.0, 0.0, 1.0) * (float(overlapCount) / float(material.numBiomes));
+	}
+
+	/// Color bands for non-overlapping regions
+	for (uint i = 0; i < material.numBiomes; i++) {
+		if (fragHeight >= material.biomes[i].minHeight &&
+		fragHeight <= material.biomes[i].maxHeight) {
+			const vec4 debugColors[4] = vec4[4](
+				vec4(1.0, 0.0, 0.0, 1.0),  // Red
+				vec4(0.0, 1.0, 0.0, 1.0),  // Green
+				vec4(0.0, 0.0, 1.0, 1.0),  // Blue
+				vec4(1.0, 1.0, 0.0, 1.0)   // Yellow
+			);
+			return debugColors[i];
+		}
+	}
+
+	return vec4(0.5, 0.5, 0.5, 1.0);
 }
 
 /// Blend biome colors based on height influence
