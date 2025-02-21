@@ -203,31 +203,53 @@ float fbm(vec3 p, NoiseParams params) {
 }
 
 /// Calculate how much influence a biome has at a given height
-/// We use smooth transitions to avoid hard cuts between biomes
+/// We handle overlapping height ranges by using the overlap itself as the transition zone
 /// @param biome The biome parameters to evaluate
 /// @param height Normalized height value from terrain
 /// @return Influence factor from 0 (no influence) to 1 (full influence)
 float calculateHeightInfluence(BiomeParameters biome, float height) {
-	/// Create smooth falloff at biome boundaries
-	/// This creates a natural transition zone between biomes
-	float smoothness = 0.1; // We'll later make this configurable per biome
+	/// For heights completely outside the biome range, no influence
+	if(height < biome.minHeight || height > biome.maxHeight) {
+		return 0.0;
+	}
 
-	/// Calculate smooth steps at both boundaries
-	float lowStep = smoothstep(
-	biome.minHeight - smoothness,
-	biome.minHeight + smoothness,
-	height
-	);
+	/// For heights in the core range (not in overlap with neighbors), full influence
+	/// We determine this using the biomes array
+	float influence = 1.0;
 
-	float highStep = smoothstep(
-	biome.maxHeight + smoothness,
-	biome.maxHeight - smoothness,
-	height
-	);
+	/// Check for overlaps with other biomes
+	for(uint i = 0; i < material.numBiomes; i++) {
+		BiomeParameters other = material.biomes[i];
 
-	/// Combine steps to get influence
-	/// A height within the biome's range will have both steps near 1
-	return lowStep * highStep;
+		/// Skip self-comparison
+		if(other.minHeight == biome.minHeight && other.maxHeight == biome.maxHeight) {
+			continue;
+		}
+
+		/// If we overlap with another biome, calculate transition factor
+		if(height >= other.minHeight && height <= other.maxHeight) {
+			/// Calculate where we are in the overlap region
+			/// This creates a smooth transition across the overlapping range
+			if(height < biome.maxHeight && height > other.minHeight) {
+				float overlapStart = max(biome.minHeight, other.minHeight);
+				float overlapEnd = min(biome.maxHeight, other.maxHeight);
+				float t = (height - overlapStart) / (overlapEnd - overlapStart);
+
+				/// Smooth the transition using smoothstep
+				/// This gives us a more natural blend through the overlap
+				t = smoothstep(0.0, 1.0, t);
+
+				/// If we're transitioning to a higher biome, invert the blend
+				if(other.minHeight > biome.minHeight) {
+					t = 1.0 - t;
+				}
+
+				influence = min(influence, t);
+			}
+		}
+	}
+
+	return influence;
 }
 
 /// Blend biome colors based on height influence
