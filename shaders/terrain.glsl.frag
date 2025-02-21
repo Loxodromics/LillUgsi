@@ -202,21 +202,88 @@ float fbm(vec3 p, NoiseParams params) {
 	return value * params.amplitude;
 }
 
-void main() {
-	/// Sample noise based on debug mode
-	float noiseValue;
-	const uint DEBUG_MODE_NOISE_PATTERNS_RAW = 6;       /// Raw simplex noise output
-	const uint DEBUG_MODE_NOISE_PATTERNS_FBM = 7;       /// FBM noise with current parameters
-	const uint DEBUG_MODE_NOISE_PATTERNS_COLORED = 8;   /// FBM noise with color mapping
-	/// Apply global noise scale to position
-	/// This allows easy adjustment of overall noise scale during development
-	vec3 scaledPos = fragPosition * 2.0;//noiseDebug.noiseScale;
+/// Calculate how much influence a biome has at a given height
+/// We use smooth transitions to avoid hard cuts between biomes
+/// @param biome The biome parameters to evaluate
+/// @param height Normalized height value from terrain
+/// @return Influence factor from 0 (no influence) to 1 (full influence)
+float calculateHeightInfluence(BiomeParameters biome, float height) {
+	/// Create smooth falloff at biome boundaries
+	/// This creates a natural transition zone between biomes
+	float smoothness = 0.1; // We'll later make this configurable per biome
 
-	if (material.debugMode == DEBUG_MODE_NOISE_PATTERNS_RAW) {
+	/// Calculate smooth steps at both boundaries
+	float lowStep = smoothstep(
+	biome.minHeight - smoothness,
+	biome.minHeight + smoothness,
+	height
+	);
+
+	float highStep = smoothstep(
+	biome.maxHeight + smoothness,
+	biome.maxHeight - smoothness,
+	height
+	);
+
+	/// Combine steps to get influence
+	/// A height within the biome's range will have both steps near 1
+	return lowStep * highStep;
+}
+
+/// Blend biome colors based on height influence
+/// This function handles the basic height-based blending without noise or other factors
+/// Later we'll extend this to handle more complex transitions
+vec4 calculateBasicBiomeColor() {
+	vec4 finalColor = vec4(0.0);
+	float totalInfluence = 0.0;
+
+	/// Accumulate weighted contributions from each biome
+	/// We'll later extend this to handle other influence factors
+	for (uint i = 0; i < material.numBiomes; i++) {
+		float influence = calculateHeightInfluence(material.biomes[i], fragHeight);
+
+		/// Skip biomes with negligible influence
+		/// This optimization will become more important as we add more factors
+		if (influence > 0.01) {
+			finalColor += material.biomes[i].color * influence;
+			totalInfluence += influence;
+		}
+	}
+
+	/// Normalize the result
+	/// This ensures we maintain full opacity and correct color blending
+	return finalColor / totalInfluence;
+}
+
+void main() {
+	if (material.debugMode == DEBUG_MODE_NONE) {
+		/// Calculate basic height-based biome color
+		/// This will be the foundation for more complex blending later
+		vec4 biomeColor = calculateBasicBiomeColor();
+
+		/// For now, output raw biome color
+		/// Later we'll add lighting, material properties, and other effects
+		outColor = biomeColor;
+		return;
+	}
+	else if (material.debugMode == DEBUG_MODE_NOISE_PATTERNS_RAW) {
+		/// Apply global noise scale to position
+		/// This allows easy adjustment of overall noise scale during development
+		vec3 scaledPos = fragPosition * 2.0;//noiseDebug.noiseScale;
+
 		/// Show raw simplex noise for basic pattern verification
-		noiseValue = simplexNoise(scaledPos);
+		float noiseValue = simplexNoise(scaledPos);
+
+		/// Output grayscale noise for raw/fbm modes
+		/// We remap from [-1,1] to [0,1] for proper display
+		outColor = vec4(vec3(noiseValue * 0.5 + 0.5), 1.0);
+		return;
 	}
 	else if (material.debugMode == DEBUG_MODE_NOISE_PATTERNS_FBM) {
+		/// Apply global noise scale to position
+		/// This allows easy adjustment of overall noise scale during development
+		vec3 scaledPos = fragPosition * 2.0;//noiseDebug.noiseScale;
+
 		/// Show FBM noise to verify parameter effects
 		NoiseParams params;
 		params.baseFrequency = 1.0;
@@ -225,26 +292,28 @@ void main() {
 		params.persistence = 0.5;
 		params.lacunarity = 2.0;
 
-		noiseValue = fbm(scaledPos, params);
+		float noiseValue = fbm(scaledPos, params);
+		/// Output grayscale noise for raw/fbm modes
+		/// We remap from [-1,1] to [0,1] for proper display
+		outColor = vec4(vec3(noiseValue * 0.5 + 0.5), 1.0);
+		return;
 	}
 	else if (material.debugMode == DEBUG_MODE_NOISE_PATTERNS_COLORED) {
+		/// Apply global noise scale to position
+		/// This allows easy adjustment of overall noise scale during development
+		vec3 scaledPos = fragPosition * 2.0;//noiseDebug.noiseScale;
 		/// Map noise to color ramp for better visualization
 		/// We use different colors to more clearly show the noise structure
-		noiseValue = fbm(scaledPos, material.biomes[0].noise);
+		float noiseValue = fbm(scaledPos, material.biomes[0].noise);
 		vec3 color = mix(
-		vec3(0.0, 0.0, 0.8),  /// Dark blue for low values
-		vec3(1.0, 0.0, 0.0),  /// Red for high values
-		noiseValue * 0.5 + 0.5
+			vec3(0.0, 0.0, 0.8),  /// Dark blue for low values
+			vec3(1.0, 0.0, 0.0),  /// Red for high values
+			noiseValue * 0.5 + 0.5
 		);
+
 		outColor = vec4(color, 1.0);
 		return;
 	}
-	else {
-		outColor = vec4(0.0, 1.0, 0.0, 1.0);
-		return;
-	}
 
-	/// Output grayscale noise for raw/fbm modes
-	/// We remap from [-1,1] to [0,1] for proper display
-	outColor = vec4(vec3(noiseValue * 0.5 + 0.5), 1.0);
+	outColor = vec4(0.0, 1.0, 0.0, 1.0);
 }
