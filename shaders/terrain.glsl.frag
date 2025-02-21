@@ -70,6 +70,14 @@ struct NoiseParams {
 	float padding3;
 };
 
+/// Parameters controlling the transition between biomes
+struct TransitionParams {
+	uint type;           /// Type of transition function to use (simplex, Worley)
+	float scale;         /// Scale of the noise pattern
+	float transitionSharpness;  /// Controls edge sharpness of noise boundaries (0: soft blend, 1: sharp cutoff)
+	NoiseParams noise;   /// Base noise parameters for the transition
+};
+
 /// Update biome parameters structure to match C++ definition
 struct BiomeParameters {
 	vec4 color;           /// Base color of the biome
@@ -83,10 +91,11 @@ struct BiomeParameters {
 	float metallic;       /// Base metallic value
 	float cliffMetallic;  /// Metallic value for cliff areas
 	NoiseParams noise;    /// Noise settings for this biome
-	float transitionNoise; /// 0.0 = smooth, 1.0 = fully noisy transition
-	float transitionScale; /// Scale of noise pattern in transitions
-	uint biomeId;          /// Unique number to identify each biome
-	float padding;
+	uint biomeId;         /// Unique number to identify each biome
+	float padding0;
+	float padding1;
+	float padding2;
+	TransitionParams transition;
 };
 
 /// Terrain material properties buffer matches CPU struct

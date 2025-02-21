@@ -28,6 +28,16 @@ public:
 		};
 	};
 
+	struct TransitionParameters {
+		alignas(16) struct {                /// 16 bytes total
+			uint32_t type;                  /// Type of transition function to use (simplex, Worley)
+			float scale;                    /// Scale of the noise pattern
+			float transitionSharpness;      /// Controls edge sharpness (0: soft blend, 1: sharp cutoff)
+			float padding;                  /// Pad to 16 bytes
+		};
+		alignas(16) NoiseParameters noise;  /// Noise parameters for the transition (32 bytes)
+	};
+
 	/// BiomeParameters now includes noise control and enhanced transition options
 	/// We extend the existing structure to support more natural-looking terrain
 	/// while maintaining backward compatibility
@@ -48,11 +58,18 @@ public:
 		};
 		alignas(16) NoiseParameters noise;    /// Noise settings for this biome (32 bytes)
 		alignas(16) struct {                  /// 16 bytes total
-			float transitionNoise;            /// 0.0 = smooth, 1.0 = fully noisy transition
-			float transitionScale;            /// Scale of noise pattern in transitions
 			uint32_t biomeId;                 /// Unique number to identify each biome in the shader
-			float padding;                    /// Pad to 16 bytes
+			float padding1;                   /// Pad to 16 bytes
+			float padding2;
+			float padding3;
 		};
+		alignas(16) TransitionParameters transition;  /// Parameters for transition to next biome (48 bytes)
+	};
+
+	/// Enum for transition types - must match shader values
+	enum class TransitionType : uint32_t {
+		Simplex = 0,
+		Worley = 1
 	};
 
 	/// Extended Properties structure to include debug support
@@ -125,13 +142,6 @@ public:
 	/// @param index Which biome to modify
 	/// @param params New noise parameters for the biome
 	void setNoiseParameters(uint32_t index, const NoiseParameters& params);
-
-	/// Set transition parameters for a biome
-	/// We use these parameters to control how biomes blend together
-	/// @param index Which biome to modify
-	/// @param noiseAmount How much noise to add to transitions (0-1)
-	/// @param scale Scale of the noise pattern
-	void setTransitionParameters(uint32_t index, float noiseAmount, float scale);
 
 	/// Set the debug visualization mode
 	/// We use this for development and tuning of the terrain system

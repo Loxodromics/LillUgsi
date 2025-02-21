@@ -18,113 +18,178 @@ TerrainMaterial::TerrainMaterial(
 	/// Water is handled as a special case - highly reflective with low roughness
 	/// Underwater cliffs are rough and less metallic to suggest rock formations
 	uint32_t biomeId = 0;
+	/// Deep oceans
+	/// Characterized by smooth, large-scale transitions and gentle wave patterns
 	this->properties.biomes[biomeId] = {
-		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f), /// Deep ocean blue
-		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f), /// Slightly lighter blue for underwater cliffs
-		0.0f,                              /// Start at lowest point
-		0.4f,                              /// Up to 40% height
-		0.3f,                              /// Water appears only on flat areas
-		0.2f,                              /// Start showing underwater formations early
-		0.1f,                              /// Smooth water surface
-		0.6f,                              /// Rough underwater cliff surface
-		0.9f,                              /// Highly reflective water
-		0.1f,                              /// Less reflective underwater cliffs
+		glm::vec4(0.0f, 0.1f, 0.4f, 1.0f),    /// Deep ocean blue
+		glm::vec4(0.0f, 0.2f, 0.5f, 1.0f),    /// Slightly lighter blue for underwater cliffs
+		0.0f,                                  /// Start at lowest point
+		0.4f,                                  /// Up to 40% height
+		0.3f,                                  /// Water appears only on flat areas
+		0.2f,                                  /// Start showing underwater formations early
+		0.1f,                                  /// Smooth water surface
+		0.6f,                                  /// Rough underwater cliff surface
+		0.9f,                                  /// Highly reflective water
+		0.1f,                                  /// Less reflective underwater cliffs
 		/// Water noise focuses on gentle, large-scale movement
 		{
-			1.0f, /// Lower frequency for broad waves
-			0.3f, /// Subtle amplitude for gentle variation
-			3,    /// Fewer octaves for smoother appearance
-			0.5f, /// Standard persistence
-			2.0f  /// Standard lacunarity
+			1.0f,  /// Lower frequency for broad waves
+			0.3f,  /// Subtle amplitude for gentle variation
+			3,     /// Fewer octaves for smoother appearance
+			0.5f,  /// Standard persistence
+			2.0f   /// Standard lacunarity
 		},
-		0.1f, /// Very smooth transitions for water
-		5.0f,  /// Large scale transitions for natural water boundaries
-		biomeId
+		biomeId,  /// Unique identifier
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		/// Transition to beach uses gentle, flowing patterns
+		{
+			0,    /// Simplex noise for smooth water transitions
+			2.0f, /// Large scale for broad shoreline features
+			0.3f, /// Soft edges for natural water boundaries
+			0.0f, /// Padding
+			{
+				0.8f,  /// Medium frequency for water movement
+				0.4f,  /// Moderate amplitude for subtle variation
+				3,     /// Few octaves for smooth transitions
+				0.5f,  /// Standard persistence
+				2.0f   /// Standard lacunarity
+			}
+		}
 	};
 
 	/// Coastal regions and beaches
 	/// Sand is rough and non-metallic, creating a diffuse appearance
 	/// Sandstone cliffs are even rougher but maintain the same non-metallic quality
+	/// Sand transitions use more detailed noise for realistic beach patterns
 	biomeId++;
 	this->properties.biomes[biomeId] = {
-		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f), /// Sandy beach color
-		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f), /// Reddish sandstone cliffs
-		0.35f,                             /// Overlap with water for shorelines
-		0.5f,                              /// Up to midlands
-		0.6f,                              /// Beaches form on moderate slopes
-		0.4f,                              /// Transition to cliffs at 40% steepness
-		0.7f,                              /// Rough sandy texture
-		0.8f,                              /// Very rough cliff texture
-		0.0f,                              /// Non-metallic sand
-		0.0f,                              /// Non-metallic cliffs
+		glm::vec4(0.8f, 0.7f, 0.5f, 1.0f),    /// Sandy beach color
+		glm::vec4(0.7f, 0.4f, 0.3f, 1.0f),    /// Reddish sandstone cliffs
+		0.35f,                                 /// Overlap with water for shorelines
+		0.5f,                                  /// Up to midlands
+		0.6f,                                  /// Beaches form on moderate slopes
+		0.4f,                                  /// Transition to cliffs at 40% steepness
+		0.7f,                                  /// Rough sandy texture
+		0.8f,                                  /// Very rough cliff texture
+		0.0f,                                  /// Non-metallic sand
+		0.0f,                                  /// Non-metallic cliffs
 		/// Beach noise creates small dunes and ripples
 		{
-			4.0f, /// Higher frequency for sand detail
-			0.7f, /// Strong amplitude for visible sand patterns
-			4,    /// More octaves for detailed sand texture
-			0.6f, /// Slower falloff for richer detail
-			2.5f  /// Wider frequency spread for varied patterns
+			4.0f,  /// Higher frequency for sand detail
+			0.7f,  /// Strong amplitude for visible sand patterns
+			4,     /// More octaves for detailed sand texture
+			0.6f,  /// Slower falloff for richer detail
+			2.5f   /// Wider frequency spread for varied patterns
 		},
-		0.8f, /// Strong noise in transitions for natural beach borders
-		2.0f,  /// Medium scale for beach features
-		biomeId
-	};
+		biomeId,  /// Unique identifier
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		/// Transition to grass uses detailed patterns for natural beach borders
+		{
+			0,    /// Simplex noise for natural beach transitions
+			3.0f, /// Medium scale for beach features
+			0.7f, /// Moderately sharp edges for distinct beach boundaries
+			0.0f, /// Padding
+		{
+			3.0f,  /// Higher frequency for detailed transitions
+			0.6f,  /// Moderate amplitude for natural variation
+			4,     /// More octaves for detailed boundaries
+			0.5f,  /// Standard persistence
+			2.0f   /// Standard lacunarity
+		}
+	}
+};
 
 	/// Midlands and forests
 	/// Organic materials are non-metallic with medium roughness
 	/// Rock faces are rougher but maintain non-metallic properties
+	/// Organic materials with varied, natural transitions to create realistic vegetation boundaries
 	biomeId++;
 	this->properties.biomes[biomeId] = {
-		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f), /// Green vegetation
-		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f), /// Grey stone cliffs
-		0.48f,                             /// Overlap with beaches
-		0.7f,                              /// Up to mountain zone
-		0.7f,                              /// Vegetation on most slopes
-		0.5f,                              /// Show cliffs on steeper angles
-		0.5f,                              /// Medium vegetation roughness
-		0.75f,                             /// Rough rock texture
-		0.0f,                              /// Non-metallic vegetation
-		0.0f,                              /// Non-metallic rock
+		glm::vec4(0.2f, 0.5f, 0.2f, 1.0f),    /// Green vegetation
+		glm::vec4(0.5f, 0.5f, 0.5f, 1.0f),    /// Grey stone cliffs
+		0.48f,                                 /// Overlap with beaches
+		0.7f,                                  /// Up to mountain zone
+		0.7f,                                  /// Vegetation on most slopes
+		0.5f,                                  /// Show cliffs on steeper angles
+		0.5f,                                  /// Medium vegetation roughness
+		0.75f,                                 /// Rough rock texture
+		0.0f,                                  /// Non-metallic vegetation
+		0.0f,                                  /// Non-metallic rock
 		/// Forest noise creates organic, varied patterns
 		{
-			3.0f, /// Medium frequency for natural variation
-			0.8f, /// Strong amplitude for clear vegetation patterns
-			5,    /// Many octaves for organic detail
-			0.5f, /// Standard persistence
-			2.0f  /// Standard lacunarity
+			3.0f,  /// Medium frequency for natural variation
+			0.8f,  /// Strong amplitude for clear vegetation patterns
+			5,     /// Many octaves for organic detail
+			0.5f,  /// Standard persistence
+			2.0f   /// Standard lacunarity
 		},
-		0.6f, /// Medium noise in transitions for natural forest edges
-		3.0f,  /// Larger scale for forest regions
-		biomeId
+		biomeId,  /// Unique identifier
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		/// Transition to mountains uses organic patterns for natural treeline
+		{
+			0,    /// Simplex noise for organic transitions
+			4.0f, /// Medium-small scale for detailed vegetation boundaries
+			0.6f, /// Moderate sharpness for natural treeline
+			0.0f, /// Padding
+			{
+				4.0f,  /// Higher frequency for detailed vegetation patterns
+				0.7f,  /// Strong amplitude for clear transitions
+				5,     /// Many octaves for natural variation
+				0.5f,  /// Standard persistence
+				2.2f   /// Slightly higher lacunarity for more varied patterns
+			}
+		}
 	};
 
 	/// Mountain peaks
 	/// Snow is smooth but not metallic
 	/// Exposed granite is very rough and slightly metallic due to mineral content
+	/// Sharp transitions with varied noise patterns to create realistic alpine environments
 	biomeId++;
 	this->properties.biomes[biomeId] = {
 		glm::vec4(0.95f, 0.95f, 0.95f, 1.0f), /// Bright snow
 		glm::vec4(0.3f, 0.3f, 0.3f, 1.0f),    /// Dark granite cliffs
-		0.6f,                                /// Overlap with midlands
-		1.0f,                                 /// Up to highest point
-		0.5f,                                 /// Snow on gentler slopes
-		0.3f,                                 /// Quick transition to rock
-		0.3f,                                 /// Smooth snow surface
-		0.9f,                                 /// Very rough granite texture
-		0.0f,                                 /// Non-metallic snow
-		0.1f,                                 /// Slightly metallic granite
+		0.6f,                                  /// Overlap with midlands
+		1.0f,                                  /// Up to highest point
+		0.5f,                                  /// Snow on gentler slopes
+		0.3f,                                  /// Quick transition to rock
+		0.3f,                                  /// Smooth snow surface
+		0.9f,                                  /// Very rough granite texture
+		0.0f,                                  /// Non-metallic snow
+		0.1f,                                  /// Slightly metallic granite
 		/// Mountain noise creates windswept patterns and rocky detail
 		{
-			5.0f, /// High frequency for detailed snow/rock patterns
-			0.9f, /// Strong amplitude for dramatic mountain features
-			6,    /// Many octaves for rich detail
-			0.5f, /// Standard persistence
-			2.2f  /// Slightly higher lacunarity for sharper features
+			5.0f,  /// High frequency for detailed snow/rock patterns
+			0.9f,  /// Strong amplitude for dramatic mountain features
+			6,     /// Many octaves for rich detail
+			0.5f,  /// Standard persistence
+			2.2f   /// Slightly higher lacunarity for sharper features
 		},
-		0.7f, /// Strong noise in transitions for jagged mountain edges
-		1.0f,  /// Small scale for detailed mountain features
-		3
-	};
+		biomeId,  /// Unique identifier
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		0.0f,     /// Padding
+		/// Transition parameters unused for highest biome
+		{
+			0,    /// Type unused
+			1.0f, /// Scale unused
+			1.0f, /// Sharpness unused
+			0.0f, /// Padding
+			{
+				1.0f,  /// Unused
+				1.0f,  /// Unused
+				1,     /// Unused
+				0.5f,  /// Unused
+				2.0f   /// Unused
+		}
+	}
+};
 
 	/// Set number of active biomes
 	this->properties.numBiomes = 4;
@@ -252,35 +317,6 @@ void TerrainMaterial::setNoiseParameters(const uint32_t index, const NoiseParame
 
 	spdlog::debug("Updated noise parameters for biome {} in material '{}'",
 		index, this->name);
-}
-
-void TerrainMaterial::setTransitionParameters(
-	const uint32_t index,
-	const float noiseAmount,
-	const float scale
-) {
-	/// Validate index before proceeding
-	if (index >= 4) {
-		throw vulkan::VulkanException(
-			VK_ERROR_VALIDATION_FAILED_EXT,
-			"Invalid biome index in terrain material '" + this->name + "'",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
-
-	/// Clamp noise amount to valid range
-	/// We use clamp to ensure valid values while allowing setter chaining
-	const float clampedNoise = glm::clamp(noiseAmount, 0.0f, 1.0f);
-
-	/// Update transition parameters
-	this->properties.biomes[index].transitionNoise = clampedNoise;
-	this->properties.biomes[index].transitionScale = scale;
-
-	/// Sync changes to GPU
-	this->updateUniformBuffer();
-
-	spdlog::debug("Updated transition parameters for biome {} in material '{}': noise={}, scale={}",
-		index, this->name, clampedNoise, scale);
 }
 
 void TerrainMaterial::setDebugMode(const TerrainDebugMode mode) {
