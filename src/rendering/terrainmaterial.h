@@ -69,12 +69,14 @@ public:
 	/// Debug modes for terrain visualization
 	/// We use an enum class for type safety and clear intent
 	enum class TerrainDebugMode : uint32_t {
-		None = 0,          /// Normal rendering
-		Height,            /// Show raw height values
-		Steepness,         /// Show slope calculations
-		Normals,           /// Visualize surface normals
-		BiomeBoundaries,   /// Show raw biome transitions
-		NoisePatterns      /// Display noise contribution
+		None = 0,            /// Normal rendering
+		Height,              /// Show raw height values
+		Steepness,           /// Show slope calculations
+		Normals,             /// Visualize surface normals
+		BiomeBoundaries,     /// Show raw biome transitions
+		NoisePatternsRaw,    /// Raw simplex noise output
+		NoisePatternsFBM,    /// FBM noise with current parameters
+		NoisePatternsColored /// FBM noise with color mapping
 	};
 
 	/// Create a new terrain material
