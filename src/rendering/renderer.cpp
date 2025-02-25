@@ -591,10 +591,13 @@ void Renderer::recordCommandBuffers() {
 	/// We need one command buffer for each swap chain image
 	/// Start with clean command buffers
 	/// First, free existing command buffers to prevent memory leaks
-	vkFreeCommandBuffers(this->vulkanContext->getDevice()->getDevice(),
-		this->commandPool.get(),
-		static_cast<uint32_t>(this->commandBuffers.size()),
-		this->commandBuffers.data());
+	/// Free existing command buffers only if they exist
+	if (!this->commandBuffers.empty()) {
+		vkFreeCommandBuffers(this->vulkanContext->getDevice()->getDevice(),
+			this->commandPool.get(),
+			static_cast<uint32_t>(this->commandBuffers.size()),
+			this->commandBuffers.data());
+	}
 
 	/// Resize for new recording
 	/// One command buffer per framebuffer
