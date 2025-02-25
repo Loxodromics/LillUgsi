@@ -363,6 +363,9 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 
 		this->vulkanContext->createSwapChain(this->width, this->height);
 
+		/// Recreate depth buffer with new dimensions
+		this->depthBuffer->initialize(this->width, this->height);
+
 		/// Recreate framebuffers
 		this->createFramebuffers();
 
