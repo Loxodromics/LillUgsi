@@ -63,6 +63,7 @@ add_executable(LillUgsi
 		src/planet/planetgenerator.cpp
 		src/planet/terraingeneratorvisitor.cpp
 		src/rendering/terrainmaterial.cpp
+		src/rendering/screenshot.cpp
 )
 
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})

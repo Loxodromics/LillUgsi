@@ -225,6 +225,8 @@ void Renderer::cleanup() {
 	/// Clean up render pass
 	this->renderPass.reset();
 
+	this->screenshotManager.reset();
+
 	/// Clean up Vulkan context (this will handle swap chain, device, and instance cleanup)
 	this->vulkanContext.reset();
 
@@ -304,6 +306,11 @@ void Renderer::drawFrame() {
 	/// Present the image to the screen
 	result = vkQueuePresentKHR(this->vulkanContext->getDevice()->getPresentQueue(), &presentInfo);
 
+	/// Store the presented image index for screenshot use
+	if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
+		this->lastPresentedImageIndex = imageIndex;
+	}
+
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
 		this->recreateSwapChain(this->width, this->height);
 	} else if (result != VK_SUCCESS) {
@@ -347,8 +354,7 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 				this->vulkanContext->getDevice()->getDevice(),
 				this->commandPool.get(),
 				static_cast<uint32_t>(this->commandBuffers.size()),
-				this->commandBuffers.data()
-			);
+				this->commandBuffers.data());
 			this->commandBuffers.clear();
 		}
 
@@ -377,7 +383,7 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		float aspectRatio = static_cast<float>(this->width) / static_cast<float>(this->height);
 		this->camera->getProjectionMatrix(aspectRatio);
 
-		spdlog::info("Swap chain recreated with dimensions {}x{}",  this->width, this->height);
+		spdlog::info("Swap chain recreated with dimensions {}x{}", this->width, this->height);
 		return true;
 	}
 	catch (const vulkan::VulkanException& e) {
@@ -388,6 +394,42 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		spdlog::error("Error during swap chain recreation: {}", e.what());
 		return false;
 	}
+}
+
+bool Renderer::captureScreenshot(const std::string& filename) {
+	/// Create the screenshot manager if it doesn't exist yet
+	if (!this->screenshotManager) {
+		this->screenshotManager = std::make_unique<Screenshot>(
+			this->vulkanContext->getDevice()->getDevice(),
+			this->vulkanContext->getPhysicalDevice(),
+			this->vulkanContext->getDevice()->getGraphicsQueue(),
+			this->commandPool.get()
+		);
+	}
+
+	/// Wait for the device to finish rendering before capturing
+	/// This ensures we have a complete frame
+	vkDeviceWaitIdle(this->vulkanContext->getDevice()->getDevice());
+
+	/// We need to keep track of which image index was last presented
+	/// Make sure we have a valid image index
+	if (this->lastPresentedImageIndex >= this->vulkanContext->getSwapChain()->getSwapChainImages().size()) {
+		spdlog::error("No valid image index for screenshot");
+		return false;
+	}
+
+	/// Get the swapchain image to capture using the last presented index
+	VkImage swapchainImage = this->vulkanContext->getSwapChain()->getSwapChainImages()[this->lastPresentedImageIndex];
+	const VkFormat swapchainFormat = this->vulkanContext->getSwapChain()->getSwapChainImageFormat();
+
+	/// Capture the screenshot
+	return this->screenshotManager->captureScreenshot(
+		swapchainImage,
+		this->width,
+		this->height,
+		swapchainFormat,
+		filename
+	);
 }
 
 void Renderer::createCommandPool() {

@@ -71,6 +71,9 @@ protected:
 	/// Manages frame timing, scaling, and fixed time step accumulation
 	void updateTime();
 
+	/// Take a screenshot and save it to a file with the current date
+	void takeScreenshot() const;
+
 	std::string appName;
 	uint32_t width;
 	uint32_t height;

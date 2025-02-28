@@ -8,6 +8,7 @@
 #include "rendering/editorcamera.h"
 #include "rendering/meshmanager.h"
 #include "rendering/lightmanager.h"
+#include "rendering/screenshot.h"
 #include "scene/scene.h"
 #include <glm/glm.hpp>
 #include <memory>
@@ -97,6 +98,10 @@ public:
 		return this->materialManager.get();
 	}
 
+	/// Capture the current frame as a screenshot
+	/// @param filename The name of the file to save (PNG format)
+	/// @return True if the screenshot was saved successfully
+	bool captureScreenshot(const std::string& filename);
 
 private:
 	/// Struct to hold camera data for GPU
@@ -197,6 +202,10 @@ private:
 	std::unique_ptr<MaterialManager> materialManager;
 
 	std::shared_ptr<planet::PlanetData> icosphere;
+
+	/// Screenshot manager variables
+	std::unique_ptr<Screenshot> screenshotManager;
+	uint32_t lastPresentedImageIndex = 0;
 
 };
 

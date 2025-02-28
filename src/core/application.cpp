@@ -1,6 +1,11 @@
 #include "application.h"
+
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
+#include <iostream>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 namespace lillugsi::core {
 Application::Application(const std::string& appName, uint32_t width, uint32_t height)
@@ -79,13 +84,17 @@ void Application::handleEvents() {
 			case SDL_EVENT_WINDOW_RESIZED:
 				this->framebufferResized = true;
 				break;
-			case SDL_EVENT_KEY_DOWN:
 			case SDL_EVENT_KEY_UP:
+				/// Check for screenshot key (e.g., F12)
+				if (event.key.key == SDLK_F12) {
+					this->takeScreenshot();
+				}
+			case SDL_EVENT_KEY_DOWN:
 			case SDL_EVENT_MOUSE_MOTION:
 			case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			case SDL_EVENT_MOUSE_BUTTON_UP:
 				/// Handle camera input for events not handled by the main application
-			/// This allows the camera to respond to mouse and keyboard input
+				/// This allows the camera to respond to mouse and keyboard input
 				this->handleCameraInput(event);
 
 				break;
@@ -199,6 +208,16 @@ void Application::fixedUpdate() {
 		/// Subtract fixed time step from accumulator
 		this->fixedTimeAccumulator -= GameTime::fixedTimeStep;
 	}
+}
+
+void Application::takeScreenshot() const {
+	const auto now = std::chrono::system_clock::now();
+	const std::time_t current_time = std::chrono::system_clock::to_time_t(now);
+	/// Convert to string using stringstream
+	std::stringstream ss;
+	ss << std::put_time(std::localtime(&current_time), "LillUgsi_%Y-%m-%d_%H.%M.%S.png");
+	const std::string filename = ss.str();
+	this->renderer->captureScreenshot(filename);
 }
 
 }
