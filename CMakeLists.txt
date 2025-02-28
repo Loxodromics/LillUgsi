@@ -20,6 +20,7 @@ find_package(Vulkan REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(glm REQUIRED)
 find_package(FastNoise2 REQUIRED)
+find_package(stb REQUIRED)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
 add_executable(LillUgsi
@@ -73,6 +74,7 @@ target_link_libraries(LillUgsi
 		Vulkan::Vulkan
 		glm::glm
 		FastNoise2::FastNoise
+		stb::stb
 )
 
 add_custom_target(Shaders

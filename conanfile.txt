@@ -2,8 +2,11 @@
 spdlog/1.14.1
 glm/cci.20230113
 fastnoise2/0.10.0-alpha
+stb/cci.20240531
+
 [generators]
 CMakeDeps
 CMakeToolchain
+
 [layout]
 cmake_layout
