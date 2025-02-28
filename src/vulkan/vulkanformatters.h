@@ -13,12 +13,22 @@ struct fmt::formatter<VkFormat> : formatter<string_view>
 		string_view name = "Unknown";
 		switch (format)
 		{
-		case VK_FORMAT_D16_UNORM: name = "VK_FORMAT_D16_UNORM";
-			break;
-		case VK_FORMAT_D32_SFLOAT: name = "VK_FORMAT_D32_SFLOAT";
-			break;
-		case VK_FORMAT_D24_UNORM_S8_UINT: name = "VK_FORMAT_D24_UNORM_S8_UINT";
-			break;
+		case VK_FORMAT_R8G8B8A8_UNORM: name = "VK_FORMAT_R8G8B8A8_UNORM"; break;
+		case VK_FORMAT_R8G8B8A8_SRGB: name = "VK_FORMAT_R8G8B8A8_SRGB"; break;
+		case VK_FORMAT_B8G8R8A8_UNORM: name = "VK_FORMAT_B8G8R8A8_UNORM"; break;
+		case VK_FORMAT_B8G8R8A8_SRGB: name = "VK_FORMAT_B8G8R8A8_SRGB"; break;
+		case VK_FORMAT_R8G8B8_UNORM: name = "VK_FORMAT_R8G8B8_UNORM"; break;
+		case VK_FORMAT_R8G8B8_SRGB: name = "VK_FORMAT_R8G8B8_SRGB"; break;
+		case VK_FORMAT_B8G8R8_UNORM: name = "VK_FORMAT_B8G8R8_UNORM"; break;
+		case VK_FORMAT_B8G8R8_SRGB: name = "VK_FORMAT_B8G8R8_SRGB"; break;
+		case VK_FORMAT_R8G8_UNORM: name = "VK_FORMAT_R8G8_UNORM"; break;
+		case VK_FORMAT_R8G8_SRGB: name = "VK_FORMAT_R8G8_SRGB"; break;
+		case VK_FORMAT_R8_UNORM: name = "VK_FORMAT_R8_UNORM"; break;
+		case VK_FORMAT_R8_SRGB: name = "VK_FORMAT_R8_SRGB"; break;
+		case VK_FORMAT_D16_UNORM: name = "VK_FORMAT_D16_UNORM"; break;
+		case VK_FORMAT_D32_SFLOAT: name = "VK_FORMAT_D32_SFLOAT"; break;
+		case VK_FORMAT_D24_UNORM_S8_UINT: name = "VK_FORMAT_D24_UNORM_S8_UINT"; break;
+			// Add any other formats you use
 		default: break;
 		}
 		return formatter<string_view>::format(name, ctx);
