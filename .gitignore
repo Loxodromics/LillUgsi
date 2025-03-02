@@ -2,6 +2,7 @@
 build/
 out/
 cmake-build-debug/
+*build-*/
 
 # Conan
 conanbuildinfo.cmake
