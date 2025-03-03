@@ -4,12 +4,14 @@
 #include "terrainmaterial.h"
 #include "vulkan/indexbuffer.h"
 #include "vulkan/vertexbuffer.h"
+#ifdef USE_PLANET
+#include <planet/datasettingvisitor.h>
+#include <planet/planetgenerator.h>
+#endif
 
 #include <SDL3/SDL_vulkan.h>
 #include <fstream>
 #include <glm/gtc/matrix_transform.hpp>
-#include <planet/datasettingvisitor.h>
-#include <planet/planetgenerator.h>
 #include <spdlog/spdlog.h>
 
 /// Helper function to read a file
@@ -1106,12 +1108,13 @@ void Renderer::initializeScene() {
 	// icosphereMesh->setMaterial(metallicMaterial);
 	// icosphereMesh->setMaterial(wireframeMaterial);
 
+#ifdef USE_PLANET
 	this->icosphere = std::make_shared<planet::PlanetData>();
 	icosphere->subdivide(4);
 
-
 	planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
 	planetGenerator.generateTerrain();
+#endif
 
 	icosphereNode->setMesh(std::move(icosphereMesh));
 

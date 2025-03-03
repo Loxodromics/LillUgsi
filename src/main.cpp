@@ -1,5 +1,8 @@
 #include "core/application.h"
+#ifdef USE_PLANET
 #include "planet/planetdata.h"
+#endif
+
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 

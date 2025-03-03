@@ -10,13 +10,16 @@
 #include "rendering/lightmanager.h"
 #include "rendering/screenshot.h"
 #include "scene/scene.h"
+#include "materialmanager.h"
+
+
+#ifdef USE_PLANET
+#include "planet/planetdata.h"
+#endif
+
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
-
-#include "materialmanager.h"
-
-#include <planet/planetdata.h>
 
 namespace lillugsi::rendering {
 
@@ -201,7 +204,9 @@ private:
 	/// Material management
 	std::unique_ptr<MaterialManager> materialManager;
 
+#ifdef USE_PLANET
 	std::shared_ptr<planet::PlanetData> icosphere;
+#endif
 
 	/// Screenshot manager variables
 	std::unique_ptr<Screenshot> screenshotManager;

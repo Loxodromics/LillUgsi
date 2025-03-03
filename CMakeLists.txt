@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(LillUgsi VERSION 0.2.0)
+project(LillUgsi VERSION 0.2.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,7 +23,8 @@ find_package(FastNoise2 REQUIRED)
 find_package(stb REQUIRED)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
-add_executable(LillUgsi
+# Define the main executable sources without planet files
+set(MAIN_SOURCES
 		src/main.cpp
 		src/vulkan/vulkaninstance.cpp
 		src/core/application.cpp
@@ -55,17 +56,30 @@ add_executable(LillUgsi
 		src/rendering/icospheremesh.cpp
 		src/vulkan/pipelineconfig.cpp
 		src/rendering/wireframematerial.cpp
-		src/planet/datasettingvisitor.cpp
-		src/planet/face.cpp
-		src/planet/planetdata.cpp
-		src/planet/vertexdata.cpp
-		src/planet/noiseterrainvisitor.cpp
-		src/planet/planetgenerator.cpp
-		src/planet/terraingeneratorvisitor.cpp
 		src/rendering/terrainmaterial.cpp
 		src/rendering/screenshot.cpp
 )
 
+add_executable(LillUgsi ${MAIN_SOURCES})
+
+# Check if the planet module is available
+set(PLANET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/modules/planet")
+option(USE_PLANET "Enable planet generation features" ON)
+
+# Add planet module if available and enabled
+if(USE_PLANET AND EXISTS "${PLANET_DIR}")
+	message(STATUS "Planet module found at ${PLANET_DIR}, including it in the build")
+	add_subdirectory(${PLANET_DIR})
+	target_link_libraries(LillUgsi PRIVATE LillUgsiPlanet)
+	target_compile_definitions(LillUgsi PRIVATE USE_PLANET)
+	target_include_directories(LillUgsi PRIVATE
+			${PLANET_DIR}/src
+	)
+else()
+	message(STATUS "Planet module not found or disabled")
+endif()
+
+# Rest of your target settings
 target_include_directories(LillUgsi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${Vulkan_INCLUDE_DIRS})
 
 target_link_libraries(LillUgsi
