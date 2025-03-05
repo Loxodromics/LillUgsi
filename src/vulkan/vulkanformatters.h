@@ -1,5 +1,7 @@
 #pragma once
 
+#include "rendering/texture.h"
+
 #include <vulkan/vulkan.h>
 #include <fmt/format.h>
 
@@ -28,8 +30,7 @@ struct fmt::formatter<VkFormat> : formatter<string_view>
 		case VK_FORMAT_D16_UNORM: name = "VK_FORMAT_D16_UNORM"; break;
 		case VK_FORMAT_D32_SFLOAT: name = "VK_FORMAT_D32_SFLOAT"; break;
 		case VK_FORMAT_D24_UNORM_S8_UINT: name = "VK_FORMAT_D24_UNORM_S8_UINT"; break;
-			// Add any other formats you use
-		default: break;
+		default: name = "VK_FORMAT_" + std::to_string(static_cast<int>(format)); break;
 		}
 		return formatter<string_view>::format(name, ctx);
 	}
@@ -196,6 +197,45 @@ struct fmt::formatter<VkBlendOp> : formatter<string_view>
 			break;
 		case VK_BLEND_OP_MAX: name = "MAX";
 			break;
+		default: break;
+		}
+		return formatter<string_view>::format(name, ctx);
+	}
+};
+
+/// Custom formatter for Texture::FilterMode
+template <>
+struct fmt::formatter<lillugsi::rendering::Texture::FilterMode> : formatter<string_view>
+{
+	template <typename FormatContext>
+	auto format(lillugsi::rendering::Texture::FilterMode mode, FormatContext& ctx)
+	{
+		string_view name = "Unknown";
+		switch (mode)
+		{
+		case lillugsi::rendering::Texture::FilterMode::Nearest: name = "Nearest"; break;
+		case lillugsi::rendering::Texture::FilterMode::Linear: name = "Linear"; break;
+		case lillugsi::rendering::Texture::FilterMode::Cubic: name = "Cubic"; break;
+		default: break;
+		}
+		return formatter<string_view>::format(name, ctx);
+	}
+};
+
+/// Custom formatter for Texture::WrapMode
+template <>
+struct fmt::formatter<lillugsi::rendering::Texture::WrapMode> : formatter<string_view>
+{
+	template <typename FormatContext>
+	auto format(lillugsi::rendering::Texture::WrapMode mode, FormatContext& ctx)
+	{
+		string_view name = "Unknown";
+		switch (mode)
+		{
+		case lillugsi::rendering::Texture::WrapMode::Repeat: name = "Repeat"; break;
+		case lillugsi::rendering::Texture::WrapMode::MirroredRepeat: name = "MirroredRepeat"; break;
+		case lillugsi::rendering::Texture::WrapMode::ClampToEdge: name = "ClampToEdge"; break;
+		case lillugsi::rendering::Texture::WrapMode::ClampToBorder: name = "ClampToBorder"; break;
 		default: break;
 		}
 		return formatter<string_view>::format(name, ctx);

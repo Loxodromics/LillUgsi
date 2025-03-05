@@ -51,7 +51,7 @@ using VulkanImageHandle = VulkanHandle<VkImage, std::function<void(VkImage)>>;
 using VulkanImageViewHandle = VulkanHandle<VkImageView, std::function<void(VkImageView)>>;
 
 /// Type alias for VkSampler wrapper
-using VulkanSamplerHandle = VulkanHandle<VkSampler, PFN_vkDestroySampler>;
+using VulkanSamplerHandle = VulkanHandle<VkSampler, std::function<void(VkSampler)>>;
 
 /// Type alias for VkDescriptorSetLayout wrapper
 using VulkanDescriptorSetLayoutHandle = VulkanHandle<VkDescriptorSetLayout, std::function<void(VkDescriptorSetLayout)>>;

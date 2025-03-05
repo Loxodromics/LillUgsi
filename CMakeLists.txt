@@ -58,6 +58,7 @@ set(MAIN_SOURCES
 		src/rendering/wireframematerial.cpp
 		src/rendering/terrainmaterial.cpp
 		src/rendering/screenshot.cpp
+		src/rendering/texture.cpp
 )
 
 add_executable(LillUgsi ${MAIN_SOURCES})
