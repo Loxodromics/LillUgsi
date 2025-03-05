@@ -60,6 +60,7 @@ set(MAIN_SOURCES
 		src/rendering/screenshot.cpp
 		src/rendering/texture.cpp
 		src/rendering/textureloader.cpp
+		src/rendering/texturemanager.cpp
 )
 
 add_executable(LillUgsi ${MAIN_SOURCES})
