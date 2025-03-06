@@ -5,11 +5,13 @@
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inColor;
+layout(location = 3) in vec2 inTexCoord;  /// Added texture coordinate input
 
 /// Output to fragment shader
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;  /// World-space normal
 layout(location = 2) out vec3 fragPosition;  /// World-space position
+layout(location = 3) out vec2 fragTexCoord;  /// Pass texture coordinates to fragment shader
 
 /// Camera uniform buffer (set = 0)
 /// We separate camera data into its own set for potential multi-view rendering
@@ -56,7 +58,11 @@ void main() {
 	fragNormal = normalize(normalMatrix * inNormal);
 
 	/// Pass the vertex color to fragment shader
-	fragColor = vec3(0.5, 0.5, 0.5);
+	fragColor = inColor;
+
+	/// Pass texture coordinates to fragment shader
+	/// This enables texture sampling in the fragment shader
+	fragTexCoord = inTexCoord;
 
 	/// For Reverse-Z, we invert the Z component
 	/// This provides better depth precision

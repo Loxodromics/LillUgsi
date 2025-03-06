@@ -35,23 +35,37 @@ void Material::bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) 
 }
 
 void Material::createDescriptorPool() {
-	VkDescriptorPoolSize poolSize{};
-	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize.descriptorCount = 1;
+	/// Define pool sizes for our different descriptor types
+	/// We need both uniform buffers and combined image samplers
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 
+	/// Uniform buffer pool size
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = 1;
+
+	/// Combined image sampler pool size
+	/// This is for texture samplers
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = 4; /// Allow up to 4 textures per material
+
+	/// Create the descriptor pool
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = 1;
-	poolInfo.pPoolSizes = &poolSize;
-	poolInfo.maxSets = 1;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
+	poolInfo.maxSets = 1; /// Just one set per material
 
 	VkDescriptorPool pool;
 	VK_CHECK(vkCreateDescriptorPool(this->device, &poolInfo, nullptr, &pool));
 
-	this->descriptorPool = vulkan::VulkanDescriptorPoolHandle(pool,
+	this->descriptorPool = vulkan::VulkanDescriptorPoolHandle(
+		pool,
 		[this](VkDescriptorPool p) {
 			vkDestroyDescriptorPool(this->device, p, nullptr);
-		});
+		}
+	);
+
+	spdlog::debug("Created descriptor pool for material '{}'", this->name);
 }
 
 VkDescriptorSetLayout Material::getDescriptorSetLayout() const {

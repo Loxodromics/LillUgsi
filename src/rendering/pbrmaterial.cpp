@@ -59,18 +59,28 @@ ShaderPaths PBRMaterial::getShaderPaths() const {
 }
 
 void PBRMaterial::createDescriptorSetLayout() {
-	/// Define the binding for our material properties uniform buffer
-	VkDescriptorSetLayoutBinding binding{};
-	binding.binding = 0;
-	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	binding.descriptorCount = 1;
-	binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	binding.pImmutableSamplers = nullptr;
+	/// Create two bindings - one for the uniform buffer and one for the texture sampler
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
 
+	/// Binding 0: Uniform buffer containing material properties
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; /// Used in fragment shader
+	bindings[0].pImmutableSamplers = nullptr;
+
+	/// Binding 1: Combined image sampler for albedo texture
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].descriptorCount = 1; /// Just one texture for now
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; /// Used in fragment shader
+	bindings[1].pImmutableSamplers = nullptr;
+
+	/// Create the descriptor set layout with both bindings
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &binding;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
 
 	VkDescriptorSetLayout layout;
 	VK_CHECK(vkCreateDescriptorSetLayout(this->device, &layoutInfo, nullptr, &layout));
@@ -80,7 +90,8 @@ void PBRMaterial::createDescriptorSetLayout() {
 		layout,
 		[this](VkDescriptorSetLayout l) {
 			vkDestroyDescriptorSetLayout(this->device, l, nullptr);
-		});
+		}
+	);
 
 	spdlog::debug("Created descriptor set layout for PBR material '{}'", this->name);
 }
@@ -176,6 +187,124 @@ void PBRMaterial::setMetallic(float metallic) {
 void PBRMaterial::setAmbient(float ambient) {
 	this->properties.ambient = glm::clamp(ambient, 0.0f, 1.0f);
 	this->updateUniformBuffer();
+}
+
+void PBRMaterial::setAlbedoTexture(std::shared_ptr<Texture> texture) {
+	/// Store the new albedo texture
+	this->albedoTexture = texture;
+
+	/// Update the material property that controls texture usage
+	/// We set this flag to 1.0 when a valid texture is provided
+	/// and 0.0 when the texture is null, which controls shader behavior
+	this->properties.useAlbedoTexture = (texture != nullptr) ? 1.0f : 0.0f;
+
+	/// Update both the uniform buffer and descriptor sets
+	/// The uniform buffer needs to reflect the new useAlbedoTexture value
+	this->updateUniformBuffer();
+
+	/// Textures are bound via descriptor sets, so we need to update those too
+	this->updateTextureDescriptors();
+
+	spdlog::debug("Albedo texture {} for material '{}'",
+		texture ? "set" : "cleared", this->name);
+}
+
+void PBRMaterial::bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) const {
+	/// First, invoke the base class implementation
+	/// This handles binding the descriptor set containing uniform buffers
+	Material::bind(cmdBuffer, pipelineLayout);
+
+	/// No additional binding required here since we're using the same
+	/// descriptor set (set=2) for both uniform data and textures.
+	///
+	/// The updateTextureDescriptors() method has already updated the
+	/// descriptors to include both the uniform buffer and any textures.
+	///
+	/// When the descriptor set is bound by the base class method,
+	/// it makes both the uniform data and textures available to the shader.
+}
+
+VkDescriptorSetLayout PBRMaterial::getDescriptorSetLayout() const {
+	/// Return the descriptor set layout created in createDescriptorSetLayout()
+	/// This layout now includes both uniform buffer and texture sampler bindings
+	return this->descriptorSetLayout.get();
+}
+
+void PBRMaterial::updateTextureDescriptors() {
+	/// Early out if we don't have a descriptor set yet
+	/// This can happen during initialization before createDescriptorSet() is called
+	if (this->descriptorSet == VK_NULL_HANDLE) {
+		return;
+	}
+
+	/// Create an array of write operations for the descriptor set
+	/// We need to update both the uniform buffer (binding 0) and texture sampler (binding 1)
+	std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+
+	/// Configure the write operation for the uniform buffer
+	/// This ensures the uniform data is updated along with textures
+	VkDescriptorBufferInfo bufferInfo{};
+	bufferInfo.buffer = this->uniformBuffer.get();
+	bufferInfo.offset = 0;
+	bufferInfo.range = sizeof(Properties);
+
+	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[0].dstSet = this->descriptorSet;
+	descriptorWrites[0].dstBinding = 0;
+	descriptorWrites[0].dstArrayElement = 0;
+	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrites[0].descriptorCount = 1;
+	descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+	/// Configure the write operation for the texture sampler
+	VkDescriptorImageInfo imageInfo{};
+
+	/// If we have a valid albedo texture, use its image view and sampler
+	/// Otherwise, use a default texture or null descriptor
+	if (this->albedoTexture) {
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageView = this->albedoTexture->getImageView();
+		imageInfo.sampler = this->albedoTexture->getSampler();
+	} else {
+		/// If no texture is set, we still need to provide valid data
+		/// This prevents validation errors in the shader even if the texture won't be used
+		/// In a real engine, you might have a default "white" texture for this purpose
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		/// Ideally, we'd get these from a default texture
+		/// For now, we need to provide valid handles or skip this write
+		if (this->properties.useAlbedoTexture < 0.5f) {
+			/// Only perform one write if we're not using a texture
+			vkUpdateDescriptorSets(
+				this->device,
+				1, /// Only update the uniform buffer
+				descriptorWrites.data(),
+				0, nullptr
+			);
+			return;
+		} else {
+			spdlog::warn("Material '{}' has useAlbedoTexture set but no texture provided", this->name);
+		}
+	}
+
+	/// Set up the texture descriptor write
+	descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[1].dstSet = this->descriptorSet;
+	descriptorWrites[1].dstBinding = 1; /// Binding 1 is for the albedo texture
+	descriptorWrites[1].dstArrayElement = 0;
+	descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrites[1].descriptorCount = 1;
+	descriptorWrites[1].pImageInfo = &imageInfo;
+
+	/// Update the descriptor set with both the uniform buffer and texture
+	vkUpdateDescriptorSets(
+		this->device,
+		this->albedoTexture ? 2 : 1, /// Update both descriptors if texture exists
+		descriptorWrites.data(),
+		0, nullptr
+	);
+
+	spdlog::trace("Updated texture descriptors for material '{}'", this->name);
 }
 
 } /// namespace lillugsi::rendering

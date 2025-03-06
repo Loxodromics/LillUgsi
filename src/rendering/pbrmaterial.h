@@ -1,8 +1,8 @@
 #pragma once
 
 #include "material.h"
+#include "texture.h"
 #include "vulkan/vulkanwrappers.h"
-
 #include <glm/glm.hpp>
 
 namespace lillugsi::rendering {
@@ -56,15 +56,37 @@ public:
 	/// @param ambient Value between 0 (fully occluded) and 1 (unoccluded)
 	void setAmbient(float ambient);
 
+	/// Set the albedo texture for this material
+	/// This texture provides the base color across the surface
+	/// @param texture Shared pointer to the texture to use
+	void setAlbedoTexture(std::shared_ptr<Texture> texture);
+
+	/// Get the current albedo texture
+	/// @return Shared pointer to the current albedo texture, or nullptr if none set
+	[[nodiscard]] std::shared_ptr<Texture> getAlbedoTexture() const {
+		return this->albedoTexture;
+	}
+
+	/// Bind this material's resources for rendering
+	/// This method overrides the base class implementation to bind textures
+	/// @param cmdBuffer The command buffer to record binding commands to
+	/// @param pipelineLayout The pipeline layout for binding
+	void bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) const override;
+
+	/// Get the descriptor set layout for this material type
+	/// Overridden to include texture samplers in the layout
+	/// @return The descriptor set layout for this material
+	[[nodiscard]] VkDescriptorSetLayout getDescriptorSetLayout() const override;
+
 protected:
 	/// GPU-aligned material properties structure
 	/// We use this layout to match the shader's uniform buffer
 	struct Properties {
-		glm::vec4 baseColor{1.0f};  /// RGB + alpha
-		float roughness{0.5f};           /// Default: medium roughness
-		float metallic{0.0f};            /// Default: dielectric
-		float ambient{1.0f};             /// Default: fully unoccluded
-		float padding;                   /// Required for GPU alignment
+		glm::vec4 baseColor{1.0f};    /// RGB + alpha
+		float roughness{0.5f};        /// Default: medium roughness
+		float metallic{0.0f};         /// Default: dielectric
+		float ambient{1.0f};          /// Default: fully unoccluded
+		float useAlbedoTexture{0.0f}; /// Whether to use albedo texture (0=no, 1=yes)
 	};
 
 	/// Create the descriptor set layout for PBR materials
@@ -84,11 +106,18 @@ protected:
 	/// Called whenever material properties change
 	void updateUniformBuffer();
 
+	/// Update descriptor set to reflect current textures
+	/// Called when textures change or are assigned
+	void updateTextureDescriptors();
+
 	Properties properties;   /// CPU-side material properties
 
 	/// Shader paths stored for pipeline creation
 	std::string vertexShaderPath;
 	std::string fragmentShaderPath;
+
+	/// Texture resources
+	std::shared_ptr<Texture> albedoTexture;   /// Base color texture
 };
 
 } /// namespace lillugsi::rendering
