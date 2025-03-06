@@ -26,6 +26,12 @@ private:
 	/// Default colors for the cube faces
 	static const std::array<glm::vec3, 6> DefaultColors;
 
+	/// Default UV coordinates for each vertex of a face
+	/// These map the corners of a texture to the corners of each face
+	/// Following standard OpenGL/Vulkan texture coordinate system:
+	/// (0,0) = bottom-left, (1,1) = top-right
+	static const std::array<glm::vec2, 4> DefaultUVs;
+
 	/// Helper function to get face normal
 	glm::vec3 getFaceNormal(int face) const {
 		switch(face) {

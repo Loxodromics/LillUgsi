@@ -19,6 +19,13 @@ struct Vertex {
 	/// The color of the vertex
 	glm::vec3 color;
 
+	/// Texture coordinates (UV) for mapping textures onto the surface
+	/// These coordinates determine how textures are projected onto geometry:
+	/// - U: Horizontal coordinate, ranges from 0 (left) to 1 (right)
+	/// - V: Vertical coordinate, ranges from 0 (bottom) to 1 (top)
+	/// Using vec2 for efficiency as we only need two components
+	glm::vec2 texCoord;
+
 	/// Get the binding description for this vertex format
 	/// This describes how to interpret vertex data in the vertex buffer
 	/// @return The vertex binding description
@@ -35,7 +42,7 @@ struct Vertex {
 	/// This describes how to extract vertex attributes from the vertex buffer
 	/// @return Vector of attribute descriptions
 	static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() {
-		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(4);
 
 		/// Position attribute
 		attributeDescriptions[0].binding = 0;  /// Comes from the same buffer as binding 0
@@ -54,6 +61,13 @@ struct Vertex {
 		attributeDescriptions[2].location = 2;
 		attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;  /// vec3
 		attributeDescriptions[2].offset = offsetof(Vertex, color);
+
+		/// Texture coordinate attribute
+		/// This is a new attribute for texture mapping support
+		attributeDescriptions[3].binding = 0;
+		attributeDescriptions[3].location = 3;  /// Location 3 in the vertex shader
+		attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;  /// vec2 (U,V coordinates)
+		attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
 
 		return attributeDescriptions;
 	}

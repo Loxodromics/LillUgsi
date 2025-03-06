@@ -1,4 +1,5 @@
 #include "cubemesh.h"
+
 #include <array>
 #include <spdlog/spdlog.h>
 
@@ -41,6 +42,12 @@ void CubeMesh::generateGeometry() {
 			vertex.position = positions[CubeFaceIndices[face][i]];
 			vertex.normal = getFaceNormal(face);
 			vertex.color = this->faceColors[face];
+
+			/// Apply texture coordinates for this vertex
+			/// We use the DefaultUVs array which defines a standard mapping
+			/// and apply the tiling factor to create texture repetition if needed
+			vertex.texCoord = this->applyTextureTiling(DefaultUVs[i]);
+
 			this->vertices.push_back(vertex);
 		}
 
@@ -56,6 +63,9 @@ void CubeMesh::generateGeometry() {
 
 	spdlog::debug("Cube mesh generated with {} vertices and {} indices",
 		this->vertices.size(), this->indices.size());
+
+	/// Mark buffers as dirty to ensure they're updated when next rendered
+	this->markBuffersDirty();
 }
 
 void CubeMesh::setFaceColors(const std::vector<glm::vec3>& colors) {
@@ -83,6 +93,15 @@ const std::array<glm::vec3, 6> CubeMesh::DefaultColors = {
 	glm::vec3(1.0f, 1.0f, 0.0f), /// Yellow
 	glm::vec3(1.0f, 0.0f, 1.0f), /// Magenta
 	glm::vec3(0.0f, 1.0f, 1.0f)  /// Cyan
+};
+
+/// Define default UV coordinates for each vertex
+/// These provide a standard mapping from texture to cube face
+const std::array<glm::vec2, 4> CubeMesh::DefaultUVs = {
+	glm::vec2(0.0f, 0.0f), /// Bottom-left
+	glm::vec2(1.0f, 0.0f), /// Bottom-right
+	glm::vec2(1.0f, 1.0f), /// Top-right
+	glm::vec2(0.0f, 1.0f)  /// Top-left
 };
 
 } /// namespace lillugsi::rendering
