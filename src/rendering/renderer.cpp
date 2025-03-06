@@ -100,6 +100,14 @@ bool Renderer::initialize(SDL_Window* window) {
 			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex()
 		);
 
+		/// The TextureManager needs these resources for uploading texture data to the GPU
+		this->textureManager = std::make_unique<rendering::TextureManager>(
+			this->vulkanContext->getDevice()->getDevice(),
+			this->vulkanContext->getPhysicalDevice(),
+			this->commandPool.get(),
+			this->vulkanContext->getDevice()->getGraphicsQueue()
+		);
+
 		/// Create camera uniform buffer
 		this->createCameraUniformBuffer();
 
@@ -205,6 +213,8 @@ void Renderer::cleanup() {
 	}
 
 	this->vulkanBufferUtility.reset();
+
+	this->textureManager.reset();
 
 	/// Clean up mesh manager before other resources
 	/// This ensures buffers are destroyed before the device
@@ -702,6 +712,11 @@ void Renderer::recordCommandBuffers() {
 
 		/// Draw all visible objects
 		for (const auto& data : renderData) {
+			/// Skip objects without valid meshes or materials
+			if (!data.vertexBuffer || !data.indexBuffer || !data.material) {
+				continue;
+			}
+
 			/// Get material name for pipeline lookup
 			const auto& materialName = data.material->getName();
 
@@ -761,6 +776,8 @@ void Renderer::recordCommandBuffers() {
 			}
 
 			/// Bind material-specific resources
+			/// This is where textures are bound through the material's bind method
+			/// Our updated Material::bind implementation handles both uniform buffers and textures
 			data.material->bind(this->commandBuffers[i],
 				this->pipelineManager->getPipelineLayout(materialName)->get());
 
@@ -1091,41 +1108,40 @@ void Renderer::initializeScene() {
 
 	auto wireframeMaterial = this->materialManager->createWireframeMaterial("wireframe");
 
-	/// Get our terrain material
-	auto terrainMaterial = this->materialManager->getMaterial("planetTerrain");
-	/// Set the planet's base radius
-	/// This should match the radius used in TerrainMaterial
-	float planetRadius = 2.9f;
-	const uint32_t levels = 1;
-	// std::static_pointer_cast<TerrainMaterial>(terrainMaterial)->setPlanetRadius(planetRadius);
-
-	/// Add an icosphere to demonstrate spherical geometry
-	/// We place it at the center where it's easy to observe
-	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
-	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
-		this->meshManager->createMesh<IcosphereMesh>(2.9f, 4));
-	icosphereMesh->setMaterial(terrainMaterial);
-	// icosphereMesh->setMaterial(metallicMaterial);
-	// icosphereMesh->setMaterial(wireframeMaterial);
-
-#ifdef USE_PLANET
-	this->icosphere = std::make_shared<planet::PlanetData>();
-	icosphere->subdivide(4);
-
-	planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
-	planetGenerator.generateTerrain();
-#endif
-
-	icosphereNode->setMesh(std::move(icosphereMesh));
-
-
-	/// Position a large icosphere in the middle of all cubes
-	/// It intersects some of the cude to see, that depth rendering works correctly
-	/// This makes it easier to see its relationship to other objects
-	scene::Transform icosphereTransform;
-	icosphereTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	// icosphereTransform.scale = glm::vec3(planetRadius);
-	icosphereNode->setLocalTransform(icosphereTransform);
+// 	/// Get our terrain material
+// 	auto terrainMaterial = this->materialManager->getMaterial("planetTerrain");
+// 	/// Set the planet's base radius
+// 	/// This should match the radius used in TerrainMaterial
+// 	float planetRadius = 2.9f;
+// 	const uint32_t levels = 1;
+// 	// std::static_pointer_cast<TerrainMaterial>(terrainMaterial)->setPlanetRadius(planetRadius);
+//
+// 	/// Add an icosphere to demonstrate spherical geometry
+// 	/// We place it at the center where it's easy to observe
+// 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
+// 	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
+// 		this->meshManager->createMesh<IcosphereMesh>(2.9f, 4));
+// 	icosphereMesh->setMaterial(terrainMaterial);
+// 	// icosphereMesh->setMaterial(metallicMaterial);
+// 	// icosphereMesh->setMaterial(wireframeMaterial);
+//
+// #ifdef USE_PLANET
+// 	this->icosphere = std::make_shared<planet::PlanetData>();
+// 	icosphere->subdivide(4);
+//
+// 	planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
+// 	planetGenerator.generateTerrain();
+// #endif
+//
+// 	icosphereNode->setMesh(std::move(icosphereMesh));
+//
+// 	/// Position a large icosphere in the middle of all cubes
+// 	/// It intersects some of the cude to see, that depth rendering works correctly
+// 	/// This makes it easier to see its relationship to other objects
+// 	scene::Transform icosphereTransform;
+// 	icosphereTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+// 	// icosphereTransform.scale = glm::vec3(planetRadius);
+// 	icosphereNode->setLocalTransform(icosphereTransform);
 
 	// /// Create a node for our test cube
 	// auto cubeNode = this->scene->createNode("TestCube", rootNode);
@@ -1191,6 +1207,24 @@ void Renderer::initializeScene() {
 	// 		cubeNode->setLocalTransform(transform);
 	// 	}
 	// }
+
+	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
+	auto cubeNode = this->scene->createNode("TexturedCube", rootNode);
+	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+
+	/// Set texture tiling to repeat the texture twice in each direction
+	/// This demonstrates the texture coordinate scaling functionality
+	cubeMesh->setTextureTiling(1.0f, 1.0f);
+
+	/// Assign the textured material to the cube
+	cubeMesh->setMaterial(texturedMaterial);
+	cubeNode->setMesh(std::move(cubeMesh));
+
+	/// Position the cube for optimal viewing
+	scene::Transform transform;
+	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	transform.scale = glm::vec3(3.0f, 3.0f, 3.0f);
+	cubeNode->setLocalTransform(transform);
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
@@ -1352,6 +1386,42 @@ void Renderer::initializeMaterials() {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
 			"Failed to create pipeline for terrain material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Load test texture
+	/// We load this early to ensure it's available when creating materials
+	std::shared_ptr<rendering::Texture> testTexture = this->textureManager->getOrLoadTexture(
+		"textures/test_pattern.png",   // Path to your test texture
+		true,                          // Generate mipmaps
+		rendering::TextureLoader::Format::RGBA // Load with alpha channel
+	);
+
+	if (!testTexture) {
+		spdlog::warn("Failed to load test texture, using default texture");
+		testTexture = this->textureManager->getDefaultTexture();
+	}
+
+
+	/// Create a textured material using the PBR workflow
+	/// We use PBRMaterial for its flexible texture support
+	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
+	texturedMaterial->setBaseColor(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)); // White to show texture clearly
+	texturedMaterial->setMetallic(0.0f);     // Non-metallic
+	texturedMaterial->setRoughness(0.7f);    // Slightly rough surface
+	texturedMaterial->setAmbient(1.0f);      // Full ambient occlusion
+
+	/// Apply the test texture to the material
+	/// This sets up the appropriate descriptors for shader sampling
+	texturedMaterial->setAlbedoTexture(testTexture);
+
+	/// Create pipeline for blue material
+	auto texturedPipeline = this->pipelineManager->createPipeline(*texturedMaterial);
+	if (!texturedPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for textured material",
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}

@@ -8,6 +8,7 @@
 #include "rendering/editorcamera.h"
 #include "rendering/meshmanager.h"
 #include "rendering/lightmanager.h"
+#include "rendering/texturemanager.h"
 #include "rendering/screenshot.h"
 #include "scene/scene.h"
 #include "materialmanager.h"
@@ -211,6 +212,9 @@ private:
 	/// Screenshot manager variables
 	std::unique_ptr<Screenshot> screenshotManager;
 	uint32_t lastPresentedImageIndex = 0;
+
+	/// Texture Manager
+	std::unique_ptr<rendering::TextureManager> textureManager;
 
 };
 
