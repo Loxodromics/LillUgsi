@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mesh.h"
+#include "tangentcalculator.h"
 
 namespace lillugsi::rendering {
 /// CubeMesh class, derived from Mesh

@@ -43,6 +43,10 @@ void CubeMesh::generateGeometry() {
 			vertex.normal = getFaceNormal(face);
 			vertex.color = this->faceColors[face];
 
+			/// We initialize tangent to zero - will calculate properly later
+			/// This placeholder tangent will be replaced by the tangent calculator
+			vertex.tangent = glm::vec3(0.0f);
+
 			/// Apply texture coordinates for this vertex
 			/// We use the DefaultUVs array which defines a standard mapping
 			/// and apply the tiling factor to create texture repetition if needed
@@ -60,6 +64,12 @@ void CubeMesh::generateGeometry() {
 		this->indices.push_back(baseIndex + 2);
 		this->indices.push_back(baseIndex + 3);
 	}
+
+	/// Calculate tangents for normal mapping
+	/// We use our specialized quad calculator since a cube is made of quads
+	/// This gives us proper tangent vectors for each vertex based on its
+	/// position, normal, and texture coordinates
+	TangentCalculator::calculateTangentsForQuads(this->vertices, this->indices);
 
 	spdlog::debug("Cube mesh generated with {} vertices and {} indices",
 		this->vertices.size(), this->indices.size());

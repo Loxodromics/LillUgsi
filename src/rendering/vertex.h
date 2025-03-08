@@ -16,6 +16,12 @@ struct Vertex {
 	/// The normal vector of the vertex, used for lighting calculations
 	glm::vec3 normal;
 
+	/// The tangent vector of the vertex, used for normal mapping
+	/// Tangents define the direction of the positive X axis in tangent space
+	/// Together with the normal and bitangent, this forms the TBN matrix
+	/// which transforms normals from tangent space to world space
+	glm::vec3 tangent;
+
 	/// The color of the vertex
 	glm::vec3 color;
 
@@ -42,34 +48,54 @@ struct Vertex {
 	/// This describes how to extract vertex attributes from the vertex buffer
 	/// @return Vector of attribute descriptions
 	static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() {
-		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(4);
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(5);
 
-		/// Position attribute
+		/// Position attribute (location 0)
 		attributeDescriptions[0].binding = 0;  /// Comes from the same buffer as binding 0
 		attributeDescriptions[0].location = 0;  /// Location in the vertex shader
 		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;  /// vec3
 		attributeDescriptions[0].offset = offsetof(Vertex, position);
 
-		/// Normal attribute
+		/// Normal attribute (location 1)
 		attributeDescriptions[1].binding = 0;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;  /// vec3
 		attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
-		/// Color attribute
+		/// Tangent attribute (location 2)
+		/// This is used for normal mapping to construct the TBN matrix
+		/// The tangent vector defines the positive X axis in tangent space
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
 		attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;  /// vec3
-		attributeDescriptions[2].offset = offsetof(Vertex, color);
+		attributeDescriptions[2].offset = offsetof(Vertex, tangent);
 
-		/// Texture coordinate attribute
-		/// This is a new attribute for texture mapping support
+		/// Color attribute (location 3)
 		attributeDescriptions[3].binding = 0;
-		attributeDescriptions[3].location = 3;  /// Location 3 in the vertex shader
-		attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;  /// vec2 (U,V coordinates)
-		attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
+		attributeDescriptions[3].location = 3;
+		attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;  /// vec3
+		attributeDescriptions[3].offset = offsetof(Vertex, color);
+
+		/// Texture coordinate attribute (location 4)
+		/// This is a new attribute for texture mapping support
+		attributeDescriptions[4].binding = 0;
+		attributeDescriptions[4].location = 4;  /// Location 4 in the vertex shader
+		attributeDescriptions[4].format = VK_FORMAT_R32G32_SFLOAT;  /// vec2 (U,V coordinates)
+		attributeDescriptions[4].offset = offsetof(Vertex, texCoord);
 
 		return attributeDescriptions;
+	}
+
+	/// Equality operator for vertex comparison
+	/// This is useful for mesh optimization to detect duplicate vertices
+	/// @param other The vertex to compare against
+	/// @return True if the vertices have identical attributes
+	bool operator==(const Vertex& other) const {
+		return position == other.position &&
+			   normal == other.normal &&
+			   tangent == other.tangent &&
+			   color == other.color &&
+			   texCoord == other.texCoord;
 	}
 };
 
