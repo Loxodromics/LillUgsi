@@ -85,6 +85,11 @@ Texture::Texture(VkDevice device,
 	);
 	
 	VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &this->imageMemory));
+
+	/// Log the allocated memory handle for tracking
+	spdlog::debug("Allocated image memory 0x{:x} for texture '{}'",
+		reinterpret_cast<uint64_t>(this->imageMemory),
+		this->name.empty() ? "unnamed" : this->name);
 	
 	/// Bind the allocated memory to the image
 	VK_CHECK(vkBindImageMemory(device, this->image.get(), this->imageMemory, 0));
@@ -124,6 +129,9 @@ Texture::~Texture() {
 	/// The RAII handles will automatically clean up the image and image view
 	/// We just need to handle the manually allocated memory
 	if (this->imageMemory != VK_NULL_HANDLE) {
+		spdlog::debug("Freeing image memory 0x{:x} for texture '{}'",
+			reinterpret_cast<uint64_t>(this->imageMemory),
+			this->name.empty() ? "unnamed" : this->name);
 		vkFreeMemory(this->device, this->imageMemory, nullptr);
 		this->imageMemory = VK_NULL_HANDLE;
 	}
@@ -191,6 +199,11 @@ void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPoo
 	);
 	
 	VK_CHECK(vkAllocateMemory(this->device, &allocInfo, nullptr, &stagingBufferMemory));
+
+	spdlog::debug("Allocated staging buffer memory 0x{:x} for texture '{}'",
+		reinterpret_cast<uint64_t>(stagingBufferMemory),
+		this->name.empty() ? "unnamed" : this->name);
+
 	VK_CHECK(vkBindBufferMemory(this->device, stagingBuffer, stagingBufferMemory, 0));
 	
 	/// Copy data to the staging buffer
@@ -238,6 +251,9 @@ void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPoo
 	/// Clean up staging resources
 	/// These are no longer needed after the copy is complete
 	vkDestroyBuffer(this->device, stagingBuffer, nullptr);
+	spdlog::debug("Freeing staging buffer memory 0x{:x} for texture '{}'",
+		reinterpret_cast<uint64_t>(stagingBufferMemory),
+		this->name.empty() ? "unnamed" : this->name);
 	vkFreeMemory(this->device, stagingBufferMemory, nullptr);
 	
 	/// If the texture has mipmaps, generate them now

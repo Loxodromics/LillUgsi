@@ -286,10 +286,11 @@ bool TextureManager::releaseTexture(const std::string& name) {
 
 	auto it = this->textureCache.find(name);
 	if (it != this->textureCache.end()) {
+		spdlog::debug("Releasing texture '{}' from cache (use count before: {})",
+			name, it->second.use_count());
 		/// Erase will decrement the shared_ptr reference count
 		/// The texture will be destroyed if no other references exist
 		this->textureCache.erase(it);
-		spdlog::debug("Released texture '{}' from cache", name);
 		return true;
 	}
 
@@ -301,20 +302,30 @@ void TextureManager::releaseAllTextures() {
 
 	size_t count = this->textureCache.size();
 	if (count > 0) {
+		spdlog::info("Releasing all {} textures from cache", count);
+
+		for (const auto& [name, texture] : this->textureCache) {
+			spdlog::debug("Releasing cached texture '{}' (use count: {})",
+				name, texture.use_count());
+		}
+
 		this->textureCache.clear();
-		spdlog::info("Released all {} textures from cache", count);
 	}
 
 	/// Also release the default texture if it exists
-	this->defaultTexture.reset();
+	if (this->defaultTexture) {
+		spdlog::debug("Releasing default texture (use count: {})",
+			this->defaultTexture.use_count());
+		this->defaultTexture.reset();
+	}
 }
 
 std::shared_ptr<Texture> TextureManager::createDefaultTexture() {
 	/// Create a small white texture as a default fallback
 	/// A single white pixel works well as a default for most material systems
-	const uint32_t size = 4; // Using 4x4 instead of 1x1 to support mipmaps
-	const uint32_t channels = 4; // RGBA
-	std::vector<uint8_t> whitePixels(size * size * channels, 255); // All white, opaque
+	const uint32_t size = 4; /// Using 4x4 instead of 1x1 to support mipmaps
+	const uint32_t channels = 4; /// RGBA
+	std::vector<uint8_t> whitePixels(size * size * channels, 255); /// All white, opaque
 
 	try {
 		/// Create the default texture with a recognizable name
