@@ -66,6 +66,15 @@ public:
 	Material& operator=(const Material&) = delete;
 
 protected:
+	/// Define the texture channel enumeration for configuring texture sampling
+	/// This allows us to flexibly specify which texture channels to use for each property
+	enum class TextureChannel {
+		R = 0,  /// Red channel
+		G = 1,  /// Green channel
+		B = 2,  /// Blue channel
+		A = 3   /// Alpha channel
+	    };
+
 	/// Create a new Material
 	/// @param device The logical device for resource creation
 	/// @param name Unique name for this material instance
@@ -85,7 +94,9 @@ protected:
 	/// Create a descriptor pool for material descriptors
 	/// We create a dedicated pool for this material's descriptors
 	/// to simplify resource management and lifetime
-	void createDescriptorPool();
+	/// Different material types may need different pool configurations
+	/// @return True if the pool was created successfully
+	virtual bool createDescriptorPool();
 
 	/// Configure material-specific pipeline settings
 	/// Derived classes should override this to customize their pipeline
@@ -101,7 +112,7 @@ protected:
 	/// GPU resources managed by the material
 	vulkan::VulkanDescriptorSetLayoutHandle descriptorSetLayout;
 	vulkan::VulkanBufferHandle uniformBuffer;
-	VkDeviceMemory uniformBufferMemory;  /// Memory for uniform buffer
+	vulkan::VulkanDeviceMemoryHandle uniformBufferMemory;
 	VkDescriptorSet descriptorSet;       /// Descriptor set for binding
 	vulkan::VulkanDescriptorPoolHandle descriptorPool;
 

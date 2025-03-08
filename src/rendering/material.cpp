@@ -34,7 +34,7 @@ void Material::bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) 
 	spdlog::trace("Bound descriptor sets for material '{}'", this->name);
 }
 
-void Material::createDescriptorPool() {
+bool Material::createDescriptorPool() {
 	/// Define pool sizes for our different descriptor types
 	/// We need both uniform buffers and combined image samplers
 	std::array<VkDescriptorPoolSize, 2> poolSizes{};
@@ -66,6 +66,8 @@ void Material::createDescriptorPool() {
 	);
 
 	spdlog::debug("Created descriptor pool for material '{}'", this->name);
+
+	return true;
 }
 
 VkDescriptorSetLayout Material::getDescriptorSetLayout() const {
