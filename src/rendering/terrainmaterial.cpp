@@ -394,7 +394,22 @@ void TerrainMaterial::createUniformBuffer() {
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	);
 
-	VK_CHECK(vkAllocateMemory(this->device, &allocInfo, nullptr, &this->uniformBufferMemory));
+	VkDeviceMemory rawMemoryHandle;
+	VK_CHECK(vkAllocateMemory(
+		this->device,
+		&allocInfo,
+		nullptr,
+		&rawMemoryHandle
+	));
+
+	/// Wrap in RAII handle
+	this->uniformBufferMemory = vulkan::VulkanDeviceMemoryHandle(
+		rawMemoryHandle,
+		[this](VkDeviceMemory mem) {
+			vkFreeMemory(this->device, mem, nullptr);
+		}
+	);
+
 	VK_CHECK(vkBindBufferMemory(this->device, this->uniformBuffer.get(), this->uniformBufferMemory, 0));
 
 	/// Initialize buffer with default properties
