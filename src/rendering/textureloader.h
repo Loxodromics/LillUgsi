@@ -25,9 +25,11 @@ public:
 	/// Image format options for texture loading
 	/// These determine the desired output format after loading
 	enum class Format {
-		Keep,    /// Keep the format from the source file
-		RGB,     /// Convert to RGB (3 channels)
-		RGBA     /// Convert to RGBA (4 channels)
+		Keep,     /// Keep the format from the source file
+		RGB,      /// Convert to RGB (3 channels)
+		RGBA,     /// Convert to RGBA (4 channels)
+		R,        /// Convert to R (1 channel)
+		NormalMap /// RGBA but with linear color space for normal maps
 	};
 
 	/// Load texture data from a file

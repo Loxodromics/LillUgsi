@@ -61,18 +61,62 @@ std::shared_ptr<Texture> TextureManager::getOrLoadTexture(
 	/// Determine appropriate Vulkan format based on channels
 	/// This mapping ensures we use the right format for the loaded pixel data
 	VkFormat vulkanFormat;
-	switch (textureData.channels) {
-		case 1: vulkanFormat = VK_FORMAT_R8_UNORM; break;
-		case 2: vulkanFormat = VK_FORMAT_R8G8_UNORM; break;
-		case 3: vulkanFormat = VK_FORMAT_R8G8B8_SRGB; break;
-		case 4: vulkanFormat = VK_FORMAT_R8G8B8A8_SRGB; break;
+	if (format == TextureLoader::Format::NormalMap) {
+		/// Always use unorm format for normal maps regardless of channel count
+		/// And ensure we have RGBA data
+		if (textureData.channels == 3) {
+			/// Convert RGB to RGBA by adding alpha channel
+			spdlog::debug("Converting RGB to RGBA for normal map");
+			std::vector<uint8_t> rgbaData(textureData.width * textureData.height * 4);
+			for (int i = 0; i < textureData.width * textureData.height; i++) {
+				rgbaData[i * 4 + 0] = textureData.pixels[i * 3 + 0]; /// R
+				rgbaData[i * 4 + 1] = textureData.pixels[i * 3 + 1]; /// G
+				rgbaData[i * 4 + 2] = textureData.pixels[i * 3 + 2]; /// B
+				rgbaData[i * 4 + 3] = 255;                           /// A (fully opaque)
+			}
+			/// Swap the pixel data
+			textureData.pixels = std::move(rgbaData);
+			textureData.channels = 4;
+		}
+		/// By using VK_FORMAT_R8G8B8A8_UNORM, we ensure the values are read exactly as they are
+		/// stored, without any gamma correction. This preserves the linear relationship needed for
+		/// proper normal vector calculations.
+		vulkanFormat = VK_FORMAT_R8G8B8A8_UNORM; /// Linear color space for normal maps
+	} else {
+		switch (textureData.channels) {
+		case 1:
+			vulkanFormat = VK_FORMAT_R8_UNORM;
+			break;
+		case 2:
+			vulkanFormat = VK_FORMAT_R8G8_UNORM;
+			break;
+		case 3: {
+			// Convert RGB to RGBA for better compatibility
+			spdlog::debug("Converting RGB to RGBA for better compatibility");
+			std::vector<uint8_t> rgbaData(textureData.width * textureData.height * 4);
+			for (int i = 0; i < textureData.width * textureData.height; i++) {
+				rgbaData[i * 4 + 0] = textureData.pixels[i * 3 + 0]; /// R
+				rgbaData[i * 4 + 1] = textureData.pixels[i * 3 + 1]; /// G
+				rgbaData[i * 4 + 2] = textureData.pixels[i * 3 + 2]; /// B
+				rgbaData[i * 4 + 3] = 255;                           /// A (fully opaque)
+			}
+			/// Swap the pixel data
+			textureData.pixels = std::move(rgbaData);
+			textureData.channels = 4;
+			vulkanFormat = VK_FORMAT_R8G8B8A8_SRGB;
+			break;
+		}
+		case 4:
+			vulkanFormat = VK_FORMAT_R8G8B8A8_SRGB;
+			break;
 		default:
 			spdlog::warn("Unsupported channel count {}, falling back to RGBA", textureData.channels);
 			vulkanFormat = VK_FORMAT_R8G8B8A8_SRGB;
+		}
 	}
 
 	/// Create mipmap levels based on settings and dimensions
-	uint32_t mipLevels = generateMipmaps ? 0 : 1; // 0 means calculate automatically
+	uint32_t mipLevels = generateMipmaps ? 0 : 1; /// 0 means calculate automatically
 
 	/// Extract filename without path for debugging and identification
 	std::filesystem::path path(normalizedPath);

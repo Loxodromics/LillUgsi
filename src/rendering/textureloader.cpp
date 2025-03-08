@@ -137,10 +137,18 @@ int TextureLoader::formatToChannels(Format format) {
 	/// Convert our format enum to the number of channels parameter used by stb_image
 	/// stb_image uses 0 to mean "keep original format"
 	switch (format) {
-		case Format::Keep: return 0;  /// Original format from the image
-		case Format::RGB:  return 3;  /// Force RGB (3 channels)
-		case Format::RGBA: return 4;  /// Force RGBA (4 channels)
-		default:           return 0;  /// Fallback to original format
+	case Format::Keep:
+		return 0; /// Original format from the image
+	case Format::RGB:
+		return 3; /// Force RGB (3 channels)
+	case Format::RGBA:
+		return 4; /// Force RGBA (4 channels)
+	case Format::R:
+		return 1; /// Force R (1 channel)
+	case Format::NormalMap:
+		return 4; /// Force RGBA (4 channels)
+	default:
+		return 0; /// Fallback to original format
 	}
 }
 

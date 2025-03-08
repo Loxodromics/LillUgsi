@@ -134,14 +134,33 @@ Texture::~Texture() {
 void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPool, VkQueue queue) {
 	/// Calculate expected data size to validate input
 	/// This helps catch potential memory errors or mismatches
-	VkDeviceSize imageSize = static_cast<VkDeviceSize>(this->width * this->height * 4); /// Assuming 4 bytes per pixel
-	
-	if (size < imageSize) {
-		throw vulkan::VulkanException(
-			VK_ERROR_VALIDATION_FAILED_EXT,
-			"Data size is smaller than expected texture size",
-			__FUNCTION__, __FILE__, __LINE__
-		);
+	VkDeviceSize imageSize;
+	switch (this->format) {
+	case VK_FORMAT_R8_UNORM:
+		imageSize = static_cast<VkDeviceSize>(this->width * this->height * 1);
+		break;
+	case VK_FORMAT_R8G8_UNORM:
+		imageSize = static_cast<VkDeviceSize>(this->width * this->height * 2);
+		break;
+	case VK_FORMAT_R8G8B8_SRGB:
+		imageSize = static_cast<VkDeviceSize>(this->width * this->height * 3);
+		break;
+	case VK_FORMAT_R8G8B8A8_SRGB:
+	case VK_FORMAT_R8G8B8A8_UNORM:
+	case VK_FORMAT_B8G8R8A8_SRGB:
+	case VK_FORMAT_B8G8R8A8_UNORM:
+		imageSize = static_cast<VkDeviceSize>(this->width * this->height * 4);
+		break;
+	case VK_FORMAT_R16G16B16A16_SFLOAT:
+		imageSize = static_cast<VkDeviceSize>(this->width * this->height * 8);
+		break;
+	case VK_FORMAT_R32G32B32A32_SFLOAT:
+		imageSize = static_cast<VkDeviceSize>(this->width * this->height * 16);
+		break;
+	default:
+		// For unknown formats, calculate based on pixel size
+			imageSize = static_cast<VkDeviceSize>(this->width * this->height * 4); // Default to 4 bytes
+		break;
 	}
 	
 	/// Create a staging buffer to transfer data from CPU to GPU
