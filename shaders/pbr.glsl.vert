@@ -4,14 +4,16 @@
 /// These attributes match the Vertex structure in C++
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inColor;
-layout(location = 3) in vec2 inTexCoord;  /// Added texture coordinate input
+layout(location = 2) in vec3 inTangent;
+layout(location = 3) in vec3 inColor;
+layout(location = 4) in vec2 inTexCoord;
 
 /// Output to fragment shader
 layout(location = 0) out vec3 fragColor;
-layout(location = 1) out vec3 fragNormal;  /// World-space normal
+layout(location = 1) out vec3 fragNormal;    /// World-space normal
 layout(location = 2) out vec3 fragPosition;  /// World-space position
 layout(location = 3) out vec2 fragTexCoord;  /// Pass texture coordinates to fragment shader
+layout(location = 4) out mat3 fragTBN;       /// TBN matrix for normal mapping
 
 /// Camera uniform buffer (set = 0)
 /// We separate camera data into its own set for potential multi-view rendering
@@ -55,13 +57,33 @@ void main() {
 	/// Transform normal to world space
 	/// We use the inverse transpose of the model matrix to handle non-uniform scaling
 	mat3 normalMatrix = transpose(inverse(mat3(push.model)));
-	fragNormal = normalize(normalMatrix * inNormal);
+	vec3 worldNormal = normalize(normalMatrix * inNormal);
+	fragNormal = worldNormal;
+
+	/// Transform tangent to world space
+	/// This uses the same normal matrix as for the normal vector
+	vec3 worldTangent = normalize(normalMatrix * inTangent);
+
+	/// Re-orthogonalize tangent with respect to normal
+	/// This ensures we have an orthogonal TBN basis
+	worldTangent = normalize(worldTangent - worldNormal * dot(worldNormal, worldTangent));
+
+	/// Calculate bitangent from normal and tangent
+	/// Using the cross product ensures we have a proper orthonormal basis
+	vec3 worldBitangent = cross(worldNormal, worldTangent);
+
+	/// Build the TBN matrix for transforming normals from tangent space to world space
+	/// Each column of the matrix is one of our basis vectors
+	fragTBN = mat3(
+	worldTangent,    // First column: tangent (X axis in tangent space)
+	worldBitangent,  // Second column: bitangent (Y axis in tangent space)
+	worldNormal      // Third column: normal (Z axis in tangent space)
+	);
 
 	/// Pass the vertex color to fragment shader
 	fragColor = inColor;
 
 	/// Pass texture coordinates to fragment shader
-	/// This enables texture sampling in the fragment shader
 	fragTexCoord = inTexCoord;
 
 	/// For Reverse-Z, we invert the Z component

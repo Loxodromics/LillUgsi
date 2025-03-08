@@ -214,7 +214,12 @@ void Renderer::cleanup() {
 
 	this->vulkanBufferUtility.reset();
 
-	this->textureManager.reset();
+	// Clear texture manager first to ensure textures are released
+	// This needs to happen before other resources are cleaned up
+	if (this->textureManager) {
+		this->textureManager->releaseAllTextures();
+		this->textureManager.reset();
+	}
 
 	/// Clean up mesh manager before other resources
 	/// This ensures buffers are destroyed before the device
@@ -1390,33 +1395,86 @@ void Renderer::initializeMaterials() {
 		);
 	}
 
-	/// Load test texture
-	/// We load this early to ensure it's available when creating materials
-	std::shared_ptr<rendering::Texture> testTexture = this->textureManager->getOrLoadTexture(
-		"textures/test_pattern.png",   // Path to your test texture
-		true,                          // Generate mipmaps
-		rendering::TextureLoader::Format::RGBA // Load with alpha channel
+	/// Load test textures
+	/// We load each texture type separately to have full control over parameters
+	std::shared_ptr<rendering::Texture> colorTexture = this->textureManager->getOrLoadTexture(
+		"textures/color_texture.png",          /// Path to your color texture
+		true,                                  /// Generate mipmaps
+		rendering::TextureLoader::Format::RGBA /// Load with alpha channel
 	);
 
-	if (!testTexture) {
-		spdlog::warn("Failed to load test texture, using default texture");
-		testTexture = this->textureManager->getDefaultTexture();
+	/// Check if texture loading succeeded, use fallbacks if needed
+	if (!colorTexture) {
+		spdlog::warn("Failed to load color texture, using default texture");
+		colorTexture = this->textureManager->getDefaultTexture();
 	}
 
+	std::shared_ptr<rendering::Texture> normalTexture = this->textureManager->getOrLoadTexture(
+		"textures/normal_texture.png",        /// Path to your normal map
+		true,                                 /// Generate mipmaps
+		rendering::TextureLoader::Format::NormalMap /// Linear color space for normal maps
+	);
+
+	std::shared_ptr<rendering::Texture> roughnessTexture = this->textureManager->getOrLoadTexture(
+		"textures/roughness_texture.png",   /// Path to your roughness map
+		true,                               /// Generate mipmaps
+		rendering::TextureLoader::Format::R /// Single channel is sufficient
+	);
+
+	std::shared_ptr<rendering::Texture> metallicTexture = this->textureManager->getOrLoadTexture(
+		"textures/metallic_texture.png",    /// Path to your metallic map
+		true,                               /// Generate mipmaps
+		rendering::TextureLoader::Format::R /// Single channel is sufficient
+	);
+
+	std::shared_ptr<rendering::Texture> occlusionTexture = this->textureManager->getOrLoadTexture(
+		"textures/occlusion_texture.png",   /// Path to your occlusion map
+		true,                               /// Generate mipmaps
+		rendering::TextureLoader::Format::R /// Single channel is sufficient
+	);
+
+
+	if (!normalTexture) {
+		spdlog::warn("Failed to load normal texture, normal mapping will be disabled");
+		// We don't need a fallback for normal maps - the shader will handle missing textures
+	}
 
 	/// Create a textured material using the PBR workflow
-	/// We use PBRMaterial for its flexible texture support
+	/// We set up a complete PBR material with all texture types
 	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
-	texturedMaterial->setBaseColor(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)); // White to show texture clearly
-	texturedMaterial->setMetallic(0.0f);     // Non-metallic
-	texturedMaterial->setRoughness(0.7f);    // Slightly rough surface
-	texturedMaterial->setAmbient(1.0f);      // Full ambient occlusion
+	texturedMaterial->setBaseColor(
+		glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)); // White to show texture clearly
+	texturedMaterial->setMetallic(0.0f);    // Non-metallic base value
+	texturedMaterial->setRoughness(0.7f);   // Slightly rough surface base value
+	texturedMaterial->setAmbient(1.0f);     // Full ambient occlusion base value
 
-	/// Apply the test texture to the material
-	/// This sets up the appropriate descriptors for shader sampling
-	texturedMaterial->setAlbedoTexture(testTexture);
+	/// Apply the color texture to the material
+	texturedMaterial->setAlbedoTexture(colorTexture);
 
-	/// Create pipeline for blue material
+	/// Apply the normal map if available
+	if (normalTexture) {
+		texturedMaterial->setNormalMap(normalTexture, 1.0f); // Full strength normal mapping
+	}
+
+	/// Apply other PBR textures for future phases
+	/// These won't be used until we enhance the shader further, but setting them up now is good
+	if (roughnessTexture) {
+		texturedMaterial->setRoughnessMap(roughnessTexture, 1.0f);
+	}
+
+	if (metallicTexture) {
+		texturedMaterial->setMetallicMap(metallicTexture, 1.0f);
+	}
+
+	if (occlusionTexture) {
+		texturedMaterial->setOcclusionMap(occlusionTexture, 1.0f);
+	}
+
+	/// Set texture tiling to repeat the textures at an appropriate scale
+	/// This can be adjusted based on your specific textures and model size
+	texturedMaterial->setTextureTiling(2.0f, 2.0f);
+
+	/// Create pipeline for textured material
 	auto texturedPipeline = this->pipelineManager->createPipeline(*texturedMaterial);
 	if (!texturedPipeline) {
 		throw vulkan::VulkanException(
