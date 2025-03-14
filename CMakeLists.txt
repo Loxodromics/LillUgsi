@@ -23,6 +23,8 @@ find_package(FastNoise2 REQUIRED)
 find_package(stb REQUIRED)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
+add_compile_definitions(GLM_ENABLE_EXPERIMENTAL)
+
 # Define the main executable sources without planet files
 set(MAIN_SOURCES
 		src/main.cpp
@@ -94,6 +96,26 @@ target_link_libraries(LillUgsi
 		FastNoise2::FastNoise
 		stb::stb
 )
+
+# Add resource copying
+set(RESOURCES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+
+# Check if resources directory exists
+if(EXISTS ${RESOURCES_DIR})
+    message(STATUS "Resources directory found at ${RESOURCES_DIR}, setting up copying")
+    
+    # Create custom command to copy resources
+    add_custom_command(
+        TARGET LillUgsi
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${RESOURCES_DIR}
+            $<TARGET_FILE_DIR:LillUgsi>/resources
+        COMMENT "Copying resources directory to build output"
+    )
+else()
+    message(WARNING "Resources directory not found at ${RESOURCES_DIR}")
+endif()
 
 add_custom_target(Shaders
 	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders

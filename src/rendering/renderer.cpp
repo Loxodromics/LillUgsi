@@ -180,6 +180,7 @@ void Renderer::cleanup() {
 
 	/// Clean up scene first as it might hold GPU resources
 	/// This ensures proper cleanup order and avoids dangling references
+	this->texturedCubeNode.reset();
 	this->scene.reset();
 
 	/// Clean up synchronization objects
@@ -1080,7 +1081,7 @@ void Renderer::initializeDepthBuffer() {
 
 void Renderer::initializeScene() {
 	/// Create main directional light (sun)
-	auto sunLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, 1.0f, 1.0f));
+	auto sunLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, 1.0f, -1.0f));
 	sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.8f));  /// Warm sunlight
 	sunLight->setIntensity(1.0f);
 	sunLight->setAmbient(glm::vec3(0.1f, 0.1f, 0.15f));
@@ -1409,9 +1410,9 @@ void Renderer::initializeMaterials() {
 	/// Load test textures
 	/// We load each texture type separately to have full control over parameters
 	std::shared_ptr<rendering::Texture> colorTexture = this->textureManager->getOrLoadTexture(
-		"textures/color_texture.png",          /// Path to your color texture
-		true,                                  /// Generate mipmaps
-		rendering::TextureLoader::Format::RGBA /// Load with alpha channel
+		"resources/textures/Rock035_1K_Color.png", /// Path to your color texture
+		true,                                   /// Generate mipmaps
+		rendering::TextureLoader::Format::RGBA  /// Load with alpha channel
 	);
 
 	/// Check if texture loading succeeded, use fallbacks if needed
@@ -1421,34 +1422,49 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> normalTexture = this->textureManager->getOrLoadTexture(
-		"textures/normal_texture.png",        /// Path to your normal map
-		true,                                 /// Generate mipmaps
+		"resources/textures/Rock035_1K_Normal.png", /// Path to your normal map
+		true,                                       /// Generate mipmaps
 		rendering::TextureLoader::Format::NormalMap /// Linear color space for normal maps
 	);
 
-	std::shared_ptr<rendering::Texture> roughnessTexture = this->textureManager->getOrLoadTexture(
-		"textures/roughness_texture.png",   /// Path to your roughness map
-		true,                               /// Generate mipmaps
-		rendering::TextureLoader::Format::R /// Single channel is sufficient
-	);
-
-	std::shared_ptr<rendering::Texture> metallicTexture = this->textureManager->getOrLoadTexture(
-		"textures/metallic_texture.png",    /// Path to your metallic map
-		true,                               /// Generate mipmaps
-		rendering::TextureLoader::Format::R /// Single channel is sufficient
-	);
-
-	std::shared_ptr<rendering::Texture> occlusionTexture = this->textureManager->getOrLoadTexture(
-		"textures/occlusion_texture.png",   /// Path to your occlusion map
-		true,                               /// Generate mipmaps
-		rendering::TextureLoader::Format::R /// Single channel is sufficient
-	);
-
-
 	if (!normalTexture) {
 		spdlog::warn("Failed to load normal texture, normal mapping will be disabled");
-		// We don't need a fallback for normal maps - the shader will handle missing textures
+		/// We don't need a fallback for normal maps - the shader will handle missing textures
 	}
+
+	std::shared_ptr<rendering::Texture> roughnessTexture = this->textureManager->getOrLoadTexture(
+		"resources/textures/Rock035_1K_Roughness.png", /// Path to your roughness map
+		true,                                          /// Generate mipmaps
+		rendering::TextureLoader::Format::R            /// Single channel is sufficient
+	);
+
+	if (!roughnessTexture) {
+		spdlog::warn("Failed to load roughness texture, roughness mapping will be disabled");
+		/// We don't need a fallback for roughness maps - the shader will handle missing textures
+	}
+
+	std::shared_ptr<rendering::Texture> metallicTexture = this->textureManager->getOrLoadTexture(
+		"resources/textures/Rock035_1K_Metalness.png", /// Path to your metallic map
+		true,                                          /// Generate mipmaps
+		rendering::TextureLoader::Format::R            /// Single channel is sufficient
+	);
+
+	if (!metallicTexture) {
+		spdlog::warn("Failed to load metallic texture, metallic mapping will be disabled");
+		/// We don't need a fallback for metallic maps - the shader will handle missing textures
+	}
+
+	std::shared_ptr<rendering::Texture> occlusionTexture = this->textureManager->getOrLoadTexture(
+		"resources/textures/Rock035_1K_AmbientOcclusion.png", /// Path to your occlusion map
+		true,                                                 /// Generate mipmaps
+		rendering::TextureLoader::Format::R                   /// Single channel is sufficient
+	);
+
+	if (!occlusionTexture) {
+		spdlog::warn("Failed to load occlusion texture, occlusion mapping will be disabled");
+		/// We don't need a fallback for occlusion maps - the shader will handle missing textures
+	}
+
 
 	/// Create a textured material using the PBR workflow
 	/// We set up a complete PBR material with all texture types
@@ -1464,7 +1480,7 @@ void Renderer::initializeMaterials() {
 
 	/// Apply the normal map if available
 	if (normalTexture) {
-		texturedMaterial->setNormalMap(normalTexture, 1.0f); // Full strength normal mapping
+		texturedMaterial->setNormalMap(normalTexture, 1.0f); /// Full strength normal mapping
 	}
 
 	/// Apply other PBR textures for future phases
