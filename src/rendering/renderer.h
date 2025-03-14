@@ -209,6 +209,8 @@ private:
 	std::shared_ptr<planet::PlanetData> icosphere;
 #endif
 
+	std::shared_ptr<scene::SceneNode> texturedCubeNode;
+
 	/// Screenshot manager variables
 	std::unique_ptr<Screenshot> screenshotManager;
 	uint32_t lastPresentedImageIndex = 0;

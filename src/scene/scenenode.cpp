@@ -88,7 +88,7 @@ void SceneNode::updateWorldTransform(const glm::mat4& parentTransform) {
 	this->worldTransform = parentTransform * this->localTransform.toMatrix();
 
 	/// Log transforms for debugging
-	spdlog::debug("Node '{}' transforms:", this->name);
+	spdlog::trace("Node '{}' transforms:", this->name);
 	spdlog::trace("  Local: pos({}, {}, {})",
 		this->localTransform.position.x,
 		this->localTransform.position.y,

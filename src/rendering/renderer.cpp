@@ -338,6 +338,17 @@ void Renderer::drawFrame() {
 void Renderer::update(float deltaTime) {
 	/// Store frame time for effects and animations
 	this->currentFrameTime = deltaTime;
+	
+	/// Rotate at x degrees per second
+	float rotationSpeed = 10.0f; /// degrees per second
+	float angleInRadians = glm::radians(rotationSpeed * deltaTime);
+	glm::vec3 yAxis(0.0f, 1.0f, 0.0f);
+	glm::quat deltaRotation = glm::angleAxis(angleInRadians, yAxis);
+
+	/// Apply the incremental rotation
+	auto transform = this->texturedCubeNode->getLocalTransform();
+	transform.rotation = transform.rotation * deltaRotation;
+	this->texturedCubeNode->setLocalTransform(transform);
 
 	/// Update scene with the provided delta time
 	/// This ensures all scene objects use the same time step
@@ -1214,7 +1225,7 @@ void Renderer::initializeScene() {
 	// }
 
 	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
-	auto cubeNode = this->scene->createNode("TexturedCube", rootNode);
+	this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
 	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
 
 	/// Set texture tiling to repeat the texture twice in each direction
@@ -1223,13 +1234,13 @@ void Renderer::initializeScene() {
 
 	/// Assign the textured material to the cube
 	cubeMesh->setMaterial(texturedMaterial);
-	cubeNode->setMesh(std::move(cubeMesh));
+	this->texturedCubeNode->setMesh(std::move(cubeMesh));
 
 	/// Position the cube for optimal viewing
 	scene::Transform transform;
 	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
 	transform.scale = glm::vec3(3.0f, 3.0f, 3.0f);
-	cubeNode->setLocalTransform(transform);
+	this->texturedCubeNode->setLocalTransform(transform);
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
