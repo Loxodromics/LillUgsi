@@ -4,22 +4,23 @@
 /// These attributes match the Vertex structure in C++
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inTangent;
+layout(location = 2) in vec3 inTangent;      /// Tangent vector for normal mapping
 layout(location = 3) in vec3 inColor;
-layout(location = 4) in vec2 inTexCoord;
+layout(location = 4) in vec2 inTexCoord;     /// Texture coordinate input
 
 /// Output to fragment shader
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;    /// World-space normal
 layout(location = 2) out vec3 fragPosition;  /// World-space position
 layout(location = 3) out vec2 fragTexCoord;  /// Pass texture coordinates to fragment shader
-layout(location = 4) out mat3 fragTBN;       /// TBN matrix for normal mapping
+layout(location = 4) out mat3 fragTBN;       /// TBN matrix for normal mapping (uses locations 4, 5, 6)
+layout(location = 7) out vec3 fragViewDir;   /// View direction in world space
 
 /// Camera uniform buffer (set = 0)
-/// We separate camera data into its own set for potential multi-view rendering
 layout(set = 0, binding = 0) uniform CameraUBO {
 	mat4 view;
 	mat4 proj;
+	vec3 cameraPos;        /// Added camera position for view direction calculation
 } camera;
 
 /// Light data structure matches our C++ LightData struct
@@ -50,6 +51,10 @@ void main() {
 
 	/// Pass world-space position to fragment shader
 	fragPosition = worldPos.xyz;
+
+	/// Calculate view direction (from position to camera)
+	/// Normalize for consistent lighting calculations
+	fragViewDir = normalize(camera.cameraPos - worldPos.xyz);
 
 	/// Transform vertex position to clip space
 	gl_Position = camera.proj * camera.view * worldPos;

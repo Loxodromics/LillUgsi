@@ -872,6 +872,12 @@ void Renderer::updateCameraUniformBuffer() const {
 	/// Get the projection matrix with current aspect ratio
 	ubo.projection = this->camera->getProjectionMatrix(aspectRatio);
 
+	/// Get the camera position for view-dependent calculations
+	ubo.cameraPos = this->camera->getPosition();
+
+	/// Padding for alignment
+	ubo.padding = 0.0f;
+
 	/// Update GPU buffer with new camera data
 	void* data;
 	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(),
@@ -880,7 +886,6 @@ void Renderer::updateCameraUniformBuffer() const {
 	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(),
 		this->cameraBufferMemory);
 }
-
 
 void Renderer::createDescriptorPool() {
 	/// Define pool sizes for our different descriptor types

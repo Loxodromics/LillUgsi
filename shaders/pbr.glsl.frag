@@ -5,7 +5,8 @@ layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec3 fragPosition;
 layout(location = 3) in vec2 fragTexCoord;
-layout(location = 4) in mat3 fragTBN;        /// TBN matrix for normal mapping
+layout(location = 4) in mat3 fragTBN;        /// TBN matrix for normal mapping (uses locations 4, 5, 6)
+layout(location = 7) in vec3 fragViewDir;    /// View direction for specular calculations
 
 /// Output color
 layout(location = 0) out vec4 outColor;
@@ -49,8 +50,9 @@ layout(set = 2, binding = 3) uniform sampler2D roughnessTexture; /// Roughness m
 layout(set = 2, binding = 4) uniform sampler2D metallicTexture;  /// Metallic map texture
 layout(set = 2, binding = 5) uniform sampler2D occlusionTexture; /// Occlusion map texture
 
-/// Calculate contribution from a single directional light
-vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 albedo) {
+/// Calculate contribution from a single directional light with specular component
+/// Now using view direction for proper specular reflection
+vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 albedo, vec3 viewDir, float roughness, float metallic) {
 	vec3 lightDir = -normalize(light.direction.xyz);
 	vec3 lightColor = light.colorAndIntensity.rgb;
 	float lightIntensity = light.colorAndIntensity.a;
@@ -59,12 +61,31 @@ vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 albedo) {
 	float diff = max(dot(normal, lightDir), 0.0);
 	vec3 diffuse = diff * lightColor * lightIntensity;
 
+	/// Calculate half vector for specular
+	vec3 halfVec = normalize(lightDir + viewDir);
+
+	/// Calculate specular component using the Blinn-Phong model
+	/// For roughness, a higher value means less specular focus
+	float specularPower = (1.0 - roughness) * 128.0 + 1.0;
+	float spec = pow(max(dot(normal, halfVec), 0.0), specularPower);
+
+	/// Adjust specular intensity based on metallic property
+	/// Metallic surfaces have stronger reflections
+	float specularIntensity = mix(0.04, 1.0, metallic);
+	vec3 specular = spec * specularIntensity * lightColor * lightIntensity;
+
 	/// Add ambient contribution
 	vec3 ambient = light.ambient.rgb;
 
-	/// Combine lighting with albedo and material properties
-	/// This is a simplified PBR calculation - could be expanded
-	return albedo * (ambient + diffuse);
+	/// For metallic surfaces, tint the specular with the albedo color
+	/// This simulates how metals color their reflections
+	if (metallic > 0.0) {
+		specular *= mix(vec3(1.0), albedo, metallic);
+	}
+
+	/// Combine lighting components
+	/// Non-metals have white specular, while metals have colored specular
+	return albedo * (ambient + diffuse) + specular;
 }
 
 void main() {
@@ -138,6 +159,9 @@ void main() {
 
 	vec3 finalColor = vec3(0.0);
 
+	/// Get normalized view direction for specular calculations
+	vec3 viewDir = normalize(fragViewDir);
+
 	/// Accumulate lighting from all active lights
 	/// We add contributions from each light to create the final lighting
 	for (int i = 0; i < 16; ++i) {  /// MaxLights from C++ code
@@ -146,7 +170,10 @@ void main() {
 			finalColor += calculateDirectionalLight(
 			lightData.lights[i],
 			normal,
-			albedo
+			albedo,
+			viewDir,
+			roughnessValue,
+			metallicValue
 			);
 		}
 	}

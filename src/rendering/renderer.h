@@ -112,6 +112,8 @@ private:
 	struct CameraUBO {
 		glm::mat4 view;
 		glm::mat4 projection;
+		glm::vec3 cameraPos;  /// Camera position for view direction calculations
+		float padding;        /// Padding to ensure proper alignment (vec3 needs to be padded to vec4)
 	};
 
 	void createCommandPool();
