@@ -50,42 +50,167 @@ layout(set = 2, binding = 3) uniform sampler2D roughnessTexture; /// Roughness m
 layout(set = 2, binding = 4) uniform sampler2D metallicTexture;  /// Metallic map texture
 layout(set = 2, binding = 5) uniform sampler2D occlusionTexture; /// Occlusion map texture
 
-/// Calculate contribution from a single directional light with specular component
-/// Now using view direction for proper specular reflection
+const float PI = 3.14159265359;
+
+/// Define constants used in PBR calculations
+#define PI 3.14159265359
+#define EPSILON 0.0001 /// Small value to prevent division by zero
+
+/// Calculate the Normal Distribution Function using GGX/Trowbridge-Reitz distribution
+/// This models the statistical distribution of microfacets on the surface
+/// @param normal The surface normal
+/// @param halfway The halfway vector between view and light
+/// @param roughness The surface roughness parameter [0,1]
+/// @return The NDF value representing microfacet alignment probability
+float distributionGGX(vec3 normal, vec3 halfway, float roughness) {
+	/// Square the roughness to provide more intuitive artist control
+	/// Linear roughness feels inconsistent at different values, squared provides better visual mapping
+	float alpha = roughness * roughness;
+	float alphaSqr = alpha * alpha;
+
+	/// Calculate how well the halfway vector aligns with the surface normal
+	float NdotH = max(dot(normal, halfway), 0.0);
+	float NdotH2 = NdotH * NdotH;
+
+	/// Compute the GGX distribution
+	/// This gives the statistical probability that microfacets are oriented along the halfway vector
+	/// The denominator creates the characteristic "long tail" of GGX highlights
+	float denominator = (NdotH2 * (alphaSqr - 1.0) + 1.0);
+	denominator = PI * denominator * denominator;
+
+	/// Return the normalized distribution value
+	/// We add an epsilon to prevent division by zero for perfectly smooth surfaces
+	return alphaSqr / max(denominator, EPSILON);
+}
+
+/// Calculate the Schlick-GGX Geometry Function for a single vector
+/// This computes self-shadowing from microfacets along one direction (view or light)
+/// @param NdotX Dot product between normal and the direction vector
+/// @param roughness The surface roughness parameter [0,1]
+/// @return Geometry term for the given direction
+float geometrySchlickGGX(float NdotX, float roughness) {
+	/// Remapping roughness for the geometry term
+	/// For direct lighting, we use this remapping to account for the different behavior
+	/// of geometry shadowing compared to the normal distribution function
+	float r = (roughness + 1.0);
+	float k = (r * r) / 8.0;
+
+	/// Calculate the shadowing term
+	/// This represents how much light is blocked by microfacets
+	/// Higher roughness values lead to more self-shadowing
+	float numerator = NdotX;
+	float denominator = NdotX * (1.0 - k) + k;
+
+	/// Return the geometry term
+	/// Clamped to prevent division by zero
+	return numerator / max(denominator, EPSILON);
+}
+
+/// Calculate the Smith model for combined geometry shadowing/masking
+/// The Smith model combines shadowing from both view and light directions
+/// @param normal The surface normal
+/// @param view The view direction
+/// @param light The light direction
+/// @param roughness The surface roughness parameter [0,1]
+/// @return Combined geometry term for both directions
+float geometrySmith(vec3 normal, vec3 view, vec3 light, float roughness) {
+	/// Calculate geometry term for both directions
+	/// We compute how much light is obscured for both the incoming and outgoing directions
+	float NdotV = max(dot(normal, view), 0.0);
+	float NdotL = max(dot(normal, light), 0.0);
+
+	/// Use Schlick-GGX approximation for each direction
+	float ggx1 = geometrySchlickGGX(NdotV, roughness);
+	float ggx2 = geometrySchlickGGX(NdotL, roughness);
+
+	/// Combine terms using Smith method
+	/// The combined term handles correlations between viewing and light directions
+	return ggx1 * ggx2;
+}
+
+/// Calculate Fresnel reflectance using Schlick's approximation
+/// This determines how much light is reflected vs. refracted based on view angle
+/// @param cosTheta Cosine of angle between halfway vector and view direction
+/// @param F0 Surface reflection at zero incidence (straight-on viewing angle)
+/// @return The Fresnel reflectance
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+	/// Schlick's approximation to Fresnel equation
+	/// This is a simple but effective approximation to the full Fresnel equations
+	/// At grazing angles (cosTheta near 0), all surfaces approach 100% reflectivity
+	return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
+}
+
+/// Calculate contribution from a single directional light using Cook-Torrance BRDF
+/// This function implements physically-based lighting using the Cook-Torrance microfacet BRDF
+/// @param light The light source data (direction, color, intensity)
+/// @param normal Surface normal in world space
+/// @param albedo Surface base color
+/// @param viewDir View direction (normalized vector toward camera)
+/// @param roughness Surface roughness (controls microfacet distribution)
+/// @param metallic Surface metalness (controls specular response)
+/// @return Final lit color including diffuse and specular components
 vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 albedo, vec3 viewDir, float roughness, float metallic) {
+	/// Extract light properties from the light structure
 	vec3 lightDir = -normalize(light.direction.xyz);
 	vec3 lightColor = light.colorAndIntensity.rgb;
 	float lightIntensity = light.colorAndIntensity.a;
 
-	/// Calculate diffuse contribution
-	float diff = max(dot(normal, lightDir), 0.0);
-	vec3 diffuse = diff * lightColor * lightIntensity;
+	/// Calculate essential dot products used throughout the BRDF
+	float NdotL = max(dot(normal, lightDir), 0.0);
+	float NdotV = max(dot(normal, viewDir), EPSILON); /// Using small epsilon to prevent divide-by-zero
 
-	/// Calculate half vector for specular
-	vec3 halfVec = normalize(lightDir + viewDir);
-
-	/// Calculate specular component using the Blinn-Phong model
-	/// For roughness, a higher value means less specular focus
-	float specularPower = (1.0 - roughness) * 128.0 + 1.0;
-	float spec = pow(max(dot(normal, halfVec), 0.0), specularPower);
-
-	/// Adjust specular intensity based on metallic property
-	/// Metallic surfaces have stronger reflections
-	float specularIntensity = mix(0.04, 1.0, metallic);
-	vec3 specular = spec * specularIntensity * lightColor * lightIntensity;
-
-	/// Add ambient contribution
-	vec3 ambient = light.ambient.rgb;
-
-	/// For metallic surfaces, tint the specular with the albedo color
-	/// This simulates how metals color their reflections
-	if (metallic > 0.0) {
-		specular *= mix(vec3(1.0), albedo, metallic);
+	/// Early exit for surfaces facing away from the light source
+	/// This optimization skips expensive calculations when the surface can't directly see the light
+	if (NdotL <= 0.0) {
+		/// Return only ambient contribution when surface faces away from light
+		return albedo * light.ambient.rgb;
 	}
 
-	/// Combine lighting components
-	/// Non-metals have white specular, while metals have colored specular
-	return albedo * (ambient + diffuse) + specular;
+	/// Calculate the halfway vector between view and light directions
+	/// The halfway vector represents the surface normal that would perfectly reflect light to the viewer
+	vec3 halfwayVector = normalize(lightDir + viewDir);
+	float HdotV = max(dot(halfwayVector, viewDir), 0.0);
+
+	/// Define the surface's specular color (F0)
+	/// For dielectrics (non-metals), this is a constant 0.04
+	/// For metals, we use the albedo color itself, controlled by metallic parameter
+	vec3 F0 = vec3(0.04);
+	F0 = mix(F0, albedo, metallic);
+
+	/// Calculate the three components of the Cook-Torrance BRDF:
+	/// 1. Normal Distribution Function (D) - Statistical distribution of microfacets
+	float D = distributionGGX(normal, halfwayVector, roughness);
+
+	/// 2. Fresnel Term (F) - Reflectivity that varies with viewing angle
+	vec3 F = fresnelSchlick(HdotV, F0);
+
+	/// 3. Geometry Term (G) - Self-shadowing of microfacets
+	float G = geometrySmith(normal, viewDir, lightDir, roughness);
+
+	/// Calculate the Cook-Torrance specular BRDF
+	/// The complete specular BRDF consists of the distribution, fresnel, and geometry terms
+	/// divided by the normalization factor (4 * NdotV * NdotL)
+	vec3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, EPSILON);
+
+	/// Calculate the diffuse component using Lambert
+	/// Lambert diffuse is simple but effective for most non-specialized materials
+	/// Normalized by PI to ensure energy conservation
+	vec3 diffuse = albedo / PI;
+
+	/// Apply energy conservation
+	/// As surfaces become more reflective (higher F) or more metallic,
+	/// the diffuse component should decrease to conserve energy
+	vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+
+	/// Combine diffuse and specular components, modulated by light properties
+	/// Scale by NdotL to account for light incident angle
+	vec3 finalColor = (kD * diffuse + specular) * lightColor * lightIntensity * NdotL;
+
+	/// Add ambient contribution
+	/// This provides a base level of illumination representing light bounced from the environment
+	finalColor += albedo * light.ambient.rgb;
+
+	return finalColor;
 }
 
 void main() {
@@ -99,6 +224,9 @@ void main() {
 
 		/// Convert from [0,1] to [-1,1] range
 		normalMap = normalMap * 2.0 - 1.0;
+
+//		normalMap.xy = -normalMap.xy;
+//		normalMap.xyz = -normalMap.xyz;
 
 		/// Apply normal strength factor
 		/// This allows control over the intensity of the normal map effect
