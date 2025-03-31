@@ -6,6 +6,7 @@
 #include "vulkan/pipelinemanager.h"
 #include "vulkan/depthbuffer.h"
 #include "rendering/editorcamera.h"
+#include "rendering/orbitcamera.h"
 #include "rendering/meshmanager.h"
 #include "rendering/lightmanager.h"
 #include "rendering/texturemanager.h"
@@ -77,7 +78,7 @@ public:
 	/// Get a pointer to the camera
 	/// This allows other parts of the application to interact with the camera
 	/// @return A pointer to the EditorCamera
-	EditorCamera* getCamera() { return this->camera.get(); }
+	Camera* getCamera() { return this->camera.get(); }
 
 	/// Handle input events for the camera
 	/// This method should be called for each relevant SDL event
@@ -191,7 +192,8 @@ private:
 
 	/// The camera used for rendering the scene
 	/// We use a unique_ptr for automatic memory management and to allow for easy replacement if needed
-	std::unique_ptr<EditorCamera> camera;
+	// std::unique_ptr<EditorCamera> camera;
+	std::unique_ptr<OrbitCamera> camera;
 
 	/// Flag to track if cleanup has been performed
 	bool isCleanedUp;
