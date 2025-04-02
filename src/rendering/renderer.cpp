@@ -46,8 +46,8 @@ Renderer::Renderer()
 
 	/// Initialize the camera with a default position
 	/// We place the camera slightly back and up to view the scene
-	// this->camera = std::make_unique<EditorCamera>(glm::vec3(0.0f, 2.0f, 5.0f));
-	this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0f, 2.0f, 5.0f));
+	// this->camera = std::make_unique<EditorCamera>(glm::vec3(3.0f, -3.0f, -3.0f), 135, 28);
+	this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0, 0.0, 0.0), 10);
 }
 
 Renderer::~Renderer() {
@@ -137,10 +137,6 @@ bool Renderer::initialize(SDL_Window* window) {
 
 		/// Create synchronization objects
 		this->createSyncObjects();
-
-		/// Initialize camera with default position
-		// this->camera = std::make_unique<EditorCamera>(glm::vec3(3.0f, -3.0f, -3.0f), 135, 28);
-		this->camera = std::make_unique<OrbitCamera>(glm::vec3(3.0f, -3.0f, -3.0f), 135, 28);
 
 		spdlog::info("Renderer initialized successfully");
 		return true;
