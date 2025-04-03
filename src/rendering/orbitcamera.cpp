@@ -35,7 +35,7 @@ OrbitCamera::OrbitCamera(
 }
 
 void OrbitCamera::handleInput(SDL_Window *window, const SDL_Event &event) {
-	spdlog::debug("SDL Event Type: {}", static_cast<int>(event.type));
+	spdlog::trace("SDL Event Type: {}", static_cast<int>(event.type));
 	switch (event.type) {
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		if (event.button.button == SDL_BUTTON_LEFT) {
@@ -167,14 +167,11 @@ glm::mat4 OrbitCamera::getProjectionMatrix(float aspectRatio) const {
 
 	/// For perspective projection, we use the standard approach with the camera's FOV
 	return glm::perspective(
-		glm::radians(this->getFov()),  // Vertical field of view in radians
-		aspectRatio,                    // Aspect ratio (width/height)
-		this->getNearPlane(),          // Near clipping plane
-		this->getFarPlane()            // Far clipping plane
+		glm::radians(this->getFov()), /// Vertical field of view in radians
+		aspectRatio,
+		this->getFarPlane(), /// Far clipping plane and
+		this->getNearPlane() /// Near clipping plane are revesed since we are using Reverse-Z
 	);
-
-	/// Note: If reverse-Z depth buffering is needed (as in EditorCamera),
-	/// we would swap the near and far planes here.
 }
 
 void OrbitCamera::setTargetPoint(const glm::vec3& newTarget) {
@@ -218,32 +215,12 @@ void OrbitCamera::updateCameraPosition() {
 	/// First update the orientation quaternion from the angles
 	this->updateOrientation();
 
-	/// Calculate camera position based on spherical coordinates
-	/// We use the current horizontal and vertical angles combined with the distance
-	/// to position the camera properly around the target point
-
-	/// Convert angles to radians for trigonometric functions
-	float horizontalRad = glm::radians(this->horizontalAngle);
-	float verticalRad = glm::radians(this->verticalAngle);
-
-	/// Calculate the camera position in a spherical coordinate system
-	/// We convert from spherical to Cartesian coordinates:
-	/// x = r * cos(phi) * cos(theta)
-	/// y = r * sin(phi)
-	/// z = r * cos(phi) * sin(theta)
-	/// where phi is vertical angle and theta is horizontal angle
-	float cosVertical = cos(verticalRad);
-
-	/// Calculate direction vector from target to camera
-	glm::vec3 directionFromTarget(
-		cosVertical * cos(horizontalRad),
-		sin(verticalRad),
-		cosVertical * sin(horizontalRad)
-	);
+	/// Calculate the direction vector directly from the quaternion
+	/// The -Z axis represents "forward" in OpenGL convention
+	const glm::vec3 directionFromTarget = -this->getOrientation() * glm::vec3(0.0f, 0.0f, 1.0f);
 
 	/// Position the camera at the correct distance from the target
-	/// This places the camera on the orbital sphere around the target
-	this->setPosition(this->targetPoint + directionFromTarget * this->distance);
+	this->setPosition(this->targetPoint - directionFromTarget * this->distance);
 }
 
 void OrbitCamera::updateOrientation() {

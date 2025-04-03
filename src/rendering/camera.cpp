@@ -18,6 +18,3 @@ glm::mat4 createLookAtMatrix(const glm::vec3& position, const glm::vec3& target,
 glm::mat4 createPerspectiveMatrix(float fov, float aspectRatio, float nearPlane, float farPlane) {
 	return glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
 }
-
-/// These utility functions could be used by derived classes to implement
-/// getViewMatrix() and getProjectionMatrix() respectively.
