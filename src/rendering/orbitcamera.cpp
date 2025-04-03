@@ -8,7 +8,7 @@
 namespace lillugsi::rendering {
 
 OrbitCamera::OrbitCamera(
-	const glm::vec3 &targetPoint, float distance, float horizontalAngle, float verticalAngle)
+	const glm::vec3 &targetPoint, float distance, float horizontalAngle, float verticalAngle, bool doClampVerticalAngle)
 	: Camera()
 	, targetPoint(targetPoint)
 	, distance(distance)
@@ -18,16 +18,13 @@ OrbitCamera::OrbitCamera(
 	, zoomSensitivity(0.15f)
 	, minDistance(0.5f)
 	, maxDistance(100.0f)
-	, isOrbiting(false) {
+	, isOrbiting(false)
+	, doClampVerticalAngle(doClampVerticalAngle){
 	/// Initialize camera with sensible defaults for orbit viewing
 	/// These FOV and plane settings provide a balanced perspective for object inspection
 	this->setFov(45.0f);
 	this->setNearPlane(0.1f);
 	this->setFarPlane(1000.0f);
-
-	/// Constrain the initial vertical angle to prevent issues at poles
-	/// We clamp between -89 and 89 degrees to avoid numerical instability at ±90 degrees
-	this->verticalAngle = std::clamp(verticalAngle, -89.0f, 89.0f);
 
 	/// Calculate the initial position and orientation
 	/// This ensures the camera starts correctly positioned around the target
@@ -76,12 +73,20 @@ void OrbitCamera::handleInput(SDL_Window *window, const SDL_Event &event) {
 			/// We negate the deltas because moving the mouse right should rotate right
 			/// and moving the mouse up should rotate up
 			this->horizontalAngle += horizontalDelta;
-			this->verticalAngle += verticalDelta;
+			this->verticalAngle -= verticalDelta;
 
 			/// Constrain vertical angle to prevent flipping at the poles
 			/// This keeps the angle within ±89 degrees to avoid numeric instability
 			/// and prevents the camera from flipping upside down
-			this->verticalAngle = std::clamp(this->verticalAngle, -89.0f, 89.0f);
+			if (this->doClampVerticalAngle) {
+				this->verticalAngle = std::clamp(this->verticalAngle, -89.0f, 89.0f);
+			}
+			else {
+				this->verticalAngle = std::fmod(this->verticalAngle, 360.0f);
+				if (this->verticalAngle < 0.0f) {
+					this->verticalAngle += 360.0f;
+				}
+			}
 
 			/// Normalize horizontal angle to keep it within [0, 360) range
 			/// This prevents the angle from growing infinitely as the user orbits multiple times

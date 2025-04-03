@@ -17,11 +17,13 @@ public:
 	/// @param distance Initial distance from target - affects the perceived "zoom" level
 	/// @param horizontalAngle Initial horizontal rotation in degrees - defaults to looking along -Z axis
 	/// @param verticalAngle Initial vertical rotation in degrees - defaults to eye-level view
-	OrbitCamera(
+	/// @param doClampVerticalAngle Initial vertical rotation clamp is active
+	explicit OrbitCamera(
 		const glm::vec3& targetPoint = glm::vec3(0.0f, 0.0f, 0.0f),
 		float distance = 5.0f,
 		float horizontalAngle = -90.0f,
-		float verticalAngle = 0.0f
+		float verticalAngle = 0.0f,
+		bool doClampVerticalAngle = false
 	);
 
 	/// Handle input events for camera control
@@ -103,6 +105,10 @@ private:
 	/// Flag to track when orbit rotation is active
 	/// We only orbit when this is true, typically when left mouse button is held
 	bool isOrbiting;
+
+	/// Flag to track vertical rotation clamp is active
+	/// This way we can't rotate past the poles
+	bool doClampVerticalAngle;
 };
 
 } /// namespace namespace lillugsi::rendering
