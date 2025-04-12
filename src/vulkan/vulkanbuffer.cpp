@@ -1,4 +1,6 @@
 #include "vulkanbuffer.h"
+
+#include "commandbuffermanager.h"
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::vulkan {
@@ -51,44 +53,24 @@ void VulkanBuffer::copyBuffer(
 	VkBuffer dstBuffer,
 	VkDeviceSize size
 ) {
-	/// Allocate a temporary command buffer for the transfer operation
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
+	/// Use the command buffer manager for one-time operations
+	/// This approach simplifies the code by delegating command buffer management
+	/// to a specialized class, improving maintainability
+	vulkan::CommandBufferManager cmdManager(this->device);
+	cmdManager.initialize();
 
-	VkCommandBuffer commandBuffer;
-	VK_CHECK(vkAllocateCommandBuffers(this->device, &allocInfo, &commandBuffer));
-
-	/// Begin command buffer recording
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+	/// Begin one-time command recording
+	VkCommandBuffer commandBuffer = cmdManager.beginSingleTimeCommands(commandPool);
 
 	/// Record copy command
 	VkBufferCopy copyRegion{};
-	copyRegion.srcOffset = 0; /// Optional
-	copyRegion.dstOffset = 0; /// Optional
+	copyRegion.srcOffset = 0;  /// Optional
+	copyRegion.dstOffset = 0;  /// Optional
 	copyRegion.size = size;
 	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-	/// End command buffer recording
-	VK_CHECK(vkEndCommandBuffer(commandBuffer));
-
-	/// Submit the command buffer
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-
-	VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
-	VK_CHECK(vkQueueWaitIdle(queue));
-
-	/// Free the temporary command buffer
-	vkFreeCommandBuffers(this->device, commandPool, 1, &commandBuffer);
+	/// End and submit command
+	cmdManager.endSingleTimeCommands(commandBuffer, commandPool, queue);
 
 	spdlog::info("Buffer copy completed successfully. Size: {}", size);
 }

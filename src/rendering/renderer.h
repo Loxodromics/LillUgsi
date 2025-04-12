@@ -4,6 +4,7 @@
 #include "vulkan/vulkanbuffer.h"
 #include "vulkan/vulkanwrappers.h"
 #include "vulkan/pipelinemanager.h"
+#include "vulkan/commandbuffermanager.h"
 #include "vulkan/depthbuffer.h"
 #include "rendering/editorcamera.h"
 #include "rendering/orbitcamera.h"
@@ -117,7 +118,6 @@ private:
 		float padding;        /// Padding to ensure proper alignment (vec3 needs to be padded to vec4)
 	};
 
-	void createCommandPool();
 	void createCommandBuffers();
 	void createRenderPass();
 	void createFramebuffers();
@@ -221,6 +221,9 @@ private:
 
 	/// Texture Manager
 	std::unique_ptr<rendering::TextureManager> textureManager;
+
+	/// Command buffer manager for centralized command buffer operations
+	std::unique_ptr<vulkan::CommandBufferManager> commandBufferManager;
 
 };
 

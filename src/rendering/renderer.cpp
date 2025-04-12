@@ -72,8 +72,18 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Create render pass
 		this->createRenderPass();
 
-		/// Create command pool
-		this->createCommandPool();
+		/// Initialize command buffer manager
+		this->commandBufferManager = std::make_unique<vulkan::CommandBufferManager>(
+			this->vulkanContext->getDevice()->getDevice());
+		if (!this->commandBufferManager->initialize()) {
+			spdlog::error("Failed to initialize command buffer manager");
+			return false;
+		}
+
+		/// Create main command pool for rendering operations
+		this->commandPool = this->commandBufferManager->createCommandPool(
+			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex(),
+			VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
 		/// Initialize pipeline manager
 		/// This needs to happen before materials are created
@@ -184,12 +194,16 @@ void Renderer::cleanup() {
 	/// Clean up synchronization objects
 	this->cleanupSyncObjects();
 
-	/// Free command buffers
-	if (this->vulkanContext && this->commandPool) {
-		vkFreeCommandBuffers(this->vulkanContext->getDevice()->getDevice(), this->commandPool.get(),
-							 static_cast<uint32_t>(this->commandBuffers.size()), this->commandBuffers.data());
+	/// Free command buffers through manager
+	if (this->commandBufferManager && !this->commandBuffers.empty()) {
+		this->commandBufferManager->freeCommandBuffers(
+			this->commandPool,
+			this->commandBuffers);
+		this->commandBuffers.clear();
 	}
-	this->commandBuffers.clear();
+
+	/// Clean up command buffer manager
+	this->commandBufferManager.reset();
 
 	/// Clean up graphics pipeline
 	this->graphicsPipeline.reset();
@@ -408,7 +422,7 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		/// Update camera aspect ratio
 		/// This ensures proper projection after resize
 		float aspectRatio = static_cast<float>(this->width) / static_cast<float>(this->height);
-		this->camera->getProjectionMatrix(aspectRatio);
+		glm::mat4 projection = this->camera->getProjectionMatrix(aspectRatio);
 
 		spdlog::info("Swap chain recreated with dimensions {}x{}", this->width, this->height);
 		return true;
@@ -459,45 +473,16 @@ bool Renderer::captureScreenshot(const std::string& filename) {
 	);
 }
 
-void Renderer::createCommandPool() {
-	/// Command pools manage the memory used to store the buffers and command buffers are allocated from them.
-	VkCommandPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-
-	/// We want to create command buffers that are associated with the graphics queue family
-	poolInfo.queueFamilyIndex = this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex();
-
-	/// VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT allows any command buffer allocated from this pool to be individually reset to the initial state
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-
-	VkCommandPool commandPool;
-	VK_CHECK(vkCreateCommandPool(this->vulkanContext->getDevice()->getDevice(), &poolInfo, nullptr, &commandPool));
-
-	/// Wrap the command pool in our RAII wrapper
-	this->commandPool = vulkan::VulkanCommandPoolHandle(commandPool, [this](VkCommandPool pool) {
-		vkDestroyCommandPool(this->vulkanContext->getDevice()->getDevice(), pool, nullptr);
-	});
-
-	spdlog::info("Command pool {} created successfully", (long)this->commandPool.get());
-}
-
 void Renderer::createCommandBuffers() {
 	/// We'll create one command buffer for each swap chain image
 	uint32_t swapChainImageCount = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
 	this->commandBuffers.resize(swapChainImageCount);
 
-	/// Set up command buffer allocation info
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = this->commandPool.get();
-
-	/// Primary command buffers can be submitted to a queue for execution, but cannot be called from other command buffers
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
-
-	/// Allocate the command buffers
-	VK_CHECK(vkAllocateCommandBuffers(this->vulkanContext->getDevice()->getDevice(), &allocInfo, this->commandBuffers.data()));
+	/// Allocate command buffers from the command buffer manager
+	this->commandBuffers = this->commandBufferManager->allocateCommandBuffers(
+		this->commandPool,
+		static_cast<uint32_t>(this->commandBuffers.size()),
+		VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 	spdlog::info("Command buffers created successfully");
 }
@@ -659,31 +644,21 @@ void Renderer::recordCommandBuffers() {
 	/// Resize command buffers vector to match the number of framebuffers
 	/// We need one command buffer for each swap chain image
 	/// Start with clean command buffers
-	/// First, free existing command buffers to prevent memory leaks
-	/// Free existing command buffers only if they exist
+	/// Free existing command buffers if any exist
 	if (!this->commandBuffers.empty()) {
-		vkFreeCommandBuffers(this->vulkanContext->getDevice()->getDevice(),
-			this->commandPool.get(),
-			static_cast<uint32_t>(this->commandBuffers.size()),
-			this->commandBuffers.data());
+		this->commandBufferManager->freeCommandBuffers(
+			this->commandPool,
+			this->commandBuffers);
 	}
 
-	/// Resize for new recording
-	/// One command buffer per framebuffer
+	/// Resize for new recording - one command buffer per framebuffer
 	this->commandBuffers.resize(this->swapChainFramebuffers.size());
 
-	/// Allocate new command buffers
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = this->commandPool.get();
-	/// Primary command buffers can be submitted directly to queues
-	/// Secondary command buffers can only be called from primary command buffers
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = static_cast<uint32_t>(this->commandBuffers.size());
-
-	/// Allocate command buffers from the command pool
-	VK_CHECK(vkAllocateCommandBuffers(this->vulkanContext->getDevice()->getDevice(),
-		&allocInfo, this->commandBuffers.data()));
+	/// Allocate new command buffers through the manager
+	this->commandBuffers = this->commandBufferManager->allocateCommandBuffers(
+		this->commandPool,
+		static_cast<uint32_t>(this->commandBuffers.size()),
+		VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 	/// Record commands for each framebuffer
 	for (size_t i = 0; i < this->commandBuffers.size(); i++) {
