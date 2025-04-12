@@ -3,8 +3,9 @@
 #include "vulkan/vulkanwrappers.h"
 #include "vulkan/vulkanexception.h"
 
-#include <string>
 #include <memory>
+#include <string>
+#include <vulkan/commandbuffermanager.h>
 
 namespace lillugsi::rendering {
 
@@ -58,10 +59,12 @@ public:
 	/// @param size Size of the data in bytes
 	/// @param commandPool Command pool for allocating transfer commands
 	/// @param queue Queue to submit transfer commands to
+	/// @param commandBufferManager Command buffer manager to use
 	void uploadData(const void* data,
 	                size_t size,
 	                VkCommandPool commandPool,
-	                VkQueue queue);
+	                VkQueue queue,
+	                vulkan::CommandBufferManager& commandBufferManager);
 
 	/// Configure the texture's sampler
 	/// @param minFilter Filter to use when texture is minified
@@ -81,7 +84,11 @@ public:
 	/// This is needed for textures that didn't have mipmaps pre-generated
 	/// @param commandPool Command pool for allocating barrier commands
 	/// @param queue Queue to submit commands to
-	void generateMipmaps(VkCommandPool commandPool, VkQueue queue);
+	/// @param commandBufferManager
+	void generateMipmaps(
+		VkCommandPool commandPool,
+		VkQueue queue,
+		vulkan::CommandBufferManager &commandBufferManager);
 
 	/// Get the texture's image view
 	/// This is needed for binding the texture to descriptors
@@ -121,6 +128,7 @@ public:
 private:
 	/// Transition the image layout
 	/// This handles the proper image memory barriers for layout transitions
+	/// @param commandBufferManager
 	/// @param commandPool Command pool for allocating barrier commands
 	/// @param queue Queue to submit commands to
 	/// @param oldLayout Current layout of the image
@@ -129,30 +137,41 @@ private:
 	/// @param levelCount Number of mipmap levels to transition
 	/// @param baseArrayLayer Base array layer for the transition
 	/// @param layerCount Number of array layers to transition
-	void transitionLayout(VkCommandPool commandPool,
-	                      VkQueue queue,
-	                      VkImageLayout oldLayout,
-	                      VkImageLayout newLayout,
-	                      uint32_t baseMipLevel = 0,
-	                      uint32_t levelCount = VK_REMAINING_MIP_LEVELS,
-	                      uint32_t baseArrayLayer = 0,
-	                      uint32_t layerCount = VK_REMAINING_ARRAY_LAYERS);
+	void transitionLayout(
+		vulkan::CommandBufferManager& commandBufferManager,
+		VkCommandPool commandPool,
+		VkQueue queue,
+		VkImageLayout oldLayout,
+		VkImageLayout newLayout,
+		uint32_t baseMipLevel = 0,
+		uint32_t levelCount = VK_REMAINING_MIP_LEVELS,
+		uint32_t baseArrayLayer = 0,
+		uint32_t layerCount = VK_REMAINING_ARRAY_LAYERS);
 
-	/// Create a command buffer for a one-time operation
-	/// Helper method to simplify command buffer allocation and recording
+	/// Begin single-time commands using the command buffer manager
 	/// @param commandPool Command pool to allocate from
-	/// @param begin Whether to begin the command buffer
-	/// @return The allocated command buffer
-	VkCommandBuffer beginSingleTimeCommands(VkCommandPool commandPool, bool begin = true) const;
+	/// @param commandBufferManager Command buffer manager to use
+	/// @return Command buffer ready for recording
+	[[nodiscard]] VkCommandBuffer beginSingleTimeCommands(
+		VkCommandPool commandPool,
+		vulkan::CommandBufferManager& commandBufferManager) const
+	{
+		return commandBufferManager.beginSingleTimeCommands(commandPool);
+	}
 
-	/// End and submit a command buffer, then clean it up
-	/// Helper method to simplify command submission and cleanup
-	/// @param commandBuffer The command buffer to submit
-	/// @param commandPool The command pool it was allocated from
-	/// @param queue The queue to submit to
-	void endSingleTimeCommands(VkCommandBuffer commandBuffer,
-	                           VkCommandPool commandPool,
-	                           VkQueue queue);
+	/// End and submit single-time commands using the command buffer manager
+	/// @param commandBuffer Command buffer to submit
+	/// @param commandPool Command pool the buffer was allocated from
+	/// @param queue Queue to submit to
+	/// @param commandBufferManager Command buffer manager to use
+	void endSingleTimeCommands(
+		VkCommandBuffer commandBuffer,
+		VkCommandPool commandPool,
+		VkQueue queue,
+		vulkan::CommandBufferManager& commandBufferManager)
+	{
+		commandBufferManager.endSingleTimeCommands(commandBuffer, commandPool, queue);
+	}
 
 	/// Calculate the number of mipmap levels for the texture
 	/// Based on the texture dimensions to determine maximum possible levels

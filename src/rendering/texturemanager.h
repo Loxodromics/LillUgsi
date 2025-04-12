@@ -3,6 +3,7 @@
 
 #include "texture.h"
 #include "textureloader.h"
+#include "vulkan/commandbuffermanager.h"
 #include <unordered_map>
 #include <string>
 #include <memory>
@@ -25,7 +26,8 @@ public:
 		VkDevice device,
 		VkPhysicalDevice physicalDevice,
 		VkCommandPool commandPool,
-		VkQueue graphicsQueue
+		VkQueue graphicsQueue,
+		std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager
 	);
 
 	/// Destructor ensures proper cleanup of all managed textures
@@ -124,6 +126,8 @@ private:
 	/// Mutex for thread-safe texture access
 	/// This prevents race conditions when multiple threads access the cache
 	mutable std::mutex cacheMutex;
+
+	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager;
 };
 
 } /// namespace lillugsi::rendering

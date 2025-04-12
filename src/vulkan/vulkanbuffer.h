@@ -1,7 +1,8 @@
 #pragma once
 
-#include "vulkanwrappers.h"
+#include "commandbuffermanager.h"
 #include "vulkanexception.h"
+#include "vulkanwrappers.h"
 #include <vulkan/vulkan.h>
 
 namespace lillugsi::vulkan {
@@ -26,8 +27,8 @@ public:
 		VkQueue queue,
 		VkBuffer srcBuffer,
 		VkBuffer dstBuffer,
-		VkDeviceSize size
-	);
+		VkDeviceSize size,
+		CommandBufferManager* cmdManager);
 
 private:
 	VkDevice device;

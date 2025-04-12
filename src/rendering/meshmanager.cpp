@@ -4,16 +4,20 @@
 
 #include <spdlog/spdlog.h>
 
+#include <utility>
+
 namespace lillugsi::rendering {
 
 MeshManager::MeshManager(VkDevice device,
 	VkPhysicalDevice physicalDevice,
 	VkQueue graphicsQueue,
-	uint32_t graphicsQueueFamilyIndex)
+	uint32_t graphicsQueueFamilyIndex,
+	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager)
 	: device(device)
 	, physicalDevice(physicalDevice)
 	, graphicsQueue(graphicsQueue)
 	, commandPool(VK_NULL_HANDLE)
+	, commandBufferManager(std::move(commandBufferManager))
 	, bufferCache(std::make_unique<BufferCache>(device, physicalDevice)) {
 	this->createCommandPool(graphicsQueueFamilyIndex);
 }
@@ -136,10 +140,10 @@ void MeshManager::createCommandPool(uint32_t graphicsQueueFamilyIndex) {
 }
 
 void MeshManager::copyToBuffer(const void* data, VkDeviceSize size, VkBuffer dstBuffer) {
-	if (size == 0) {
+	if (!data || size == 0) {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
-			"Attempted to copy 0 bytes to buffer",
+			"Attempted to copy 0 bytes or from null pointer to buffer",
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}
@@ -178,39 +182,22 @@ void MeshManager::copyToBuffer(const void* data, VkDeviceSize size, VkBuffer dst
 	memcpy(mapped, data, size);
 	vkUnmapMemory(this->device, stagingMemory);
 
-	/// Copy from staging buffer to device local buffer
-	VkCommandBufferAllocateInfo cmdBufAllocInfo{};
-	cmdBufAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	cmdBufAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cmdBufAllocInfo.commandPool = this->commandPool;
-	cmdBufAllocInfo.commandBufferCount = 1;
+	/// Use the command buffer manager for the transfer operation
+	/// This centralizes command buffer management and ensures proper cleanup
+	VkCommandBuffer commandBuffer = this->commandBufferManager->beginSingleTimeCommands(this->commandPool);
 
-	VkCommandBuffer commandBuffer;
-	VK_CHECK(vkAllocateCommandBuffers(this->device, &cmdBufAllocInfo, &commandBuffer));
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-
+	/// Set up and record the copy command
 	VkBufferCopy copyRegion{};
 	copyRegion.size = size;
 	vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuffer, 1, &copyRegion);
 
-	VK_CHECK(vkEndCommandBuffer(commandBuffer));
+	/// Submit the command and wait for completion
+	this->commandBufferManager->endSingleTimeCommands(
+		commandBuffer,
+		this->commandPool,
+		this->graphicsQueue);
 
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-
-	VK_CHECK(vkQueueSubmit(this->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-	VK_CHECK(vkQueueWaitIdle(this->graphicsQueue));
-
-	vkFreeCommandBuffers(this->device, this->commandPool, 1, &commandBuffer);
-
-	/// Clean up staging buffer
+	/// Clean up staging resources
 	vkDestroyBuffer(this->device, stagingBuffer, nullptr);
 	vkFreeMemory(this->device, stagingMemory, nullptr);
 }

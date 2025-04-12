@@ -73,7 +73,7 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->createRenderPass();
 
 		/// Initialize command buffer manager
-		this->commandBufferManager = std::make_unique<vulkan::CommandBufferManager>(
+		this->commandBufferManager = std::make_shared<vulkan::CommandBufferManager>(
 			this->vulkanContext->getDevice()->getDevice());
 		if (!this->commandBufferManager->initialize()) {
 			spdlog::error("Failed to initialize command buffer manager");
@@ -108,7 +108,8 @@ bool Renderer::initialize(SDL_Window* window) {
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice(),
 			this->vulkanContext->getDevice()->getGraphicsQueue(),
-			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex()
+			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex(),
+			this->commandBufferManager
 		);
 
 		/// The TextureManager needs these resources for uploading texture data to the GPU
@@ -116,7 +117,8 @@ bool Renderer::initialize(SDL_Window* window) {
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice(),
 			this->commandPool.get(),
-			this->vulkanContext->getDevice()->getGraphicsQueue()
+			this->vulkanContext->getDevice()->getGraphicsQueue(),
+			this->commandBufferManager
 		);
 
 		/// Create camera uniform buffer
@@ -194,16 +196,15 @@ void Renderer::cleanup() {
 	/// Clean up synchronization objects
 	this->cleanupSyncObjects();
 
-	/// Free command buffers through manager
-	if (this->commandBufferManager && !this->commandBuffers.empty()) {
-		this->commandBufferManager->freeCommandBuffers(
-			this->commandPool,
-			this->commandBuffers);
+	/// Command buffer manager cleanup needs to happen before the device is destroyed
+	/// This ensures all Vulkan resources are released in the proper order
+	if (this->commandBufferManager) {
+		/// Command buffers don't need to be explicitly freed before manager cleanup
+		/// as the manager tracks and cleans up all allocated command buffers
 		this->commandBuffers.clear();
+		this->commandBufferManager->cleanup();
+		this->commandBufferManager.reset();
 	}
-
-	/// Clean up command buffer manager
-	this->commandBufferManager.reset();
 
 	/// Clean up graphics pipeline
 	this->graphicsPipeline.reset();
@@ -389,13 +390,11 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		/// Clean up old swap chain resources
 		this->cleanupFramebuffers();
 
-		/// Free old command buffers
-		if (this->vulkanContext->getDevice() && !this->commandBuffers.empty()) {
-			vkFreeCommandBuffers(
-				this->vulkanContext->getDevice()->getDevice(),
-				this->commandPool.get(),
-				static_cast<uint32_t>(this->commandBuffers.size()),
-				this->commandBuffers.data());
+		/// Free old command buffers through the manager
+		if (this->commandBufferManager && !this->commandBuffers.empty()) {
+			this->commandBufferManager->freeCommandBuffers(
+				this->commandPool,
+				this->commandBuffers);
 			this->commandBuffers.clear();
 		}
 

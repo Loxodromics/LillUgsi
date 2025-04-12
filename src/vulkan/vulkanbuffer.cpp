@@ -51,28 +51,22 @@ void VulkanBuffer::copyBuffer(
 	VkQueue queue,
 	VkBuffer srcBuffer,
 	VkBuffer dstBuffer,
-	VkDeviceSize size
-) {
-	/// Use the command buffer manager for one-time operations
-	/// This approach simplifies the code by delegating command buffer management
-	/// to a specialized class, improving maintainability
-	vulkan::CommandBufferManager cmdManager(this->device);
-	cmdManager.initialize();
-
-	/// Begin one-time command recording
-	VkCommandBuffer commandBuffer = cmdManager.beginSingleTimeCommands(commandPool);
+	VkDeviceSize size,
+	vulkan::CommandBufferManager* cmdManager)
+{
+	/// Use the command buffer manager for efficient one-time transfers
+	/// This provides consistent command buffer management and error handling
+	VkCommandBuffer commandBuffer = cmdManager->beginSingleTimeCommands(commandPool);
 
 	/// Record copy command
 	VkBufferCopy copyRegion{};
-	copyRegion.srcOffset = 0;  /// Optional
-	copyRegion.dstOffset = 0;  /// Optional
+	copyRegion.srcOffset = 0; /// Optional
+	copyRegion.dstOffset = 0; /// Optional
 	copyRegion.size = size;
 	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
 	/// End and submit command
-	cmdManager.endSingleTimeCommands(commandBuffer, commandPool, queue);
-
-	spdlog::info("Buffer copy completed successfully. Size: {}", size);
+	cmdManager->endSingleTimeCommands(commandBuffer, commandPool, queue);
 }
 
 uint32_t VulkanBuffer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {

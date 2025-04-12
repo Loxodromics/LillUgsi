@@ -1,12 +1,13 @@
 #pragma once
 
-#include "mesh.h"
 #include "buffercache.h"
+#include "mesh.h"
 #include "vulkan/buffer.h"
-#include "vulkan/vertexbuffer.h"
 #include "vulkan/indexbuffer.h"
+#include "vulkan/vertexbuffer.h"
 #include <memory>
 #include <vector>
+#include <vulkan/commandbuffermanager.h>
 
 namespace lillugsi::rendering {
 
@@ -20,7 +21,8 @@ public:
 	MeshManager(VkDevice device,
 		VkPhysicalDevice physicalDevice,
 		VkQueue graphicsQueue,
-		uint32_t graphicsQueueFamilyIndex);
+		uint32_t graphicsQueueFamilyIndex,
+		std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager);
 
 	/// Destructor ensures proper cleanup of resources
 	~MeshManager();
@@ -52,6 +54,8 @@ private:
 
 	/// Command pool for transfer operations
 	VkCommandPool commandPool;
+
+	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager;
 
 	/// Buffer cache for efficient buffer management
 	std::unique_ptr<BufferCache> bufferCache;

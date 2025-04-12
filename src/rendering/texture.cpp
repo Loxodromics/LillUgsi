@@ -139,7 +139,8 @@ Texture::~Texture() {
 	spdlog::debug("Texture '{}' destroyed", this->name.empty() ? "unnamed" : this->name);
 }
 
-void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPool, VkQueue queue) {
+void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPool, VkQueue queue,
+		vulkan::CommandBufferManager& commandBufferManager) {
 	/// Calculate expected data size to validate input
 	/// This helps catch potential memory errors or mismatches
 	VkDeviceSize imageSize;
@@ -215,6 +216,7 @@ void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPoo
 	/// Prepare the image by transitioning to TRANSFER_DST_OPTIMAL layout
 	/// This is required before copying data to the image
 	this->transitionLayout(
+		commandBufferManager,
 		commandPool,
 		queue,
 		VK_IMAGE_LAYOUT_UNDEFINED,
@@ -222,7 +224,7 @@ void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPoo
 	);
 	
 	/// Copy the staging buffer to the texture image
-	VkCommandBuffer commandBuffer = this->beginSingleTimeCommands(commandPool);
+	VkCommandBuffer commandBuffer = this->beginSingleTimeCommands(commandPool, commandBufferManager);
 	
 	/// Set up copy region struct for the buffer-to-image copy
 	VkBufferImageCopy region{};
@@ -246,7 +248,7 @@ void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPoo
 		&region
 	);
 	
-	this->endSingleTimeCommands(commandBuffer, commandPool, queue);
+	this->endSingleTimeCommands(commandBuffer, commandPool, queue, commandBufferManager);
 	
 	/// Clean up staging resources
 	/// These are no longer needed after the copy is complete
@@ -259,10 +261,11 @@ void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPoo
 	/// If the texture has mipmaps, generate them now
 	/// Otherwise, transition directly to shader read layout
 	if (this->mipLevels > 1) {
-		this->generateMipmaps(commandPool, queue);
+		this->generateMipmaps(commandPool, queue, commandBufferManager);
 	} else {
 		/// Transition to shader read layout if not generating mipmaps
 		this->transitionLayout(
+			commandBufferManager,
 			commandPool,
 			queue,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -339,7 +342,8 @@ void Texture::configureSampler(FilterMode minFilter, FilterMode magFilter,
 		static_cast<int>(minFilter), static_cast<int>(magFilter));
 }
 
-void Texture::generateMipmaps(VkCommandPool commandPool, VkQueue queue) {
+void Texture::generateMipmaps(
+	VkCommandPool commandPool, VkQueue queue, vulkan::CommandBufferManager &commandBufferManager) {
 	/// Check if the format supports linear blitting
 	/// Linear blitting is required for mipmap generation
 	VkFormatProperties formatProperties;
@@ -353,7 +357,7 @@ void Texture::generateMipmaps(VkCommandPool commandPool, VkQueue queue) {
 		);
 	}
 	
-	VkCommandBuffer commandBuffer = this->beginSingleTimeCommands(commandPool);
+	VkCommandBuffer commandBuffer = this->beginSingleTimeCommands(commandPool, commandBufferManager);
 	
 	/// Set up an image memory barrier to use for layout transitions
 	VkImageMemoryBarrier barrier{};
@@ -450,7 +454,7 @@ void Texture::generateMipmaps(VkCommandPool commandPool, VkQueue queue) {
 		1, &barrier
 	);
 
-	this->endSingleTimeCommands(commandBuffer, commandPool, queue);
+	this->endSingleTimeCommands(commandBuffer, commandPool, queue, commandBufferManager);
 
 	/// Update the current layout to reflect the final state
 	this->currentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -460,20 +464,22 @@ void Texture::generateMipmaps(VkCommandPool commandPool, VkQueue queue) {
 		this->mipLevels, this->name.empty() ? "unnamed" : this->name);
 }
 
-void Texture::transitionLayout(VkCommandPool commandPool,
-                               VkQueue queue,
-                               VkImageLayout oldLayout,
-                               VkImageLayout newLayout,
-                               uint32_t baseMipLevel,
-                               uint32_t levelCount,
-                               uint32_t baseArrayLayer,
-                               uint32_t layerCount) {
+void Texture::transitionLayout(
+	vulkan::CommandBufferManager &commandBufferManager,
+	VkCommandPool commandPool,
+	VkQueue queue,
+	VkImageLayout oldLayout,
+	VkImageLayout newLayout,
+	uint32_t baseMipLevel,
+	uint32_t levelCount,
+	uint32_t baseArrayLayer,
+	uint32_t layerCount) {
 	/// Early out if the image is already in the desired layout
 	if (oldLayout == newLayout) {
 		return;
 	}
 
-	VkCommandBuffer commandBuffer = this->beginSingleTimeCommands(commandPool);
+	VkCommandBuffer commandBuffer = this->beginSingleTimeCommands(commandPool, commandBufferManager);
 
 	/// Set up an image memory barrier for the layout transition
 	VkImageMemoryBarrier barrier{};
@@ -539,66 +545,10 @@ void Texture::transitionLayout(VkCommandPool commandPool,
 		1, &barrier
 	);
 
-	this->endSingleTimeCommands(commandBuffer, commandPool, queue);
+	this->endSingleTimeCommands(commandBuffer, commandPool, queue, commandBufferManager);
 
 	/// Update the current layout to reflect the change
 	this->currentLayout = newLayout;
-}
-
-VkCommandBuffer Texture::beginSingleTimeCommands(VkCommandPool commandPool, bool begin) const {
-	/// Allocate a command buffer for the one-time operation
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer commandBuffer;
-	VK_CHECK(vkAllocateCommandBuffers(this->device, &allocInfo, &commandBuffer));
-
-	/// Begin the command buffer if requested
-	if (begin) {
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-		VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-	}
-
-	return commandBuffer;
-}
-
-void Texture::endSingleTimeCommands(VkCommandBuffer commandBuffer,
-                                    VkCommandPool commandPool,
-                                    VkQueue queue) {
-	/// End the command buffer recording
-	VK_CHECK(vkEndCommandBuffer(commandBuffer));
-
-	/// Submit the command buffer to the queue and wait for it to complete
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-
-	/// Submit commands and wait for completion
-	/// For one-time operations, we use a fence to ensure the operation completes
-	VkFenceCreateInfo fenceInfo{};
-	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceInfo.flags = 0;
-
-	VkFence fence;
-	VK_CHECK(vkCreateFence(this->device, &fenceInfo, nullptr, &fence));
-
-	VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, fence));
-
-	/// Wait for the fence to signal that command buffer execution has finished
-	VK_CHECK(vkWaitForFences(this->device, 1, &fence, VK_TRUE, UINT64_MAX));
-
-	/// Clean up the fence
-	vkDestroyFence(this->device, fence, nullptr);
-
-	/// Free the command buffer
-	vkFreeCommandBuffers(this->device, commandPool, 1, &commandBuffer);
 }
 
 uint32_t Texture::calculateMipLevels(uint32_t width, uint32_t height) {

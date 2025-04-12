@@ -2,6 +2,7 @@
 #include "texturemanager.h"
 #include <spdlog/spdlog.h>
 #include <filesystem>
+#include <utility>
 
 namespace lillugsi::rendering {
 
@@ -9,12 +10,14 @@ TextureManager::TextureManager(
 	VkDevice device,
 	VkPhysicalDevice physicalDevice,
 	VkCommandPool commandPool,
-	VkQueue graphicsQueue
+	VkQueue graphicsQueue,
+	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager
 ) : device(device)
   , physicalDevice(physicalDevice)
   , commandPool(commandPool)
   , graphicsQueue(graphicsQueue)
-  , defaultTexture(nullptr) {
+  , defaultTexture(nullptr)
+  , commandBufferManager(std::move(commandBufferManager)){
 
 	spdlog::info("Texture manager initialized");
 }
@@ -141,7 +144,8 @@ std::shared_ptr<Texture> TextureManager::getOrLoadTexture(
 			textureData.pixels.data(),
 			textureData.pixels.size(),
 			this->commandPool,
-			this->graphicsQueue
+			this->graphicsQueue,
+			*this->commandBufferManager.get()
 		);
 
 		/// Configure default sampler settings
@@ -217,7 +221,7 @@ std::shared_ptr<Texture> TextureManager::createTexture(
 			height,
 			format,
 			mipLevels,
-			1, // Single layer
+			1, /// Single layer
 			name
 		);
 
@@ -226,7 +230,8 @@ std::shared_ptr<Texture> TextureManager::createTexture(
 			data,
 			dataSize,
 			this->commandPool,
-			this->graphicsQueue
+			this->graphicsQueue,
+			*this->commandBufferManager.get()
 		);
 
 		/// Configure default sampler settings
@@ -345,7 +350,8 @@ std::shared_ptr<Texture> TextureManager::createDefaultTexture() {
 			whitePixels.data(),
 			whitePixels.size(),
 			this->commandPool,
-			this->graphicsQueue
+			this->graphicsQueue,
+			*this->commandBufferManager.get()
 		);
 
 		/// Configure sampler to repeat for seamless tiling

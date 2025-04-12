@@ -223,7 +223,7 @@ private:
 	std::unique_ptr<rendering::TextureManager> textureManager;
 
 	/// Command buffer manager for centralized command buffer operations
-	std::unique_ptr<vulkan::CommandBufferManager> commandBufferManager;
+	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager;
 
 };
 
