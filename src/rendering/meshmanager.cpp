@@ -36,11 +36,10 @@ void MeshManager::cleanup() {
 		this->bufferCache->cleanup();
 	}
 
-	/// Destroy the command pool
+	/// Reset the command pool
 	if (this->commandPool != VK_NULL_HANDLE) {
-		vkDestroyCommandPool(this->device, this->commandPool, nullptr);
-		this->commandPool = VK_NULL_HANDLE;
-		spdlog::debug("Command pool destroyed");
+		this->commandBufferManager->resetCommandPool(this->commandPool);
+		spdlog::debug("Command pool reseted");
 	}
 
 	spdlog::info("MeshManager cleanup completed");
@@ -128,14 +127,10 @@ std::shared_ptr<Mesh> MeshManager::createMesh(Args&&... args) {
 }
 
 void MeshManager::createCommandPool(uint32_t graphicsQueueFamilyIndex) {
-	VkCommandPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = graphicsQueueFamilyIndex;
-	/// Use VK_COMMAND_POOL_CREATE_TRANSIENT_BIT as these command buffers
-	/// will be short-lived and used only for transfer operations
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-
-	VK_CHECK(vkCreateCommandPool(this->device, &poolInfo, nullptr, &this->commandPool));
+	/// Create main command pool for rendering operations
+	this->commandPool = this->commandBufferManager->createCommandPool(
+		graphicsQueueFamilyIndex,
+		VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 	spdlog::debug("Command pool created for transfer operations");
 }
 

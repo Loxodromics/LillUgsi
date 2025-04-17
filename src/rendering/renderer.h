@@ -140,11 +140,12 @@ private:
 	/// Vulkan context managing Vulkan instance, device, and swap chain
 	std::unique_ptr<vulkan::VulkanContext> vulkanContext;
 
-	/// Command pool for allocating command buffers
-	vulkan::VulkanCommandPoolHandle commandPool;
-
 	/// Command buffers for recording drawing commands
 	std::vector<VkCommandBuffer> commandBuffers;
+
+	/// Command pool for rendering operations
+	/// Raw handle owned by CommandBufferManager
+	VkCommandPool commandPool = VK_NULL_HANDLE;
 
 	/// Handle for the render pass
 	vulkan::VulkanRenderPassHandle renderPass;

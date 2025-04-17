@@ -116,10 +116,22 @@ bool Renderer::initialize(SDL_Window* window) {
 		this->textureManager = std::make_unique<rendering::TextureManager>(
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice(),
-			this->commandPool.get(),
+			this->commandPool,
 			this->vulkanContext->getDevice()->getGraphicsQueue(),
 			this->commandBufferManager
 		);
+		this->commandBufferManager = std::make_shared<vulkan::CommandBufferManager>(
+			this->vulkanContext->getDevice()->getDevice());
+		if (!this->commandBufferManager->initialize()) {
+			spdlog::error("Failed to initialize command buffer manager");
+			return false;
+		}
+
+		/// Create main command pool for rendering operations
+		/// The CommandBufferManager maintains ownership of the pool
+		this->commandPool = this->commandBufferManager->createCommandPool(
+			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex(),
+			VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
 		/// Create camera uniform buffer
 		this->createCameraUniformBuffer();
@@ -196,12 +208,9 @@ void Renderer::cleanup() {
 	/// Clean up synchronization objects
 	this->cleanupSyncObjects();
 
-	/// Command buffer manager cleanup needs to happen before the device is destroyed
-	/// This ensures all Vulkan resources are released in the proper order
+	/// Clean up command buffer manager before vulkan context
+	/// This ensures proper resource cleanup order
 	if (this->commandBufferManager) {
-		/// Command buffers don't need to be explicitly freed before manager cleanup
-		/// as the manager tracks and cleans up all allocated command buffers
-		this->commandBuffers.clear();
 		this->commandBufferManager->cleanup();
 		this->commandBufferManager.reset();
 	}
@@ -244,8 +253,8 @@ void Renderer::cleanup() {
 
 	this->vulkanBufferUtility.reset();
 
-	/// Reset command pool
-	this->commandPool.reset();
+	/// null the command pool
+	this->commandPool = nullptr;
 
 	/// Clean up framebuffers
 	this->cleanupFramebuffers();
@@ -443,7 +452,7 @@ bool Renderer::captureScreenshot(const std::string& filename) {
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice(),
 			this->vulkanContext->getDevice()->getGraphicsQueue(),
-			this->commandPool.get()
+			this->commandPool
 		);
 	}
 
