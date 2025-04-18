@@ -100,6 +100,9 @@ bool Renderer::initialize(SDL_Window* window) {
 			this->vulkanContext->getPhysicalDevice()
 		);
 
+		this->framebufferManager = std::make_unique<vulkan::FramebufferManager>(
+			this->vulkanContext->getDevice()->getDevice());
+
 		/// Create framebuffers
 		this->createFramebuffers();
 
@@ -120,6 +123,7 @@ bool Renderer::initialize(SDL_Window* window) {
 			this->vulkanContext->getDevice()->getGraphicsQueue(),
 			this->commandBufferManager
 		);
+
 		this->commandBufferManager = std::make_shared<vulkan::CommandBufferManager>(
 			this->vulkanContext->getDevice()->getDevice());
 		if (!this->commandBufferManager->initialize()) {
@@ -259,6 +263,8 @@ void Renderer::cleanup() {
 	/// Clean up framebuffers
 	this->cleanupFramebuffers();
 
+	this->framebufferManager.reset();
+
 	/// Clean up depth buffer
 	this->depthBuffer.reset();
 
@@ -396,9 +402,6 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 			vkDeviceWaitIdle(this->vulkanContext->getDevice()->getDevice());
 		}
 
-		/// Clean up old swap chain resources
-		this->cleanupFramebuffers();
-
 		/// Free old command buffers through the manager
 		if (this->commandBufferManager && !this->commandBuffers.empty()) {
 			this->commandBufferManager->freeCommandBuffers(
@@ -421,8 +424,14 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		/// Recreate depth buffer with new dimensions
 		this->depthBuffer->initialize(this->width, this->height);
 
-		/// Recreate framebuffers
-		this->createFramebuffers();
+		/// Recreate framebuffers using the manager
+		this->framebufferManager->recreateSwapChainFramebuffers(
+			this->renderPass.get(),
+			this->vulkanContext->getSwapChain()->getSwapChainImageViews(),
+			this->depthBuffer->getImageView(),
+			this->width,
+			this->height
+		);
 
 		/// Recreate command buffers
 		this->recordCommandBuffers();
@@ -588,47 +597,23 @@ void Renderer::createRenderPass() {
 }
 
 void Renderer::createFramebuffers() {
-	/// Framebuffers are the destination for the rendering operations
-	/// We create one framebuffer for each image view in the swap chain
-
-	/// Resize the framebuffer vector to match the number of swap chain images
-	this->swapChainFramebuffers.resize(this->vulkanContext->getSwapChain()->getSwapChainImageViews().size());
-
-	/// Iterate through each swap chain image view and create a framebuffer for it
-	for (size_t i = 0; i < this->vulkanContext->getSwapChain()->getSwapChainImageViews().size(); i++) {
-		/// We'll use two attachments for each framebuffer: color and depth
-		/// The color attachment comes from the swap chain, while the depth attachment is shared
-		std::array<VkImageView, 2> attachments = {
-			this->vulkanContext->getSwapChain()->getSwapChainImageViews()[i].get(),
-			this->depthBuffer->getImageView()
-		};
-
-		/// Create the framebuffer create info structure
-		VkFramebufferCreateInfo framebufferInfo{};
-		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferInfo.renderPass = this->renderPass.get(); /// The render pass this framebuffer is compatible with
-		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size()); /// Number of attachments (color and depth)
-		framebufferInfo.pAttachments = attachments.data(); /// Pointer to the attachments array
-		framebufferInfo.width = this->vulkanContext->getSwapChain()->getSwapChainExtent().width;
-		framebufferInfo.height = this->vulkanContext->getSwapChain()->getSwapChainExtent().height;
-		framebufferInfo.layers = 1; /// Number of layers in image arrays
-
-		/// Create the framebuffer
-		VkFramebuffer framebuffer;
-		VK_CHECK(vkCreateFramebuffer(this->vulkanContext->getDevice()->getDevice(), &framebufferInfo, nullptr, &framebuffer));
-
-		/// Store the framebuffer in our vector, wrapped in a VulkanFramebufferHandle for RAII
-		this->swapChainFramebuffers[i] = vulkan::VulkanFramebufferHandle(framebuffer, [this](VkFramebuffer fb) {
-			vkDestroyFramebuffer(this->vulkanContext->getDevice()->getDevice(), fb, nullptr);
-		});
-	}
-
-	spdlog::info("Created {} framebuffers with color and depth attachments successfully", this->swapChainFramebuffers.size());
+	/// Delegate framebuffer creation to the FramebufferManager
+	/// This centralizes framebuffer management and reduces Renderer's responsibilities
+	this->framebufferManager->createSwapChainFramebuffers(
+		this->renderPass.get(),
+		this->vulkanContext->getSwapChain()->getSwapChainImageViews(),
+		this->depthBuffer->getImageView(),
+		this->vulkanContext->getSwapChain()->getSwapChainExtent().width,
+		this->vulkanContext->getSwapChain()->getSwapChainExtent().height
+	);
 }
 
 void Renderer::cleanupFramebuffers() {
-	this->swapChainFramebuffers.clear();
-	spdlog::info("Framebuffers cleaned up");
+	/// Delegate framebuffer cleanup to the FramebufferManager
+	/// This ensures consistent resource management
+	if (this->framebufferManager) {
+		this->framebufferManager->cleanup();
+	}
 }
 
 vulkan::VulkanShaderModuleHandle Renderer::createShaderModule(const std::vector<char>& code) {
@@ -660,7 +645,8 @@ void Renderer::recordCommandBuffers() {
 	}
 
 	/// Resize for new recording - one command buffer per framebuffer
-	this->commandBuffers.resize(this->swapChainFramebuffers.size());
+	uint32_t swapChainImageCount = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
+	this->commandBuffers.resize(swapChainImageCount);
 
 	/// Allocate new command buffers through the manager
 	this->commandBuffers = this->commandBufferManager->allocateCommandBuffers(
@@ -680,7 +666,7 @@ void Renderer::recordCommandBuffers() {
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.renderPass = this->renderPass.get();
-		renderPassInfo.framebuffer = this->swapChainFramebuffers[i].get();
+		renderPassInfo.framebuffer = this->framebufferManager->getFramebuffer(i);
 		/// Define the render area, typically the size of the framebuffer
 		renderPassInfo.renderArea.offset = {0, 0};
 		renderPassInfo.renderArea.extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
@@ -873,15 +859,17 @@ void Renderer::createDescriptorPool() {
 	/// Each type needs its own pool allocation
 	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 
+	uint32_t swapChainImageCount = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
+
 	/// Camera buffer pool size
 	/// One descriptor per swap chain image
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImageCount);
 
 	/// Light buffer pool size
 	/// One descriptor per swap chain image
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(this->swapChainFramebuffers.size());
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImageCount);
 
 	/// Create the descriptor pool
 	/// We need enough space for both camera and light descriptors per frame
@@ -890,7 +878,7 @@ void Renderer::createDescriptorPool() {
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
 	/// Multiply maxSets by 2 because we need two sets (camera + light) per frame
-	poolInfo.maxSets = static_cast<uint32_t>(this->swapChainFramebuffers.size() * 2);
+	poolInfo.maxSets = static_cast<uint32_t>(swapChainImageCount * 2);
 
 	VK_CHECK(vkCreateDescriptorPool(
 		this->vulkanContext->getDevice()->getDevice(),
@@ -904,7 +892,7 @@ void Renderer::createDescriptorPool() {
 void Renderer::createDescriptorSets() {
 	/// Calculate number of descriptor sets needed
 	/// One set per swap chain image for both camera and lighting data
-	size_t numFrames = this->swapChainFramebuffers.size();
+	uint32_t numFrames = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
 
 	/// Create storage for camera descriptor sets
 	this->cameraDescriptorSets.resize(numFrames);

@@ -5,6 +5,7 @@
 #include "vulkan/vulkanwrappers.h"
 #include "vulkan/pipelinemanager.h"
 #include "vulkan/commandbuffermanager.h"
+#include "vulkan/framebuffermanager.h"
 #include "vulkan/depthbuffer.h"
 #include "rendering/editorcamera.h"
 #include "rendering/orbitcamera.h"
@@ -19,6 +20,7 @@
 #ifdef USE_PLANET
 #include "planet/planetdata.h"
 #endif
+
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -150,9 +152,6 @@ private:
 	/// Handle for the render pass
 	vulkan::VulkanRenderPassHandle renderPass;
 
-	/// Vector to store framebuffer handles
-	std::vector<vulkan::VulkanFramebufferHandle> swapChainFramebuffers;
-
 	/// Vulkan buffer utility
 	std::unique_ptr<vulkan::VulkanBuffer> vulkanBufferUtility;
 
@@ -225,6 +224,9 @@ private:
 
 	/// Command buffer manager for centralized command buffer operations
 	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager;
+
+	/// Add framebuffer manager
+	std::unique_ptr<vulkan::FramebufferManager> framebufferManager;
 
 };
 
