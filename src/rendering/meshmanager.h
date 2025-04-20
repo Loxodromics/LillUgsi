@@ -1,28 +1,26 @@
 #pragma once
 
-#include "buffercache.h"
+#include "buffermanager.h"
 #include "mesh.h"
 #include "vulkan/buffer.h"
-#include "vulkan/indexbuffer.h"
-#include "vulkan/vertexbuffer.h"
 #include <memory>
 #include <vector>
-#include <vulkan/commandbuffermanager.h>
 
 namespace lillugsi::rendering {
 
 class MeshManager {
 public:
-	/// Constructor taking Vulkan device references needed for buffer creation
+	/// Constructor taking Vulkan device references and BufferManager
 	/// @param device The logical device for buffer operations
 	/// @param physicalDevice The physical device for memory allocation
 	/// @param graphicsQueue The graphics queue for transfer operations
 	/// @param graphicsQueueFamilyIndex The queue family index for command pool creation
+	/// @param bufferManager The buffer manager to use for creating buffers
 	MeshManager(VkDevice device,
-		VkPhysicalDevice physicalDevice,
-		VkQueue graphicsQueue,
-		uint32_t graphicsQueueFamilyIndex,
-		std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager);
+	    VkPhysicalDevice physicalDevice,
+	    VkQueue graphicsQueue,
+	    uint32_t graphicsQueueFamilyIndex,
+	    std::shared_ptr<BufferManager> bufferManager);
 
 	/// Destructor ensures proper cleanup of resources
 	~MeshManager();
@@ -30,8 +28,6 @@ public:
 	void cleanup();
 
 	/// Create a mesh of the specified type with constructor parameters
-	/// This method creates the mesh and its associated GPU buffers
-	/// The variadic template allows each mesh type to have its own parameters
 	/// @tparam T The type of mesh to create (must derive from Mesh)
 	/// @tparam Args Parameter pack for mesh constructor arguments
 	/// @param args Constructor arguments forwarded to mesh creation
@@ -39,11 +35,12 @@ public:
 	template<typename T, typename... Args>
 	[[nodiscard]] std::shared_ptr<Mesh> createMesh(Args&&... args);
 
+	/// Update GPU buffers for a mesh
+	/// @param mesh The mesh whose buffers need updating
 	void updateBuffers(const std::shared_ptr<Mesh>& mesh);
 
 	/// Update GPU buffers for a mesh if needed
 	/// @param mesh The mesh whose buffers might need updating
-	/// @throws VulkanException if buffer update fails
 	void updateBuffersIfNeeded(const std::shared_ptr<Mesh>& mesh);
 
 private:
@@ -52,33 +49,8 @@ private:
 	VkPhysicalDevice physicalDevice;
 	VkQueue graphicsQueue;
 
-	/// Command pool for transfer operations
-	VkCommandPool commandPool;
-
-	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager;
-
-	/// Buffer cache for efficient buffer management
-	std::unique_ptr<BufferCache> bufferCache;
-
-	/// Create a command pool for transfer operations
-	/// @param graphicsQueueFamilyIndex The queue family index for the command pool
-	void createCommandPool(uint32_t graphicsQueueFamilyIndex);
-
-	/// Copy data to a buffer using staging buffer
-	/// @param data Pointer to the source data
-	/// @param size Size of the data in bytes
-	/// @param dstBuffer Destination buffer
-	void copyToBuffer(const void* data, VkDeviceSize size, VkBuffer dstBuffer);
-
-	/// Find a suitable memory type for buffer allocation
-	/// This method finds a memory type that satisfies both the type requirements from Vulkan
-	/// and our desired memory properties (e.g., host visible, device local)
-	/// @param typeFilter Bit field of suitable memory types returned by Vulkan
-	/// @param properties Required memory properties we need
-	/// @return Index of a suitable memory type
-	/// @throws VulkanException if no suitable memory type is found
-	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
-
+	/// Buffer manager for creating and updating buffers
+	std::shared_ptr<BufferManager> bufferManager;
 };
 
 } /// namespace lillugsi::rendering

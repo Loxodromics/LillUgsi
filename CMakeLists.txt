@@ -66,6 +66,7 @@ set(MAIN_SOURCES
 		src/rendering/orbitcamera.cpp
 		src/vulkan/commandbuffermanager.cpp
 		src/vulkan/framebuffermanager.cpp
+		src/rendering/buffermanager.cpp
 )
 
 add_executable(LillUgsi ${MAIN_SOURCES})

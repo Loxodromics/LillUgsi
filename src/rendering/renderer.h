@@ -15,6 +15,7 @@
 #include "rendering/screenshot.h"
 #include "scene/scene.h"
 #include "materialmanager.h"
+#include "buffermanager.h"
 
 
 #ifdef USE_PLANET
@@ -155,10 +156,6 @@ private:
 	/// Vulkan buffer utility
 	std::unique_ptr<vulkan::VulkanBuffer> vulkanBufferUtility;
 
-	/// Buffer to hold camera uniform data
-	vulkan::VulkanBufferHandle cameraBuffer;
-	VkDeviceMemory cameraBufferMemory;
-
 	/// Descriptor pool
 	VkDescriptorPool descriptorPool;
 
@@ -203,8 +200,6 @@ private:
 
 	/// Light management
 	std::unique_ptr<LightManager> lightManager;
-	vulkan::VulkanBufferHandle lightBuffer;
-	VkDeviceMemory lightBufferMemory;
 
 	/// Material management
 	std::unique_ptr<MaterialManager> materialManager;
@@ -227,6 +222,10 @@ private:
 
 	/// Add framebuffer manager
 	std::unique_ptr<vulkan::FramebufferManager> framebufferManager;
+
+	std::shared_ptr<BufferManager> bufferManager;
+	std::shared_ptr<vulkan::Buffer> cameraBuffer;
+	std::shared_ptr<vulkan::Buffer> lightBuffer;
 
 };
 

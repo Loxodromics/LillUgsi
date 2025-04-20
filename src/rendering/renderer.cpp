@@ -72,7 +72,7 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Create render pass
 		this->createRenderPass();
 
-		/// Initialize command buffer manager
+		/// Initialize the command buffer manager
 		this->commandBufferManager = std::make_shared<vulkan::CommandBufferManager>(
 			this->vulkanContext->getDevice()->getDevice());
 		if (!this->commandBufferManager->initialize()) {
@@ -94,26 +94,26 @@ bool Renderer::initialize(SDL_Window* window) {
 		);
 		this->pipelineManager->initialize();
 
-		/// Initialize buffer utility after Vulkan setup
-		this->vulkanBufferUtility = std::make_unique<vulkan::VulkanBuffer>(
+		/// Initialize buffer manager
+		this->bufferManager = std::make_shared<BufferManager>(
 			this->vulkanContext->getDevice()->getDevice(),
-			this->vulkanContext->getPhysicalDevice()
-		);
+			this->vulkanContext->getPhysicalDevice(),
+			this->vulkanContext->getDevice()->getGraphicsQueue(),
+			this->commandBufferManager);
 
-		this->framebufferManager = std::make_unique<vulkan::FramebufferManager>(
-			this->vulkanContext->getDevice()->getDevice());
+		if (!this->bufferManager->initialize(
+				this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex())) {
+			spdlog::error("Failed to initialize buffer manager");
+			return false;
+				}
 
-		/// Create framebuffers
-		this->createFramebuffers();
-
-		/// Initialize MeshManager
+		/// Initialize MeshManager with the buffer manager
 		this->meshManager = std::make_unique<MeshManager>(
 			this->vulkanContext->getDevice()->getDevice(),
 			this->vulkanContext->getPhysicalDevice(),
 			this->vulkanContext->getDevice()->getGraphicsQueue(),
 			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex(),
-			this->commandBufferManager
-		);
+			this->bufferManager);
 
 		/// The TextureManager needs these resources for uploading texture data to the GPU
 		this->textureManager = std::make_unique<rendering::TextureManager>(
@@ -160,6 +160,24 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Create command buffers
 		this->createCommandBuffers();
 
+		/// Initialize framebuffer manager
+		this->framebufferManager = std::make_unique<vulkan::FramebufferManager>(
+			this->vulkanContext->getDevice()->getDevice());
+
+		if (!this->framebufferManager->initialize()) {
+			spdlog::error("Failed to initialize framebuffer manager");
+			return false;
+		}
+
+		/// Create framebuffers
+		this->framebufferManager->createSwapChainFramebuffers(
+			this->renderPass.get(),
+			this->vulkanContext->getSwapChain()->getSwapChainImageViews(),
+			this->depthBuffer->getImageView(),
+			this->vulkanContext->getSwapChain()->getSwapChainExtent().width,
+			this->vulkanContext->getSwapChain()->getSwapChainExtent().height
+		);
+
 		/// Record command buffers
 		this->recordCommandBuffers();
 
@@ -177,7 +195,7 @@ bool Renderer::initialize(SDL_Window* window) {
 
 void Renderer::cleanup() {
 	if (this->isCleanedUp) {
-		return;  /// Already cleaned up, do nothing
+		return; /// Already cleaned up, do nothing
 	}
 
 	/// Ensure all GPU operations are completed before cleanup
@@ -189,14 +207,7 @@ void Renderer::cleanup() {
 	}
 
 	/// Clean up light resources
-	if (this->lightBuffer) {
-		this->lightBuffer.reset();
-	}
-	if (this->lightBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->vulkanContext->getDevice()->getDevice(),
-			this->lightBufferMemory, nullptr);
-		this->lightBufferMemory = VK_NULL_HANDLE;
-	}
+	this->lightBuffer.reset();
 	this->lightManager.reset();
 
 	/// Clean up materials before scene
@@ -224,45 +235,41 @@ void Renderer::cleanup() {
 	this->pipelineLayout.reset();
 	this->pipelineManager->cleanup();
 
-	/// Clean up descriptor pool and layout
+	/// Clean up descriptor pool and sets
 	if (this->descriptorPool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(this->vulkanContext->getDevice()->getDevice(), this->descriptorPool, nullptr);
+		vkDestroyDescriptorPool(
+			this->vulkanContext->getDevice()->getDevice(), this->descriptorPool, nullptr);
 		this->descriptorPool = VK_NULL_HANDLE;
 	}
 
-	/// Clean up uniform buffers
-	if (this->cameraBuffer) {
-		this->cameraBuffer.reset();
-	}
-	if (this->cameraBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->vulkanContext->getDevice()->getDevice(), this->cameraBufferMemory, nullptr);
-		this->cameraBufferMemory = VK_NULL_HANDLE;
+	/// Clean up camera and light uniform buffers
+	this->cameraBuffer.reset();
+	this->lightBuffer.reset();
+
+	/// Clean up buffer manager before mesh manager
+	/// This ensures proper resource cleanup order
+	if (this->bufferManager) {
+		this->bufferManager->cleanup();
+		this->bufferManager.reset();
 	}
 
-	this->vulkanBufferUtility.reset();
-
-	// Clear texture manager first to ensure textures are released
-	// This needs to happen before other resources are cleaned up
+	/// Clear texture manager to ensure textures are released
 	if (this->textureManager) {
 		this->textureManager->releaseAllTextures();
 		this->textureManager.reset();
 	}
 
-	/// Clean up mesh manager before other resources
-	/// This ensures buffers are destroyed before the device
+	/// Clean up mesh manager
 	if (this->meshManager) {
 		this->meshManager->cleanup();
 		this->meshManager.reset();
 	}
 
-	this->vulkanBufferUtility.reset();
-
-	/// null the command pool
+	/// Null the command pool
 	this->commandPool = nullptr;
 
 	/// Clean up framebuffers
 	this->cleanupFramebuffers();
-
 	this->framebufferManager.reset();
 
 	/// Clean up depth buffer
@@ -801,27 +808,15 @@ void Renderer::recordCommandBuffers() {
 void Renderer::createCameraUniformBuffer() {
 	VkDeviceSize bufferSize = sizeof(CameraUBO);
 
-	/// Create the uniform buffer
-	/// Use VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-	/// to ensure the buffer is accessible by the CPU and automatically synchronized
-	this->vulkanBufferUtility->createBuffer(
-		bufferSize,
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		this->cameraBuffer,
-		this->cameraBufferMemory
-	);
-
-	/// Initialize buffer with identity matrices
+	/// Create camera uniform buffer with initial data
 	CameraUBO initialData{};
 	initialData.view = glm::mat4(1.0f);
 	initialData.projection = glm::mat4(1.0f);
+	initialData.cameraPos = glm::vec3(0.0f);
+	initialData.padding = 0.0f;
 
-	/// Copy initial data to the buffer
-	void* data;
-	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(), this->cameraBufferMemory, 0, bufferSize, 0, &data));
-	memcpy(data, &initialData, bufferSize);
-	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(), this->cameraBufferMemory);
+	/// Create the uniform buffer using buffer manager
+	this->cameraBuffer = this->bufferManager->createUniformBuffer(bufferSize, &initialData);
 
 	spdlog::info("Camera uniform buffer created successfully");
 }
@@ -846,12 +841,11 @@ void Renderer::updateCameraUniformBuffer() const {
 	ubo.padding = 0.0f;
 
 	/// Update GPU buffer with new camera data
-	void* data;
-	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(),
-		this->cameraBufferMemory, 0, sizeof(ubo), 0, &data));
-	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(),
-		this->cameraBufferMemory);
+	this->bufferManager->updateBuffer(
+		this->cameraBuffer,
+		&ubo,
+		sizeof(ubo),
+		0);
 }
 
 void Renderer::createDescriptorPool() {
@@ -891,7 +885,6 @@ void Renderer::createDescriptorPool() {
 
 void Renderer::createDescriptorSets() {
 	/// Calculate number of descriptor sets needed
-	/// One set per swap chain image for both camera and lighting data
 	uint32_t numFrames = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
 
 	/// Create storage for camera descriptor sets
@@ -902,8 +895,8 @@ void Renderer::createDescriptorSets() {
 	/// First, allocate camera descriptor sets
 	{
 		/// Create layouts array using global layout from pipeline manager
-		std::vector<VkDescriptorSetLayout> cameraLayouts(numFrames,
-			this->pipelineManager->getCameraDescriptorLayout());
+		std::vector<VkDescriptorSetLayout>
+			cameraLayouts(numFrames, this->pipelineManager->getCameraDescriptorLayout());
 
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -920,8 +913,8 @@ void Renderer::createDescriptorSets() {
 	/// Then, allocate light descriptor sets
 	{
 		/// Create layouts array using global layout from pipeline manager
-		std::vector<VkDescriptorSetLayout> lightLayouts(numFrames,
-			this->pipelineManager->getLightDescriptorLayout());
+		std::vector<VkDescriptorSetLayout>
+			lightLayouts(numFrames, this->pipelineManager->getLightDescriptorLayout());
 
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -940,7 +933,7 @@ void Renderer::createDescriptorSets() {
 		/// Update camera descriptor
 		{
 			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = this->cameraBuffer.get();
+			bufferInfo.buffer = this->cameraBuffer->get();
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(CameraUBO);
 
@@ -954,16 +947,13 @@ void Renderer::createDescriptorSets() {
 			descriptorWrite.pBufferInfo = &bufferInfo;
 
 			vkUpdateDescriptorSets(
-				this->vulkanContext->getDevice()->getDevice(),
-				1,
-				&descriptorWrite,
-				0, nullptr);
+				this->vulkanContext->getDevice()->getDevice(), 1, &descriptorWrite, 0, nullptr);
 		}
 
 		/// Update light descriptor
 		{
 			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = this->lightBuffer.get();
+			bufferInfo.buffer = this->lightBuffer->get();
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(LightData) * LightManager::MaxLights;
 
@@ -977,10 +967,7 @@ void Renderer::createDescriptorSets() {
 			descriptorWrite.pBufferInfo = &bufferInfo;
 
 			vkUpdateDescriptorSets(
-				this->vulkanContext->getDevice()->getDevice(),
-				1,
-				&descriptorWrite,
-				0, nullptr);
+				this->vulkanContext->getDevice()->getDevice(), 1, &descriptorWrite, 0, nullptr);
 		}
 	}
 
@@ -1225,51 +1212,30 @@ void Renderer::initializeScene() {
 
 void Renderer::createLightUniformBuffer() {
 	/// Calculate required buffer size
-	/// We allocate space for the maximum number of lights
-	/// This simplifies buffer management as size remains constant
 	VkDeviceSize bufferSize = sizeof(LightData) * LightManager::MaxLights;
 
-	/// Create the uniform buffer
-	/// We use VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT to allow CPU updates
-	/// and VK_MEMORY_PROPERTY_HOST_COHERENT_BIT to ensure synchronization
-	this->vulkanBufferUtility->createBuffer(
-		bufferSize,
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		this->lightBuffer,
-		this->lightBufferMemory
-	);
-
 	/// Initialize buffer with empty light data
-	/// This ensures valid data even before any lights are added
 	std::vector<LightData> initialData(LightManager::MaxLights);
-	void* data;
-	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(),
-		this->lightBufferMemory, 0, bufferSize, 0, &data));
-	memcpy(data, initialData.data(), bufferSize);
-	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(),
-		this->lightBufferMemory);
+
+	/// Create the uniform buffer using buffer manager
+	this->lightBuffer = this->bufferManager->createUniformBuffer(bufferSize, initialData.data());
 
 	spdlog::info("Light uniform buffer created with size {} bytes", bufferSize);
 }
 
-/// Update the light uniform buffer with current light data
-/// This should be called when lights change or every frame if lights are dynamic
 void Renderer::updateLightUniformBuffer() const {
 	/// Get current light data from the manager
-	/// This data is already in GPU-friendly format
 	auto lightData = this->lightManager->getLightData();
 
 	/// Calculate buffer size
 	VkDeviceSize bufferSize = sizeof(LightData) * LightManager::MaxLights;
 
-	/// Map the buffer memory and update it with new data
-	void* data;
-	VK_CHECK(vkMapMemory(this->vulkanContext->getDevice()->getDevice(),
-		this->lightBufferMemory, 0, bufferSize, 0, &data));
-	memcpy(data, lightData.data(), bufferSize);
-	vkUnmapMemory(this->vulkanContext->getDevice()->getDevice(),
-		this->lightBufferMemory);
+	/// Update buffer with new light data
+	this->bufferManager->updateBuffer(
+		this->lightBuffer,
+		lightData.data(),
+		bufferSize,
+		0);
 
 	spdlog::trace("Updated light uniform buffer with {} lights",
 		this->lightManager->getLightCount());
