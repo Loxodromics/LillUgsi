@@ -6,6 +6,7 @@
 #include <memory>
 #include <unordered_map>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 namespace lillugsi::rendering {
 
