@@ -68,6 +68,7 @@ set(MAIN_SOURCES
 		src/vulkan/commandbuffermanager.cpp
 		src/vulkan/framebuffermanager.cpp
 		src/rendering/buffermanager.cpp
+		src/rendering/models/modelmanager.cpp
 )
 
 add_executable(LillUgsi ${MAIN_SOURCES})
