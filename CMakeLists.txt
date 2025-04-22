@@ -21,6 +21,7 @@ find_package(spdlog REQUIRED)
 find_package(glm REQUIRED)
 find_package(FastNoise2 REQUIRED)
 find_package(stb REQUIRED)
+find_package(tinygltf REQUIRED)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
 add_compile_definitions(GLM_ENABLE_EXPERIMENTAL)
@@ -99,6 +100,7 @@ target_link_libraries(LillUgsi
 		glm::glm
 		FastNoise2::FastNoise
 		stb::stb
+		TinyGLTF::TinyGLTF
 )
 
 # Add resource copying
