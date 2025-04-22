@@ -65,7 +65,6 @@ public:
 	Material(const Material&) = delete;
 	Material& operator=(const Material&) = delete;
 
-protected:
 	/// Define the texture channel enumeration for configuring texture sampling
 	/// This allows us to flexibly specify which texture channels to use for each property
 	enum class TextureChannel {
@@ -75,6 +74,7 @@ protected:
 		A = 3   /// Alpha channel
 	    };
 
+protected:
 	/// Create a new Material
 	/// @param device The logical device for resource creation
 	/// @param name Unique name for this material instance

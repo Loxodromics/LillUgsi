@@ -18,6 +18,9 @@ class IndexBuffer;
 namespace lillugsi::rendering {
 
 class Mesh {
+friend class ModelLoader;
+friend class GltfModelLoader;
+
 public:
 	/// Data structure containing everything needed to render this mesh
 	/// This struct is populated by prepareRenderData and used by the renderer
@@ -45,7 +48,8 @@ public:
 	/// Generate mesh geometry
 	/// This pure virtual function must be implemented by derived classes
 	/// to define their specific geometry
-	virtual void generateGeometry() = 0;
+	/// Default implementation does nothing
+	virtual void generateGeometry() {};
 
 	/// Prepare render data for this mesh
 	/// This method populates a RenderData struct with everything needed to render the mesh

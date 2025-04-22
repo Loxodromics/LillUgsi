@@ -106,7 +106,8 @@ void MeshManager::updateBuffersIfNeeded(const std::shared_ptr<Mesh> &mesh) {
 }
 
 /// Explicit template instantiations for known mesh types
+template std::shared_ptr<Mesh> MeshManager::createMesh<Mesh>();
 template std::shared_ptr<Mesh> MeshManager::createMesh<CubeMesh>();
 template std::shared_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float &&, int &&);
 
-} // namespace lillugsi::rendering
+} /// namespace lillugsi::rendering

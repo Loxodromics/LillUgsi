@@ -69,6 +69,7 @@ set(MAIN_SOURCES
 		src/vulkan/framebuffermanager.cpp
 		src/rendering/buffermanager.cpp
 		src/rendering/models/modelmanager.cpp
+		src/rendering/models/gltfmodelloader.cpp
 )
 
 add_executable(LillUgsi ${MAIN_SOURCES})
