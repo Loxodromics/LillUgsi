@@ -31,17 +31,35 @@ struct ModelData {
 	/// We store this separately from engine materials to decouple
 	/// the file format from our internal representation
 	struct MaterialInfo {
+		/// Alpha blending modes
+		enum class AlphaMode {
+			Opaque,  /// No transparency
+			Mask,    /// Binary transparency based on alpha threshold
+			Blend    /// Full alpha blending
+		};
+
 		std::string albedoTexturePath;      /// Path to base color texture
 		std::string normalTexturePath;      /// Path to normal map texture
 		std::string roughnessTexturePath;   /// Path to roughness texture
 		std::string metallicTexturePath;    /// Path to metallic texture
 		std::string occlusionTexturePath;   /// Path to ambient occlusion texture
+		std::string emissiveTexturePath;    /// Path to emissive texture
+		
 		glm::vec4 baseColor{1.0f};          /// Base color and alpha
 		float roughness{0.5f};              /// Roughness factor [0-1]
 		float metallic{0.0f};               /// Metallic factor [0-1]
-		float occlusionStrength{1.0f};      /// Occlusion factor [0-1]
+		float occlusion{1.0f};              /// Occlusion factor [0-1]
 		float normalScale{1.0f};            /// Normal map strength
+		
+		glm::vec3 emissiveColor{0.0f};      /// Emissive color
+		bool emissive{false};               /// Whether material emits light
+		
 		bool doubleSided{false};            /// Whether material should be rendered on both sides
+		bool unlit{false};                  /// Whether material ignores lighting
+		
+		AlphaMode alphaMode{AlphaMode::Opaque};  /// How transparency is handled
+		float alphaCutoff{0.5f};            /// Threshold for alpha masking
+		bool transparent{false};            /// Whether material uses transparency
 	};
 	
 	/// Map of material names to their information

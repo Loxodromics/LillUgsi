@@ -71,6 +71,7 @@ set(MAIN_SOURCES
 		src/rendering/models/modelmanager.cpp
 		src/rendering/models/gltfmodelloader.cpp
 		src/rendering/models/meshextractor.cpp
+		src/rendering/models/materialextractor.cpp
 )
 
 add_executable(LillUgsi ${MAIN_SOURCES})

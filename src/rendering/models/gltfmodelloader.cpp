@@ -139,23 +139,10 @@ ModelData GltfModelLoader::parseGltfModel(
 		modelData.name = "GltfModel";
 	}
 
-	/// Parse materials
-	/// We process all materials first to ensure they're available when processing meshes
-	spdlog::debug("Parsing {} materials", gltfModel.materials.size());
-	for (size_t i = 0; i < gltfModel.materials.size(); ++i) {
-		std::string materialName = "material_" + std::to_string(i);
-
-		/// Extract material info from glTF material
-		modelData.materials[materialName] = this->extractMaterialInfo(
-			gltfModel, static_cast<int>(i), baseDir);
-
-		/// Use the material's name if available
-		if (!gltfModel.materials[i].name.empty()) {
-			materialName = gltfModel.materials[i].name;
-			modelData.materials[materialName] = modelData.materials["material_" + std::to_string(i)];
-			modelData.materials.erase("material_" + std::to_string(i));
-		}
-	}
+	/// Parse materials using our dedicated extractor
+	/// This encapsulates all the complex material extraction logic
+	MaterialExtractor materialExtractor(gltfModel);
+	modelData.materials = materialExtractor.extractAllMaterials(baseDir);
 
 	/// Parse meshes
 	/// We extract all mesh data from the glTF model
@@ -636,120 +623,46 @@ ModelData::MaterialInfo GltfModelLoader::extractMaterialInfo(
 	const tinygltf::Model& gltfModel,
 	int materialIndex,
 	const std::string& baseDir) {
-
-	ModelData::MaterialInfo materialInfo;
-
-	/// Validate material index
-	if (materialIndex < 0 || materialIndex >= static_cast<int>(gltfModel.materials.size())) {
-		spdlog::error("Invalid material index: {}", materialIndex);
-		return materialInfo;
-	}
-
-	const auto& material = gltfModel.materials[materialIndex];
-
-	/// Extract base color factor
-	/// glTF PBR materials use a baseColorFactor for the albedo color
-	if (material.pbrMetallicRoughness.baseColorFactor.size() >= 3) {
-		materialInfo.baseColor = glm::vec4(
-			material.pbrMetallicRoughness.baseColorFactor[0],
-			material.pbrMetallicRoughness.baseColorFactor[1],
-			material.pbrMetallicRoughness.baseColorFactor[2],
-			material.pbrMetallicRoughness.baseColorFactor.size() >= 4 ?
-				material.pbrMetallicRoughness.baseColorFactor[3] : 1.0f
-		);
-	}
-
-	/// Extract metallic factor
-	/// glTF uses 0 for dielectric, 1 for metallic
-	materialInfo.metallic = static_cast<float>(material.pbrMetallicRoughness.metallicFactor);
-
-	/// Extract roughness factor
-	/// glTF uses 0 for smooth, 1 for rough
-	materialInfo.roughness = static_cast<float>(material.pbrMetallicRoughness.roughnessFactor);
-
-	/// Extract base color texture path
-	if (material.pbrMetallicRoughness.baseColorTexture.index >= 0) {
-		materialInfo.albedoTexturePath = this->getTexturePath(
-			gltfModel, material.pbrMetallicRoughness.baseColorTexture.index, baseDir);
-	}
-
-	/// Extract normal map texture path
-	if (material.normalTexture.index >= 0) {
-		materialInfo.normalTexturePath = this->getTexturePath(
-			gltfModel, material.normalTexture.index, baseDir);
-		/// Extract normal scale
-		materialInfo.normalScale = static_cast<float>(material.normalTexture.scale);
-	}
-
-	/// Extract metallic-roughness texture path
-	/// glTF stores metallic in B channel, roughness in G channel
-	if (material.pbrMetallicRoughness.metallicRoughnessTexture.index >= 0) {
-		materialInfo.metallicTexturePath = this->getTexturePath(
-			gltfModel, material.pbrMetallicRoughness.metallicRoughnessTexture.index, baseDir);
-		/// We use the same texture for roughness since they're packed together
-		materialInfo.roughnessTexturePath = materialInfo.metallicTexturePath;
-	}
-
-	/// Extract occlusion texture path
-	if (material.occlusionTexture.index >= 0) {
-		materialInfo.occlusionTexturePath = this->getTexturePath(
-			gltfModel, material.occlusionTexture.index, baseDir);
-		/// Extract occlusion strength
-		materialInfo.occlusionStrength = static_cast<float>(material.occlusionTexture.strength);
-	}
-
-	/// Extract double-sided flag
-	materialInfo.doubleSided = material.doubleSided;
-
-	return materialInfo;
+	
+	/// Use our dedicated MaterialExtractor
+	MaterialExtractor extractor(gltfModel);
+	return extractor.extractMaterialInfo(materialIndex, baseDir);
 }
 
 std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> GltfModelLoader::createMaterials(
 	const ModelData& modelData,
 	const std::string& baseDir) {
-
+	
 	std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> materials;
-
+	
 	for (const auto& [name, materialInfo] : modelData.materials) {
 		/// Create a PBR material using our material manager
-		/// We use the material name as a unique identifier
 		auto material = this->materialManager->createPBRMaterial(name);
-
+		
 		/// Set base material properties
 		material->setBaseColor(materialInfo.baseColor);
 		material->setMetallic(materialInfo.metallic);
 		material->setRoughness(materialInfo.roughness);
-
-		/// Enable double-sided rendering if needed
-		/// This requires modifying the material's features
-		if (materialInfo.doubleSided) {
-			/// Note: Our current implementation doesn't directly support
-			/// setting the DoubleSided feature from outside the material constructor.
-			/// This would be an improvement to add to the Material class.
-			spdlog::debug("Double-sided material not yet supported: {}", name);
-		}
-
+		
 		/// Load and assign textures
-		/// We load each texture and configure the correct mapping
-
+		
 		/// Load albedo (base color) texture
 		if (!materialInfo.albedoTexturePath.empty()) {
 			auto texture = this->textureManager->getOrLoadTexture(
 				materialInfo.albedoTexturePath,
-				true, /// Generate mipmaps for better quality
-				TextureLoader::Format::RGBA /// Load with alpha channel
+				true, /// Generate mipmaps
+				materialInfo.transparent ? 
+					TextureLoader::Format::RGBA : /// Need alpha channel for transparency
+					TextureLoader::Format::RGB     /// Save memory without alpha
 			);
-
+			
 			if (texture) {
 				material->setAlbedoTexture(texture);
-				spdlog::debug("Set albedo texture for material {}: {}",
-					name, materialInfo.albedoTexturePath);
-			} else {
-				spdlog::warn("Failed to load albedo texture for material {}: {}",
+				spdlog::debug("Set albedo texture for material {}: {}", 
 					name, materialInfo.albedoTexturePath);
 			}
 		}
-
+		
 		/// Load normal map texture
 		if (!materialInfo.normalTexturePath.empty()) {
 			auto texture = this->textureManager->getOrLoadTexture(
@@ -757,28 +670,24 @@ std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> GltfModelLoader::c
 				true, /// Generate mipmaps
 				TextureLoader::Format::NormalMap /// Special format for normal maps
 			);
-
+			
 			if (texture) {
 				material->setNormalMap(texture, materialInfo.normalScale);
-				spdlog::debug("Set normal map for material {}: {}",
-					name, materialInfo.normalTexturePath);
-			} else {
-				spdlog::warn("Failed to load normal map for material {}: {}",
-					name, materialInfo.normalTexturePath);
+				spdlog::debug("Set normal map for material {}: {} (scale: {})", 
+					name, materialInfo.normalTexturePath, materialInfo.normalScale);
 			}
 		}
-
+		
 		/// Check if we have a combined metallic-roughness texture
-		/// glTF typically packs roughness (G) and metallic (B) in one texture
-		if (!materialInfo.metallicTexturePath.empty() &&
+		if (!materialInfo.metallicTexturePath.empty() && 
 			materialInfo.metallicTexturePath == materialInfo.roughnessTexturePath) {
-
+			
 			auto texture = this->textureManager->getOrLoadTexture(
 				materialInfo.metallicTexturePath,
 				true, /// Generate mipmaps
 				TextureLoader::Format::RGBA /// Need all channels
 			);
-
+			
 			if (texture) {
 				/// Set the combined texture with channel mappings
 				/// G channel contains roughness, B channel contains metallic
@@ -786,20 +695,16 @@ std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> GltfModelLoader::c
 					texture,
 					Material::TextureChannel::G, /// Roughness channel
 					Material::TextureChannel::B, /// Metallic channel
-					1.0f, /// Roughness strength
-					1.0f  /// Metallic strength
+					materialInfo.roughness,
+					materialInfo.metallic
 				);
-
-				spdlog::debug("Set combined roughness-metallic map for material {}: {}",
-					name, materialInfo.metallicTexturePath);
-			} else {
-				spdlog::warn("Failed to load metallic-roughness texture for material {}: {}",
+				
+				spdlog::debug("Set combined roughness-metallic map for material {}: {}", 
 					name, materialInfo.metallicTexturePath);
 			}
 		} else {
 			/// Handle separate roughness and metallic textures
-			/// This is less common in glTF but we support it
-
+			
 			/// Load roughness texture
 			if (!materialInfo.roughnessTexturePath.empty()) {
 				auto texture = this->textureManager->getOrLoadTexture(
@@ -807,17 +712,14 @@ std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> GltfModelLoader::c
 					true, /// Generate mipmaps
 					TextureLoader::Format::R /// Single channel is enough
 				);
-
+				
 				if (texture) {
-					material->setRoughnessMap(texture);
-					spdlog::debug("Set roughness map for material {}: {}",
-						name, materialInfo.roughnessTexturePath);
-				} else {
-					spdlog::warn("Failed to load roughness texture for material {}: {}",
+					material->setRoughnessMap(texture, materialInfo.roughness);
+					spdlog::debug("Set roughness map for material {}: {}", 
 						name, materialInfo.roughnessTexturePath);
 				}
 			}
-
+			
 			/// Load metallic texture
 			if (!materialInfo.metallicTexturePath.empty()) {
 				auto texture = this->textureManager->getOrLoadTexture(
@@ -825,18 +727,15 @@ std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> GltfModelLoader::c
 					true, /// Generate mipmaps
 					TextureLoader::Format::R /// Single channel is enough
 				);
-
+				
 				if (texture) {
-					material->setMetallicMap(texture);
-					spdlog::debug("Set metallic map for material {}: {}",
-						name, materialInfo.metallicTexturePath);
-				} else {
-					spdlog::warn("Failed to load metallic texture for material {}: {}",
+					material->setMetallicMap(texture, materialInfo.metallic);
+					spdlog::debug("Set metallic map for material {}: {}", 
 						name, materialInfo.metallicTexturePath);
 				}
 			}
 		}
-
+		
 		/// Load occlusion texture
 		if (!materialInfo.occlusionTexturePath.empty()) {
 			auto texture = this->textureManager->getOrLoadTexture(
@@ -844,21 +743,37 @@ std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> GltfModelLoader::c
 				true, /// Generate mipmaps
 				TextureLoader::Format::R /// Single channel is enough
 			);
-
+			
 			if (texture) {
-				material->setOcclusionMap(texture, materialInfo.occlusionStrength);
-				spdlog::debug("Set occlusion map for material {}: {}",
-					name, materialInfo.occlusionTexturePath);
-			} else {
-				spdlog::warn("Failed to load occlusion texture for material {}: {}",
+				material->setOcclusionMap(texture, materialInfo.occlusion);
+				spdlog::debug("Set occlusion map for material {}: {}", 
 					name, materialInfo.occlusionTexturePath);
 			}
 		}
-
+		
+		/// Load emissive texture if supported
+		if (!materialInfo.emissiveTexturePath.empty()) {
+			/// Note: Our current PBRMaterial may not support emissive textures
+			/// This would be a good enhancement to add in the future
+			spdlog::debug("Emissive textures not yet supported in material system: {}", 
+				materialInfo.emissiveTexturePath);
+		}
+		
+		/// Handle transparency if needed
+		if (materialInfo.transparent) {
+			/// Note: Our current implementation doesn't directly support
+			/// setting the transparency mode from outside the material constructor.
+			/// This would be an improvement to add to the Material class.
+			spdlog::debug("Transparency for material {} not fully supported: mode={}, cutoff={}", 
+				name, 
+				static_cast<int>(materialInfo.alphaMode), 
+				materialInfo.alphaCutoff);
+		}
+		
 		/// Store the created material
 		materials[name] = material;
 	}
-
+	
 	spdlog::info("Created {} materials from model data", materials.size());
 	return materials;
 }

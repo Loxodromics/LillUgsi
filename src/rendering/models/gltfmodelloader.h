@@ -2,6 +2,7 @@
 
 #include "modelloader.h"
 #include "modeldata.h"
+#include "materialextractor.h"
 #include "rendering/meshmanager.h"
 #include "rendering/materialmanager.h"
 #include "rendering/texturemanager.h"
