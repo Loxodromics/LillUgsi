@@ -37,46 +37,39 @@ std::shared_ptr<scene::SceneNode> GltfModelLoader::loadModel(
 	scene::Scene& scene,
 	std::shared_ptr<scene::SceneNode> parentNode,
 	const ModelLoadOptions& options) {
-
+	
 	/// Ensure we have a valid parent node, defaulting to scene root if none provided
-	/// This helps maintain a consistent API where parent is always valid
 	if (!parentNode) {
 		parentNode = scene.getRoot();
 	}
-
+	
 	/// Extract base name from path for node naming
-	/// Using the filename without extension as the model's root node name
-	/// keeps naming consistent and meaningful
 	std::filesystem::path path(filePath);
 	std::string baseName = path.stem().string();
 	std::string baseDir = path.parent_path().string();
-
+	
 	/// Create a root node for the model
-	/// This node will contain the entire model hierarchy
 	auto modelRootNode = scene.createNode(baseName, parentNode);
-
+	
 	/// Parse the glTF file using tinygltf
-	/// tinygltf handles the low-level file parsing, allowing us to focus on
-	/// converting the data to our engine's format
 	tinygltf::Model gltfModel;
 	tinygltf::TinyGLTF loader;
 	std::string err, warn;
-
+	
 	bool success = false;
-
+	
 	/// Load the appropriate format based on file extension
-	/// glTF supports both JSON (.gltf) and binary (.glb) formats
 	if (path.extension() == ".glb") {
 		success = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, filePath);
 	} else {
 		success = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, filePath);
 	}
-
+	
 	/// Log any warnings - these aren't fatal but might indicate issues
 	if (!warn.empty()) {
 		spdlog::warn("glTF warning while loading '{}': {}", filePath, warn);
 	}
-
+	
 	/// Check if loading was successful
 	if (!success) {
 		spdlog::error("Failed to load glTF model '{}': {}", filePath, err);
@@ -84,42 +77,24 @@ std::shared_ptr<scene::SceneNode> GltfModelLoader::loadModel(
 		scene.removeNode(modelRootNode);
 		return nullptr;
 	}
-
+	
 	/// Parse the glTF model into our intermediate representation
-	/// This extracts all the data we need from the glTF structure
 	spdlog::debug("Parsing glTF model '{}'", filePath);
 	ModelData modelData = this->parseGltfModel(gltfModel, options, baseDir);
-
+	
 	/// Create materials from the model data
-	/// We create materials first since meshes need to reference them
 	auto materials = this->createMaterials(modelData, baseDir);
-
+	
 	/// Create meshes from the model data
-	/// Meshes need materials, so we create them after materials
 	auto meshes = this->createMeshes(modelData, materials);
-
-	/// Process the scene hierarchy
-	/// glTF files can specify a default scene, or we use the first one
-	int sceneIndex = gltfModel.defaultScene >= 0 ? gltfModel.defaultScene : 0;
-
-	if (sceneIndex >= 0 && sceneIndex < gltfModel.scenes.size()) {
-		const auto& gltfScene = gltfModel.scenes[sceneIndex];
-
-		/// Process each root node in the scene
-		for (int nodeIndex : gltfScene.nodes) {
-			auto childNode = this->processNode(gltfModel, nodeIndex, modelData, scene, modelRootNode, options);
-		}
-	} else if (!gltfModel.nodes.empty()) {
-		/// If no valid scene is defined, process each root node directly
-		/// Some glTF files don't specify scenes and just have nodes
-		for (size_t i = 0; i < gltfModel.nodes.size(); ++i) {
-			auto childNode = this->processNode(gltfModel, static_cast<int>(i), modelData, scene, modelRootNode, options);
-		}
-	}
-
+	
+	/// Build the scene hierarchy using our dedicated constructor
+	SceneGraphConstructor sceneConstructor(gltfModel, modelData, meshes);
+	auto rootNode = sceneConstructor.buildSceneGraph(scene, modelRootNode, options);
+	
 	/// Update the model bounds to ensure proper culling
 	modelRootNode->updateBoundsIfNeeded();
-
+	
 	spdlog::info("Successfully loaded glTF model '{}'", filePath);
 	return modelRootNode;
 }
@@ -245,137 +220,6 @@ ModelData GltfModelLoader::parseGltfModel(
 		modelData.meshes.size(), modelData.materials.size(), modelData.nodes.size());
 
 	return modelData;
-}
-
-std::shared_ptr<scene::SceneNode> GltfModelLoader::processNode(
-	const tinygltf::Model& gltfModel,
-	int nodeIndex,
-	const ModelData& modelData,
-	scene::Scene& scene,
-	std::shared_ptr<scene::SceneNode> parentNode,
-	const ModelLoadOptions& options) {
-
-	/// Validate node index
-	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(modelData.nodes.size())) {
-		spdlog::warn("Invalid node index: {}", nodeIndex);
-		return nullptr;
-	}
-
-	/// Get node data
-	const auto& nodeInfo = modelData.nodes[nodeIndex];
-
-	/// Create a new scene node
-	auto sceneNode = scene.createNode(nodeInfo.name, parentNode);
-
-	/// Set node transform
-	/// We convert from the modelData representation to the scene node representation
-	scene::Transform transform;
-	transform.position = nodeInfo.translation;
-	transform.rotation = nodeInfo.rotation;
-	transform.scale = nodeInfo.scale;
-	sceneNode->setLocalTransform(transform);
-
-	/// Assign mesh if this node has one
-	if (nodeInfo.meshIndex >= 0 &&
-		nodeInfo.meshIndex < static_cast<int>(gltfModel.meshes.size())) {
-
-		const auto& gltfMesh = gltfModel.meshes[nodeInfo.meshIndex];
-
-		/// In glTF, a mesh can have multiple primitives, each with its own material
-		/// If there are multiple primitives, we create child nodes for each one
-		if (gltfMesh.primitives.size() > 1) {
-			for (size_t i = 0; i < gltfMesh.primitives.size(); ++i) {
-				/// Create a child node for each primitive
-				std::string primitiveName = nodeInfo.name + "_primitive_" + std::to_string(i);
-				auto primitiveNode = scene.createNode(primitiveName, sceneNode);
-
-				/// Find the corresponding ModelMeshData
-				/// We need to find the right ModelMeshData by matching mesh and primitive indices
-				int meshDataIndex = -1;
-				for (size_t j = 0; j < modelData.meshes.size(); ++j) {
-					if (modelData.meshes[j].name == gltfMesh.name + "_" + std::to_string(i) ||
-						modelData.meshes[j].name == "mesh_" + std::to_string(nodeInfo.meshIndex) + "_" + std::to_string(i)) {
-						meshDataIndex = static_cast<int>(j);
-						break;
-					}
-				}
-
-				if (meshDataIndex >= 0) {
-					/// Create a mesh from the mesh data
-					const auto& meshData = modelData.meshes[meshDataIndex];
-					auto mesh = this->meshManager->createMesh<Mesh>();
-
-					/// Copy vertices and indices to the mesh
-					/// We need to create mutable copies because the mesh will take ownership
-					auto vertices = meshData.vertices;
-					auto indices = meshData.indices;
-
-					/// Update the mesh with the extracted data
-					mesh->vertices = std::move(vertices);
-					mesh->indices = std::move(indices);
-					mesh->generateGeometry(); /// This will trigger any necessary calculations
-
-					/// Set the material
-					if (!meshData.materialName.empty() && this->materialManager->hasMaterial(meshData.materialName)) {
-						mesh->setMaterial(this->materialManager->getMaterial(meshData.materialName));
-					} else {
-						/// Use default material if the specified one doesn't exist
-						mesh->setMaterial(this->materialManager->getMaterial("default"));
-					}
-
-					/// Assign the mesh to the primitive node
-					primitiveNode->setMesh(mesh);
-				}
-			}
-		} else if (!gltfMesh.primitives.empty()) {
-			/// If there's only one primitive, assign it directly to this node
-			/// This is the simpler case where we don't need child nodes
-
-			/// Find the corresponding ModelMeshData
-			int meshDataIndex = -1;
-			for (size_t j = 0; j < modelData.meshes.size(); ++j) {
-				if (modelData.meshes[j].name == gltfMesh.name + "_0" ||
-					modelData.meshes[j].name == "mesh_" + std::to_string(nodeInfo.meshIndex) + "_0") {
-					meshDataIndex = static_cast<int>(j);
-					break;
-				}
-			}
-
-			if (meshDataIndex >= 0) {
-				/// Create a mesh from the mesh data
-				const auto& meshData = modelData.meshes[meshDataIndex];
-				auto mesh = this->meshManager->createMesh<Mesh>();
-
-				/// Copy vertices and indices to the mesh
-				auto vertices = meshData.vertices;
-				auto indices = meshData.indices;
-
-				/// Update the mesh with the extracted data
-				mesh->vertices = std::move(vertices);
-				mesh->indices = std::move(indices);
-				mesh->generateGeometry();
-
-				/// Set the material
-				if (!meshData.materialName.empty() && this->materialManager->hasMaterial(meshData.materialName)) {
-					mesh->setMaterial(this->materialManager->getMaterial(meshData.materialName));
-				} else {
-					/// Use default material if the specified one doesn't exist
-					mesh->setMaterial(this->materialManager->getMaterial("default"));
-				}
-
-				/// Assign the mesh to this node
-				sceneNode->setMesh(mesh);
-			}
-		}
-	}
-
-	/// Process child nodes recursively
-	/// This builds the complete scene hierarchy
-	for (int childIndex : nodeInfo.children) {
-		auto childNode = this->processNode(gltfModel, childIndex, modelData, scene, sceneNode, options);
-	}
-
-	return sceneNode;
 }
 
 ModelMeshData GltfModelLoader::extractMeshData(

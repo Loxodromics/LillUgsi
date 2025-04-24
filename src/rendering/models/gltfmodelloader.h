@@ -3,6 +3,7 @@
 #include "modelloader.h"
 #include "modeldata.h"
 #include "materialextractor.h"
+#include "scenegraphconstructor.h"
 #include "rendering/meshmanager.h"
 #include "rendering/materialmanager.h"
 #include "rendering/texturemanager.h"
@@ -67,23 +68,6 @@ private:
 		const tinygltf::Model& gltfModel, 
 		const ModelLoadOptions& options,
 		const std::string& baseDir);
-	
-	/// Process a single node in the glTF scene hierarchy
-	/// This creates scene nodes and processes meshes recursively
-	/// @param gltfModel The parsed tinygltf model
-	/// @param nodeIndex Index of the node to process
-	/// @param modelData Our internal model data
-	/// @param scene Scene to add nodes to
-	/// @param parentNode Parent node to attach to
-	/// @param options Loading options
-	/// @return The created scene node
-	[[nodiscard]] std::shared_ptr<scene::SceneNode> processNode(
-		const tinygltf::Model& gltfModel,
-		int nodeIndex,
-		const ModelData& modelData,
-		scene::Scene& scene,
-		std::shared_ptr<scene::SceneNode> parentNode,
-		const ModelLoadOptions& options);
 	
 	/// Extract mesh data from a glTF mesh primitive
 	/// This handles vertex attributes and indices
