@@ -48,8 +48,7 @@ public:
 	/// Generate mesh geometry
 	/// This pure virtual function must be implemented by derived classes
 	/// to define their specific geometry
-	/// Default implementation does nothing
-	virtual void generateGeometry() {};
+	virtual void generateGeometry() = 0;
 
 	/// Prepare render data for this mesh
 	/// This method populates a RenderData struct with everything needed to render the mesh

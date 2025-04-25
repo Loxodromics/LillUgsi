@@ -154,6 +154,8 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Initialize material system
 		this->initializeMaterials();
 
+		this->initializeModelManager();
+
 		/// Initialize the scene
 		this->initializeScene();
 
@@ -1186,23 +1188,54 @@ void Renderer::initializeScene() {
 	// 	}
 	// }
 
-	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
-	this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
-	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+	// auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
+	// this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
+	// auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
 
-	/// Set texture tiling to repeat the texture twice in each direction
-	/// This demonstrates the texture coordinate scaling functionality
-	cubeMesh->setTextureTiling(1.0f, 1.0f);
+	// /// Set texture tiling to repeat the texture twice in each direction
+	// /// This demonstrates the texture coordinate scaling functionality
+	// cubeMesh->setTextureTiling(1.0f, 1.0f);
 
-	/// Assign the textured material to the cube
-	cubeMesh->setMaterial(texturedMaterial);
-	this->texturedCubeNode->setMesh(std::move(cubeMesh));
+	// /// Assign the textured material to the cube
+	// cubeMesh->setMaterial(texturedMaterial);
+	// this->texturedCubeNode->setMesh(std::move(cubeMesh));
 
-	/// Position the cube for optimal viewing
-	scene::Transform transform;
-	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	transform.scale = glm::vec3(3.0f, 3.0f, 3.0f);
-	this->texturedCubeNode->setLocalTransform(transform);
+	// /// Position the cube for optimal viewing
+	// scene::Transform transform;
+	// transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	// transform.scale = glm::vec3(3.0f, 3.0f, 3.0f);
+	// this->texturedCubeNode->setLocalTransform(transform);
+
+	/// Load a sample model to demonstrate model loading
+	/// We place it at the center of the scene to showcase the loaded geometry
+	try {
+		spdlog::info("Loading sample model...");
+		
+		/// Create a parent node for our model
+		auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
+		
+		/// Position the model appropriately in the scene
+		scene::Transform modelTransform;
+		modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+		modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
+		modelParentNode->setLocalTransform(modelTransform);
+		
+		/// Load the model and attach it to our parent node
+		/// Using a relative path that will be resolved using the base directory
+		auto modelRootNode = this->modelManager->loadModel(
+			"Duck.glb",
+			*this->scene,
+			modelParentNode
+		);
+		
+		if (modelRootNode) {
+			spdlog::info("Sample model loaded successfully");
+		} else {
+			spdlog::error("Failed to load sample model");
+		}
+	} catch (const std::exception& e) {
+		spdlog::error("Exception during model loading: {}", e.what());
+	}
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
@@ -1454,4 +1487,25 @@ void Renderer::initializeMaterials() {
 	spdlog::info("Materials and pipelines initialized successfully");
 }
 
+void Renderer::initializeModelManager() {
+	/// Initialize model manager
+	/// This provides centralized model loading and caching
+	this->modelManager = std::make_unique<ModelManager>(
+		this->meshManager,
+		this->materialManager,
+		this->textureManager
+	);
+
+	if (!this->modelManager->initialize()) {
+		spdlog::error("Failed to initialize model manager");
+		return;
+	}
+
+	/// Set the resource base directory for model loading
+	/// This enables loading models using relative paths
+	this->modelManager->setResourceBaseDirectory("resources/models/");
+
+	spdlog::info("Model manager initialized successfully");
 }
+
+} /// namespace lillugsi::rendering

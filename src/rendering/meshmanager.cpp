@@ -3,6 +3,7 @@
 #include "meshmanager.h"
 #include "cubemesh.h"
 #include "icospheremesh.h"
+#include "modelmesh.h"
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::rendering {
@@ -106,8 +107,8 @@ void MeshManager::updateBuffersIfNeeded(const std::shared_ptr<Mesh> &mesh) {
 }
 
 /// Explicit template instantiations for known mesh types
-template std::shared_ptr<Mesh> MeshManager::createMesh<Mesh>();
 template std::shared_ptr<Mesh> MeshManager::createMesh<CubeMesh>();
 template std::shared_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float &&, int &&);
+template std::shared_ptr<Mesh> MeshManager::createMesh<ModelMesh>();
 
 } /// namespace lillugsi::rendering

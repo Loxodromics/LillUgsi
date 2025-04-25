@@ -2,6 +2,7 @@
 
 #include "modelloader.h"
 #include "modeldata.h"
+#include "rendering/modelmesh.h"
 #include "materialextractor.h"
 #include "scenegraphconstructor.h"
 #include "rendering/meshmanager.h"

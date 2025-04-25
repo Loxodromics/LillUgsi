@@ -16,6 +16,7 @@
 #include "scene/scene.h"
 #include "materialmanager.h"
 #include "buffermanager.h"
+#include "models/modelmanager.h"
 
 
 #ifdef USE_PLANET
@@ -139,6 +140,7 @@ private:
 	void createLightUniformBuffer();
 	void updateLightUniformBuffer() const;
 	void initializeMaterials();
+	void initializeModelManager();
 
 	/// Vulkan context managing Vulkan instance, device, and swap chain
 	std::unique_ptr<vulkan::VulkanContext> vulkanContext;
@@ -174,7 +176,7 @@ private:
 	std::unique_ptr<vulkan::PipelineManager> pipelineManager;
 
 	/// MeshManager for creating and managing meshes
-	std::unique_ptr<MeshManager> meshManager;
+	std::shared_ptr<MeshManager> meshManager;
 
 	/// Scene management
 	std::unique_ptr<scene::Scene> scene;  /// Scene graph for object management
@@ -202,7 +204,7 @@ private:
 	std::unique_ptr<LightManager> lightManager;
 
 	/// Material management
-	std::unique_ptr<MaterialManager> materialManager;
+	std::shared_ptr<MaterialManager> materialManager;
 
 #ifdef USE_PLANET
 	std::shared_ptr<planet::PlanetData> icosphere;
@@ -215,7 +217,7 @@ private:
 	uint32_t lastPresentedImageIndex = 0;
 
 	/// Texture Manager
-	std::unique_ptr<rendering::TextureManager> textureManager;
+	std::shared_ptr<rendering::TextureManager> textureManager;
 
 	/// Command buffer manager for centralized command buffer operations
 	std::shared_ptr<vulkan::CommandBufferManager> commandBufferManager;
@@ -226,6 +228,7 @@ private:
 	std::shared_ptr<BufferManager> bufferManager;
 	std::shared_ptr<vulkan::Buffer> cameraBuffer;
 	std::shared_ptr<vulkan::Buffer> lightBuffer;
+	std::unique_ptr<ModelManager> modelManager;
 
 };
 

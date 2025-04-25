@@ -631,18 +631,29 @@ std::vector<std::shared_ptr<Mesh>> GltfModelLoader::createMeshes(
 
 	/// Process each mesh in the model data
 	for (const auto& meshData : modelData.meshes) {
-		/// Create a new mesh
-		auto mesh = this->meshManager->createMesh<Mesh>();
+		/// Skip meshes with no geometry
+		if (meshData.vertices.empty()) {
+			spdlog::warn("Skipping mesh '{}' with no vertices", meshData.name);
+			continue;
+		}
+		
+		/// Generate sequential indices if none exist
+		std::vector<uint32_t> indices = meshData.indices;
+		if (indices.empty()) {
+			indices.reserve(meshData.vertices.size());
+			for (size_t i = 0; i < meshData.vertices.size(); i++) {
+				indices.push_back(static_cast<uint32_t>(i));
+			}
+			spdlog::debug("Generated {} sequential indices for non-indexed mesh '{}'", 
+				indices.size(), meshData.name);
+		}
 
-		/// Set vertices and indices
-		/// We need to make copies because the mesh manager needs ownership
-		auto vertices = meshData.vertices;
-		auto indices = meshData.indices;
-		mesh->vertices = std::move(vertices);
-		mesh->indices = std::move(indices);
-
-		/// Generate geometry (this might recalculate normals, tangents, etc.)
-		mesh->generateGeometry();
+		/// Create a new ModelMesh instead of generic Mesh
+		auto mesh = this->meshManager->createMesh<ModelMesh>();
+		
+		/// Explicitly set the geometry data
+		std::static_pointer_cast<ModelMesh>(mesh)->setGeometryData(
+			meshData.vertices, indices);
 
 		/// Assign material
 		if (!meshData.materialName.empty() && materials.find(meshData.materialName) != materials.end()) {
