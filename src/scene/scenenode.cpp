@@ -132,7 +132,18 @@ bool SceneNode::isVisible(const Frustum& frustum) const {
 void SceneNode::getRenderData(const Frustum& frustum,
 	std::vector<rendering::Mesh::RenderData>& outRenderData) const {
 	/// First check if this node is visible
-	if (!this->isVisible(frustum)) {
+	bool visible = this->isVisible(frustum);
+
+	/// Debug log for nodes with meshes - TEMPORARY
+	if (this->mesh) {
+		spdlog::debug("Node '{}' visibility check: {}, bounds min=({},{},{}), max=({},{},{})",
+			this->name,
+			visible ? "visible" : "culled",
+			this->worldBounds.getMin().x, this->worldBounds.getMin().y, this->worldBounds.getMin().z,
+			this->worldBounds.getMax().x, this->worldBounds.getMax().y, this->worldBounds.getMax().z);
+	}
+
+	if (!visible) {
 		return;  /// Early out if not visible
 	}
 

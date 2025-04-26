@@ -56,6 +56,20 @@ BoundingBox BoundingBox::transform(const glm::mat4& transform) const {
 		return BoundingBox();
 	}
 
+	/// Check for extreme scaling in the transform matrix
+	/// Extract scale components from the matrix (from columns 0-2)
+	float scaleX = glm::length(glm::vec3(transform[0]));
+	float scaleY = glm::length(glm::vec3(transform[1]));
+	float scaleZ = glm::length(glm::vec3(transform[2]));
+
+	if (scaleX < 1e-6f || scaleY < 1e-6f || scaleZ < 1e-6f) {
+		spdlog::warn("Transform contains extremely small scale, clamping: ({}, {}, {})",
+			scaleX, scaleY, scaleZ);
+		// Return a small box around the transform's position
+		glm::vec3 position(transform[3]);
+		return BoundingBox(position - glm::vec3(0.01f), position + glm::vec3(0.01f));
+	}
+
 	/// Transform all 8 corners of the box
 	/// This ensures we get a proper bounding box that contains
 	/// the entire transformed original box

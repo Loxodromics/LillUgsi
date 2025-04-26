@@ -141,64 +141,31 @@ void SceneGraphConstructor::applyNodeTransform(
 bool SceneGraphConstructor::assignNodeMesh(
 	const ModelData::NodeInfo& nodeInfo,
 	std::shared_ptr<scene::SceneNode> sceneNode) {
-	
-	/// Check if this node has a mesh
-	if (nodeInfo.meshIndex < 0) {
+
+	if (nodeInfo.meshIndex < 0 || nodeInfo.meshIndex >= static_cast<int>(this->meshes.size())) {
+		spdlog::warn("Mesh index {} out of range for node '{}'", nodeInfo.meshIndex, nodeInfo.name);
 		return false;
 	}
-	
-	/// Find the corresponding mesh in our prepared meshes
-	/// The meshes should be in the same order as in the modelData
-	int meshDataIndex = -1;
-	
-	/// In glTF, a mesh can have multiple primitives
-	/// Each primitive results in a ModelMeshData entry, but primitives from the same mesh
-	/// share the same meshIndex. We need to find the first primitive of this mesh.
-	for (size_t i = 0; i < this->modelData.meshes.size(); ++i) {
-		/// Check if this mesh name matches the pattern for first primitive
-		const auto& meshName = this->modelData.meshes[i].name;
-		
-		/// Names are typically in the format "meshName_0" or "mesh_index_0"
-		/// for the first primitive of a mesh
-		if (meshName == nodeInfo.name + "_0" ||
-			meshName == "mesh_" + std::to_string(nodeInfo.meshIndex) + "_0") {
-			meshDataIndex = static_cast<int>(i);
-			break;
+
+	// Directly map the mesh index to our meshes array
+	sceneNode->setMesh(this->meshes[nodeInfo.meshIndex]);
+
+	// Add debug bounds reporting for this node
+	auto mesh = this->meshes[nodeInfo.meshIndex];
+	auto& vertices = mesh->getVertices();
+	if (!vertices.empty()) {
+		scene::BoundingBox localBounds;
+		for (const auto& v : vertices) {
+			localBounds.addPoint(v.position);
 		}
+
+		spdlog::info("Node '{}' mesh bounds: min=({},{},{}), max=({},{},{})",
+			nodeInfo.name,
+			localBounds.getMin().x, localBounds.getMin().y, localBounds.getMin().z,
+			localBounds.getMax().x, localBounds.getMax().y, localBounds.getMax().z);
 	}
-	
-	/// If we found a matching mesh, assign it to the node
-	if (meshDataIndex >= 0 && meshDataIndex < static_cast<int>(this->meshes.size())) {
-		sceneNode->setMesh(this->meshes[meshDataIndex]);
-		spdlog::debug("Assigned mesh '{}' to node '{}'", 
-			this->modelData.meshes[meshDataIndex].name, nodeInfo.name);
-		return true;
-	}
-	
-	/// If the mesh is the only primitive of this mesh, it might not have _0 suffix
-	for (size_t i = 0; i < this->modelData.meshes.size(); ++i) {
-		const auto& meshName = this->modelData.meshes[i].name;
-		
-		/// Check if the mesh name matches the node name or a mesh_index pattern
-		if (meshName == nodeInfo.name || 
-			meshName == "mesh_" + std::to_string(nodeInfo.meshIndex)) {
-			meshDataIndex = static_cast<int>(i);
-			break;
-		}
-	}
-	
-	/// If we found a matching mesh, assign it to the node
-	if (meshDataIndex >= 0 && meshDataIndex < static_cast<int>(this->meshes.size())) {
-		sceneNode->setMesh(this->meshes[meshDataIndex]);
-		spdlog::debug("Assigned mesh '{}' to node '{}'", 
-			this->modelData.meshes[meshDataIndex].name, nodeInfo.name);
-		return true;
-	}
-	
-	/// No matching mesh found
-	spdlog::warn("No matching mesh found for node '{}' with meshIndex {}", 
-		nodeInfo.name, nodeInfo.meshIndex);
-	return false;
+
+	return true;
 }
 
 bool SceneGraphConstructor::handlePrimitiveGroups(

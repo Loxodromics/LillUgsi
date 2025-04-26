@@ -91,6 +91,8 @@ std::shared_ptr<scene::SceneNode> GltfModelLoader::loadModel(
 	/// Build the scene hierarchy using our dedicated constructor
 	SceneGraphConstructor sceneConstructor(gltfModel, modelData, meshes);
 	auto rootNode = sceneConstructor.buildSceneGraph(scene, modelRootNode, options);
+
+	normalizeModelTransform(modelRootNode);
 	
 	/// Update the model bounds to ensure proper culling
 	modelRootNode->updateBoundsIfNeeded();
@@ -636,7 +638,7 @@ std::vector<std::shared_ptr<Mesh>> GltfModelLoader::createMeshes(
 			spdlog::warn("Skipping mesh '{}' with no vertices", meshData.name);
 			continue;
 		}
-		
+
 		/// Generate sequential indices if none exist
 		std::vector<uint32_t> indices = meshData.indices;
 		if (indices.empty()) {
@@ -644,15 +646,12 @@ std::vector<std::shared_ptr<Mesh>> GltfModelLoader::createMeshes(
 			for (size_t i = 0; i < meshData.vertices.size(); i++) {
 				indices.push_back(static_cast<uint32_t>(i));
 			}
-			spdlog::debug("Generated {} sequential indices for non-indexed mesh '{}'", 
+			spdlog::debug("Generated {} sequential indices for non-indexed mesh '{}'",
 				indices.size(), meshData.name);
 		}
 
-		/// Create a new ModelMesh instead of generic Mesh
-		auto mesh = this->meshManager->createMesh<ModelMesh>();
-		
-		/// Explicitly set the geometry data
-		std::static_pointer_cast<ModelMesh>(mesh)->setGeometryData(
+		/// Create a mesh with the extracted geometry
+		auto mesh = this->meshManager->createMeshWithGeometry<ModelMesh>(
 			meshData.vertices, indices);
 
 		/// Assign material
@@ -710,10 +709,7 @@ std::pair<const unsigned char*, size_t> GltfModelLoader::getAccessorData(
 }
 
 std::string GltfModelLoader::getTexturePath(
-	const tinygltf::Model& gltfModel,
-	int textureIndex,
-	const std::string& baseDir) {
-
+	const tinygltf::Model &gltfModel, int textureIndex, const std::string &baseDir) {
 	/// Validate texture index
 	if (textureIndex < 0 || textureIndex >= static_cast<int>(gltfModel.textures.size())) {
 		spdlog::error("Invalid texture index: {}", textureIndex);
@@ -745,9 +741,9 @@ std::string GltfModelLoader::getTexturePath(
 		}
 
 		/// Construct the full path by combining base directory and relative path
-		std::filesystem::path imagePath = baseDir.empty() ?
-			std::filesystem::path(image.uri) :
-			std::filesystem::path(baseDir) / image.uri;
+		std::filesystem::path imagePath = baseDir.empty()
+											  ? std::filesystem::path(image.uri)
+											  : std::filesystem::path(baseDir) / image.uri;
 
 		/// Return the normalized path
 		return imagePath.lexically_normal().string();
@@ -762,6 +758,71 @@ std::string GltfModelLoader::getTexturePath(
 	/// If we reach here, the image data couldn't be found
 	spdlog::error("Texture data not found for texture index: {}", textureIndex);
 	return "";
+}
+
+void GltfModelLoader::normalizeModelTransform(const std::shared_ptr<scene::SceneNode>& rootNode) {
+	/// Calculate bounds of the model
+	scene::BoundingBox modelBounds;
+	collectNodeBounds(rootNode, modelBounds, glm::mat4(1.0f));
+
+	if (!modelBounds.isValid()) {
+		spdlog::warn("Unable to normalize model with invalid bounds");
+		return;
+	}
+
+	/// Get model size and center
+	glm::vec3 modelSize = modelBounds.getSize();
+	glm::vec3 modelCenter = modelBounds.getCenter();
+
+	// Calculate scale to normalize to ~2 unit dimensions
+	const float maxDimension = std::max({modelSize.x, modelSize.y, modelSize.z});
+	if (maxDimension > 0.0f) {
+		const float normalizeScale = 2.0f / maxDimension;
+
+		/// Apply normalization transform to root node
+		scene::Transform normalizedTransform;
+		normalizedTransform.position = -modelCenter * normalizeScale;  /// Center the model
+		normalizedTransform.scale = glm::vec3(normalizeScale);         /// Scale to ~2 units
+
+		rootNode->setLocalTransform(normalizedTransform);
+
+		spdlog::info("Normalized model from bounds min=({},{},{}), max=({},{},{})",
+			modelBounds.getMin().x, modelBounds.getMin().y, modelBounds.getMin().z,
+			modelBounds.getMax().x, modelBounds.getMax().y, modelBounds.getMax().z);
+	}
+}
+
+void GltfModelLoader::collectNodeBounds(
+	const std::shared_ptr<scene::SceneNode>& node,
+	scene::BoundingBox& bounds,
+	const glm::mat4& parentTransform) {
+
+	/// Get node's local transform
+	glm::mat4 localTransform = node->getLocalTransform().toMatrix();
+	glm::mat4 worldTransform = parentTransform * localTransform;
+
+	/// If this node has a mesh, add its bounds
+	if (auto mesh = node->getMesh()) {
+		// Calculate bounds from vertices
+		scene::BoundingBox meshBounds;
+		for (const auto& vertex : mesh->getVertices()) {
+			// Transform vertex to world space
+			glm::vec4 worldPos = worldTransform * glm::vec4(vertex.position, 1.0f);
+			meshBounds.addPoint(glm::vec3(worldPos));
+		}
+
+		/// Add to overall bounds
+		if (meshBounds.isValid()) {
+			for (const auto& corner : meshBounds.getCorners()) {
+				bounds.addPoint(corner);
+			}
+		}
+	}
+
+	/// Recursively process children
+	for (const auto& child : node->getChildren()) {
+		collectNodeBounds(child, bounds, worldTransform);
+	}
 }
 
 } /// namespace lillugsi::rendering

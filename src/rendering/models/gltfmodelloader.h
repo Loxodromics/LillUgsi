@@ -128,6 +128,34 @@ private:
 		const tinygltf::Model& gltfModel,
 		int textureIndex,
 		const std::string& baseDir);
+
+	/// Normalizes a model's transform to make it properly fit in the scene viewport
+	///
+	/// Model files often use wildly different coordinate systems and scales.
+	/// This method calculates the model's actual dimensions and adjusts its transform
+	/// to ensure consistent sizing and positioning within our engine's coordinate space.
+	/// We apply a single transform at the root node level to preserve the model's
+	/// internal structure while making it properly viewable.
+	///
+	/// @param rootNode The root node of the model to normalize
+	void normalizeModelTransform(const std::shared_ptr<scene::SceneNode>& rootNode);
+
+	/// Recursively collects bounds from a node hierarchy for normalization
+	///
+	/// To properly normalize a model, we need accurate bounds information for the entire
+	/// hierarchy. This method traverses the scene graph, accumulating bounds data while
+	/// accounting for nested transformations. By collecting bounds this way rather than
+	/// using the already-computed node bounds, we can handle models with improperly
+	/// initialized bounds and ensure consistent scaling even for models with extreme
+	/// coordinate values.
+	///
+	/// @param node The current node being processed
+	/// @param bounds The accumulated bounds being built
+	/// @param parentTransform The combined parent transform to apply to this node
+	void collectNodeBounds(
+		const std::shared_ptr<scene::SceneNode> &node,
+		scene::BoundingBox& bounds,
+		const glm::mat4& parentTransform);
 	
 	std::shared_ptr<MeshManager> meshManager;
 	std::shared_ptr<MaterialManager> materialManager;

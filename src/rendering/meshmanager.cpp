@@ -71,6 +71,37 @@ std::shared_ptr<Mesh> MeshManager::createMesh(Args &&...args) {
 	}
 }
 
+template<typename T>
+[[nodiscard]] std::shared_ptr<Mesh> MeshManager::createMeshWithGeometry(
+	const std::vector<Vertex>& vertices,
+	const std::vector<uint32_t>& indices)
+{
+	/// Create the mesh instance using default constructor
+	auto mesh = std::make_shared<T>();
+
+	/// Cast to ModelMesh and set the geometry data directly
+	auto modelMesh = std::static_pointer_cast<T>(mesh);
+	modelMesh->setGeometryData(vertices, indices);
+
+	try {
+		/// Create GPU buffers using BufferManager
+		auto vertexBuffer = this->bufferManager->createVertexBuffer(vertices);
+		auto indexBuffer = this->bufferManager->createIndexBuffer(indices);
+
+		/// Assign buffers to the mesh
+		mesh->setBuffers(std::move(vertexBuffer), std::move(indexBuffer));
+
+		spdlog::info(
+			"Successfully created mesh with {} vertices and {} indices",
+			vertices.size(), indices.size());
+
+		return mesh;
+	} catch (const vulkan::VulkanException& e) {
+		spdlog::error("Failed to create mesh buffers: {}", e.what());
+		throw;
+	}
+}
+
 void MeshManager::updateBuffers(const std::shared_ptr<Mesh> &mesh) {
 	if (!mesh) {
 		throw vulkan::VulkanException(
@@ -109,6 +140,7 @@ void MeshManager::updateBuffersIfNeeded(const std::shared_ptr<Mesh> &mesh) {
 /// Explicit template instantiations for known mesh types
 template std::shared_ptr<Mesh> MeshManager::createMesh<CubeMesh>();
 template std::shared_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float &&, int &&);
-template std::shared_ptr<Mesh> MeshManager::createMesh<ModelMesh>();
+template std::shared_ptr<Mesh> MeshManager::createMeshWithGeometry<ModelMesh>(
+	const std::vector<Vertex>&, const std::vector<uint32_t>&);
 
 } /// namespace lillugsi::rendering
