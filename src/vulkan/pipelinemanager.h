@@ -86,6 +86,13 @@ class PipelineManager {
 		return this->lightDescriptorLayout.get();
 	}
 
+	/// Check if a pipeline exists for a material
+	/// This is needed for the PipelineFactory to avoid creating duplicate pipelines
+	/// and for efficient resource management during model loading
+	/// @param materialName The name of the material to check for
+	/// @return True if a pipeline exists for this material
+	[[nodiscard]] bool hasPipeline(const std::string& materialName) const;
+
 	/// Clean up all pipelines and shader resources
 	void cleanup();
 

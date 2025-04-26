@@ -172,14 +172,13 @@ void PipelineManager::createGlobalDescriptorLayouts() {
 }
 
 PipelineManager::MaterialPipeline PipelineManager::getOrCreatePipeline(
-	PipelineConfig& config,
-	const rendering::Material& material) {
+	PipelineConfig &config, const rendering::Material &material) {
 	/// Calculate configuration hash
 	/// This identifies materials that can share pipelines
 	size_t configHash = config.hash();
 
 	/// Check if we have an existing pipeline for this configuration
-	auto& cacheEntry = this->pipelinesByConfig[configHash];
+	auto &cacheEntry = this->pipelinesByConfig[configHash];
 
 	/// Create new pipeline and layout if this is a new configuration
 	if (cacheEntry.referenceCount == 0) {
@@ -202,57 +201,45 @@ PipelineManager::MaterialPipeline PipelineManager::getOrCreatePipeline(
 		VkPushConstantRange pushConstantRange{};
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pushConstantRange.offset = 0;
-		pushConstantRange.size = sizeof(glm::mat4);  /// Model matrix size
+		pushConstantRange.size = sizeof(glm::mat4); /// Model matrix size
 		layoutInfo.pushConstantRangeCount = 1;
 		layoutInfo.pPushConstantRanges = &pushConstantRange;
 
-		VK_CHECK(vkCreatePipelineLayout(
-			this->device, &layoutInfo, nullptr, &cacheEntry.layout));
+		VK_CHECK(vkCreatePipelineLayout(this->device, &layoutInfo, nullptr, &cacheEntry.layout));
 
 		/// Create the graphics pipeline
-		auto createInfo = config.getCreateInfo(
-			this->device, this->renderPass, cacheEntry.layout);
+		auto createInfo = config.getCreateInfo(this->device, this->renderPass, cacheEntry.layout);
 
 		VK_CHECK(vkCreateGraphicsPipelines(
-			this->device,
-			VK_NULL_HANDLE,
-			1,
-			&createInfo,
-			nullptr,
-			&cacheEntry.pipeline
-		));
+			this->device, VK_NULL_HANDLE, 1, &createInfo, nullptr, &cacheEntry.pipeline));
 
 		spdlog::info("Created new pipeline configuration with hash {:#x}", configHash);
-	}
-	else {
-		spdlog::debug("Reusing pipeline configuration with hash {:#x} for material '{}'",
-		              configHash, material.getName());
+	} else {
+		spdlog::debug(
+			"Reusing pipeline configuration with hash {:#x} for material '{}'",
+			configHash,
+			material.getName());
 	}
 
 	/// Create RAII handles for this material
 	/// These share the underlying Vulkan objects but provide safe cleanup
 	MaterialPipeline materialPipeline;
 	materialPipeline.pipeline = std::make_shared<VulkanPipelineHandle>(
-		cacheEntry.pipeline,
-		[this, configHash](VkPipeline p) {
+		cacheEntry.pipeline, [this, configHash](VkPipeline p) {
 			/// Only decrease reference count, actual destruction happens in PipelineManager cleanup
-			auto& entry = this->pipelinesByConfig[configHash];
+			auto &entry = this->pipelinesByConfig[configHash];
 			entry.referenceCount--;
 			spdlog::debug("Released pipeline reference, remaining refs: {}", entry.referenceCount);
-		}
-	);
+		});
 
 	materialPipeline.layout = std::make_shared<VulkanPipelineLayoutHandle>(
-		cacheEntry.layout,
-		[this, configHash](VkPipelineLayout l) {
+		cacheEntry.layout, [this, configHash](VkPipelineLayout l) {
 			/// Clean up layout when last reference is gone
-			auto& entry = this->pipelinesByConfig[configHash];
-			if (entry.referenceCount == 0)
-			{
+			auto &entry = this->pipelinesByConfig[configHash];
+			if (entry.referenceCount == 0) {
 				vkDestroyPipelineLayout(this->device, l, nullptr);
 			}
-		}
-	);
+		});
 
 	/// Increment reference count for this configuration
 	cacheEntry.referenceCount++;
@@ -261,6 +248,26 @@ PipelineManager::MaterialPipeline PipelineManager::getOrCreatePipeline(
 	this->materialPipelines[material.getName()] = materialPipeline;
 
 	return materialPipeline;
+}
+
+bool PipelineManager::hasPipeline(const std::string& materialName) const {
+	/// Check if we already have a cached pipeline for this material
+	/// This is a simple lookup that doesn't trigger any Vulkan API calls
+	// std::lock_guard<std::mutex> lock(this->pipelinesMutex);
+
+	/// We need to check both the pipeline and pipeline layout maps
+	/// Both need to exist for a complete pipeline
+	auto pipelineIt = this->pipelines.find(materialName);
+	auto layoutIt = this->pipelineLayouts.find(materialName);
+
+	/// Only return true if both components exist
+	/// A partial pipeline isn't usable and would cause rendering errors
+	bool exists = (pipelineIt != this->pipelines.end() && layoutIt != this->pipelineLayouts.end());
+
+	spdlog::trace("Pipeline for material '{}' {}",
+		materialName, exists ? "exists" : "does not exist");
+
+	return exists;
 }
 
 void PipelineManager::cleanup() {

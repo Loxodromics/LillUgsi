@@ -35,6 +35,24 @@ public:
 	template<typename T, typename... Args>
 	[[nodiscard]] std::shared_ptr<Mesh> createMesh(Args&&... args);
 
+	/// Creates a mesh with pre-defined geometry data
+	///
+	/// Unlike procedural meshes that generate their geometry internally,
+	/// imported model meshes come with complete vertex and index data.
+	/// This method allows direct creation of meshes from existing geometry data
+	/// without requiring a call to generateGeometry(). We use this approach
+	/// for model loaders that extract geometry from files rather than
+	/// generating it procedurally.
+	///
+	/// @tparam T The mesh class type to create
+	/// @param vertices Pre-defined vertex data for the mesh
+	/// @param indices Pre-defined index data for the mesh
+	/// @return A shared pointer to the created mesh
+	template<typename T>
+	[[nodiscard]] std::shared_ptr<Mesh> createMeshWithGeometry(
+		const std::vector<Vertex>& vertices,
+		const std::vector<uint32_t>& indices);
+
 	/// Update GPU buffers for a mesh
 	/// @param mesh The mesh whose buffers need updating
 	void updateBuffers(const std::shared_ptr<Mesh>& mesh);

@@ -11,22 +11,29 @@ class ModelMesh : public Mesh {
 public:
 	ModelMesh() = default;
 	~ModelMesh() override = default;
-	
+
 	/// Set the mesh geometry data directly
 	/// @param vertices Vector of vertex data
 	/// @param indices Vector of index data
 	void setGeometryData(std::vector<Vertex> vertices, std::vector<uint32_t> indices) {
 		this->vertices = std::move(vertices);
 		this->indices = std::move(indices);
-		spdlog::info("ModelMesh setGeometryData");
+		spdlog::debug("ModelMesh geometry set: {} vertices, {} indices",
+		    this->vertices.size(), this->indices.size());
 		this->markBuffersDirty();
 	}
-	
-	/// This implementation just uses the data set via setGeometryData
+
+	/// For ModelMesh, this implementation just validates the pre-set data
 	void generateGeometry() override {
-		/// The geometry is already set via setGeometryData
-		/// This method exists to satisfy the base class interface
+		/// If we have no data yet, return early
+		if (this->vertices.empty() || this->indices.empty()) {
+			spdlog::debug("ModelMesh has no geometry data");
+			return;
+		}
+
+		spdlog::debug("ModelMesh already has geometry: {} vertices, {} indices",
+		    this->vertices.size(), this->indices.size());
 	}
 };
 
-} // namespace lillugsi::rendering
+} /// namespace lillugsi::rendering
