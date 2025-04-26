@@ -73,6 +73,9 @@ set(MAIN_SOURCES
 		src/rendering/models/meshextractor.cpp
 		src/rendering/models/materialextractor.cpp
 		src/rendering/models/scenegraphconstructor.cpp
+		src/rendering/pipelinefactory.cpp
+		src/rendering/models/materialparametermapper.cpp
+		src/rendering/models/textureloadingpipeline.cpp
 )
 
 add_executable(LillUgsi ${MAIN_SOURCES})
