@@ -133,6 +133,35 @@ TextureLoader::TextureData TextureLoader::loadFromMemory(
 	return result;
 }
 
+TextureLoader::TextureData TextureLoader::loadFromBufferView(
+	const void* bufferData,
+	size_t bufferSize,
+	const std::string& mimeType,
+	Format format,
+	bool flipVertically) {
+
+	TextureData result;
+
+	/// Validate input parameters
+	if (!bufferData || bufferSize == 0) {
+		result.success = false;
+		result.errorMessage = "Invalid buffer data (null pointer or zero size)";
+		spdlog::error("Failed to load texture from buffer view: {}", result.errorMessage);
+		return result;
+	}
+
+	/// Log detailed information about the buffer we're processing
+	/// This helps with debugging embedded textures in glTF/GLB files
+	spdlog::debug("Loading texture from buffer view: {} bytes, MIME type: {}",
+		bufferSize, mimeType);
+
+	/// We use the existing loadFromMemory method since the underlying operation
+	/// is essentially the same: decoding image data from a memory buffer.
+	/// This avoids duplicating the image loading logic while still providing
+	/// a clear API for glTF buffer views.
+	return loadFromMemory(bufferData, bufferSize, format, flipVertically);
+}
+
 int TextureLoader::formatToChannels(Format format) {
 	/// Convert our format enum to the number of channels parameter used by stb_image
 	/// stb_image uses 0 to mean "keep original format"

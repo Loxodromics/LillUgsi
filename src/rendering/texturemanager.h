@@ -1,4 +1,3 @@
-// texturemanager.h
 #pragma once
 
 #include "texture.h"
@@ -69,6 +68,26 @@ public:
 		bool generateMipmaps = true
 	);
 
+	/// Create a texture from glTF buffer view data
+	/// Specialized for handling embedded textures in glTF/GLB files without
+	/// needing to write temporary files to disk
+	///
+	/// @param name Unique name to identify this texture (for caching)
+	/// @param bufferData Pointer to the buffer view data
+	/// @param bufferSize Size of the buffer view in bytes
+	/// @param mimeType MIME type of the image (e.g., "image/png")
+	/// @param generateMipmaps Whether to generate mipmaps for this texture
+	/// @param format Desired format for loading the texture
+	/// @return Shared pointer to the created texture
+	[[nodiscard]] std::shared_ptr<Texture> createTextureFromBufferView(
+		const std::string& name,
+		const void* bufferData,
+		size_t bufferSize,
+		const std::string& mimeType,
+		bool generateMipmaps = true,
+		TextureLoader::Format format = TextureLoader::Format::RGBA
+	);
+
 	/// Check if a texture is already loaded
 	/// @param filename Path to the texture file to check
 	/// @return True if the texture is already loaded and cached
@@ -116,7 +135,7 @@ private:
 	VkCommandPool commandPool;        /// Command pool for transfer operations
 	VkQueue graphicsQueue;            /// Queue for transfer operations
 
-	/// Cache of loaded textures, keyed by normalized path
+	/// Cache of loaded textures, keyed by normalized path or name
 	/// Using std::unordered_map for O(1) average lookup time
 	std::unordered_map<std::string, std::shared_ptr<Texture>> textureCache;
 

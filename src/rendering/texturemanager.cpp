@@ -1,4 +1,3 @@
-// texturemanager.cpp
 #include "texturemanager.h"
 #include <spdlog/spdlog.h>
 #include <filesystem>
@@ -259,6 +258,166 @@ std::shared_ptr<Texture> TextureManager::createTexture(
 	}
 	catch (const std::exception& e) {
 		spdlog::error("Unexpected error creating texture '{}': {}", name, e.what());
+		return this->getDefaultTexture();
+	}
+}
+
+std::shared_ptr<Texture> TextureManager::createTextureFromBufferView(
+	const std::string& name,
+	const void* bufferData,
+	size_t bufferSize,
+	const std::string& mimeType,
+	bool generateMipmaps,
+	TextureLoader::Format format
+) {
+	/// Early check for invalid input
+	if (!bufferData || bufferSize == 0) {
+		spdlog::error("Invalid buffer data for texture '{}'", name);
+		return this->getDefaultTexture();
+	}
+
+	/// First, check if a texture with this name already exists
+	/// This allows us to avoid redundant processing of the same embedded texture
+	{
+		std::lock_guard<std::mutex> lock(this->cacheMutex);
+
+		auto it = this->textureCache.find(name);
+		if (it != this->textureCache.end()) {
+			spdlog::debug("Embedded texture '{}' already exists, returning cached version", name);
+			return it->second;
+		}
+	}
+
+	/// Use the TextureLoader to decode the buffer data into pixel data
+	/// This handles different image formats embedded in the glTF file
+	auto textureData = TextureLoader::loadFromBufferView(
+		bufferData,
+		bufferSize,
+		mimeType,
+		format
+	);
+
+	/// If loading failed, return the default texture as a fallback
+	if (!textureData.success) {
+		spdlog::warn("Failed to load embedded texture '{}': {}", name, textureData.errorMessage);
+		return this->getDefaultTexture();
+	}
+
+	/// Determine the appropriate Vulkan format based on the loaded data
+	/// This mapping is similar to the file loading path but specifically
+	/// handles embedded texture data which might have different characteristics
+	VkFormat vulkanFormat;
+	if (format == TextureLoader::Format::NormalMap) {
+		/// Normal maps need to use a linear format (UNORM) to preserve values exactly
+		vulkanFormat = VK_FORMAT_R8G8B8A8_UNORM;
+
+		/// Ensure normal maps have 4 channels (RGBA)
+		if (textureData.channels == 3) {
+			/// Convert RGB to RGBA by adding alpha channel
+			spdlog::debug("Converting RGB to RGBA for embedded normal map");
+			std::vector<uint8_t> rgbaData(textureData.width * textureData.height * 4);
+			for (int i = 0; i < textureData.width * textureData.height; i++) {
+				rgbaData[i * 4 + 0] = textureData.pixels[i * 3 + 0]; /// R
+				rgbaData[i * 4 + 1] = textureData.pixels[i * 3 + 1]; /// G
+				rgbaData[i * 4 + 2] = textureData.pixels[i * 3 + 2]; /// B
+				rgbaData[i * 4 + 3] = 255;                           /// A (fully opaque)
+			}
+			/// Swap the pixel data
+			textureData.pixels = std::move(rgbaData);
+			textureData.channels = 4;
+		}
+	} else {
+		/// For standard textures, select format based on channel count
+		switch (textureData.channels) {
+		case 1:
+			vulkanFormat = VK_FORMAT_R8_UNORM;
+			break;
+		case 2:
+			vulkanFormat = VK_FORMAT_R8G8_UNORM;
+			break;
+		case 3: {
+			/// Convert RGB to RGBA for better compatibility with Vulkan
+			spdlog::debug("Converting RGB to RGBA for embedded texture");
+			std::vector<uint8_t> rgbaData(textureData.width * textureData.height * 4);
+			for (int i = 0; i < textureData.width * textureData.height; i++) {
+				rgbaData[i * 4 + 0] = textureData.pixels[i * 3 + 0]; /// R
+				rgbaData[i * 4 + 1] = textureData.pixels[i * 3 + 1]; /// G
+				rgbaData[i * 4 + 2] = textureData.pixels[i * 3 + 2]; /// B
+				rgbaData[i * 4 + 3] = 255;                           /// A (fully opaque)
+			}
+			/// Swap the pixel data
+			textureData.pixels = std::move(rgbaData);
+			textureData.channels = 4;
+			vulkanFormat = VK_FORMAT_R8G8B8A8_SRGB;
+			break;
+		}
+		case 4:
+			vulkanFormat = VK_FORMAT_R8G8B8A8_SRGB;
+			break;
+		default:
+			spdlog::warn("Unsupported channel count {} for embedded texture, falling back to RGBA",
+				textureData.channels);
+			vulkanFormat = VK_FORMAT_R8G8B8A8_SRGB;
+		}
+	}
+
+	/// Calculate appropriate mip levels
+	/// We either use automatic calculation (when generateMipmaps=true) or a single level
+	uint32_t mipLevels = generateMipmaps ? 0 : 1; /// 0 means calculate automatically
+
+	try {
+		/// Create the GPU texture resource for the embedded texture
+		auto texture = std::make_shared<Texture>(
+			this->device,
+			this->physicalDevice,
+			static_cast<uint32_t>(textureData.width),
+			static_cast<uint32_t>(textureData.height),
+			vulkanFormat,
+			mipLevels,
+			1, /// Single layer
+			name /// Use the provided name for identification
+		);
+
+		/// Upload the pixel data to the GPU
+		/// This transfers the decoded image data to the GPU texture
+		texture->uploadData(
+			textureData.pixels.data(),
+			textureData.pixels.size(),
+			this->commandPool,
+			this->graphicsQueue,
+			*this->commandBufferManager.get()
+		);
+
+		/// Configure default sampler settings
+		/// These settings work well for most embedded textures
+		texture->configureSampler(
+			Texture::FilterMode::Linear,
+			Texture::FilterMode::Linear,
+			Texture::WrapMode::Repeat,
+			Texture::WrapMode::Repeat,
+			true, /// Enable anisotropic filtering
+			16.0f /// Max anisotropy
+		);
+
+		/// Cache the texture for future use
+		/// This is especially important for models that might reuse the same texture
+		{
+			std::lock_guard<std::mutex> lock(this->cacheMutex);
+			this->textureCache[name] = texture;
+		}
+
+		spdlog::info("Created and cached embedded texture: {}, {}x{}, {} channels",
+			name, textureData.width, textureData.height, textureData.channels);
+		return texture;
+	}
+	catch (const vulkan::VulkanException& e) {
+		/// Handle Vulkan errors during texture creation
+		spdlog::error("Failed to create embedded texture '{}': {}", name, e.what());
+		return this->getDefaultTexture();
+	}
+	catch (const std::exception& e) {
+		/// Handle any other unexpected errors
+		spdlog::error("Unexpected error creating embedded texture '{}': {}", name, e.what());
 		return this->getDefaultTexture();
 	}
 }

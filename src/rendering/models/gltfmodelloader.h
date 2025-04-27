@@ -1,14 +1,15 @@
 #pragma once
 
-#include "modelloader.h"
-#include "modeldata.h"
-#include "rendering/modelmesh.h"
 #include "materialextractor.h"
-#include "scenegraphconstructor.h"
-#include "rendering/meshmanager.h"
+#include "materialparametermapper.h"
+#include "modeldata.h"
+#include "modelloader.h"
 #include "rendering/materialmanager.h"
-#include "rendering/texturemanager.h"
+#include "rendering/meshmanager.h"
+#include "rendering/modelmesh.h"
 #include "rendering/tangentcalculator.h"
+#include "rendering/texturemanager.h"
+#include "scenegraphconstructor.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -100,7 +101,8 @@ private:
 	/// @return Map of material names to created material pointers
 	[[nodiscard]] std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> createMaterials(
 		const ModelData& modelData,
-		const std::string& baseDir);
+		const std::string& baseDir,
+		models::MaterialParameterMapper* materialMapper = nullptr);
 	
 	/// Create engine meshes from extracted mesh data
 	/// @param modelData Our internal model data with mesh info

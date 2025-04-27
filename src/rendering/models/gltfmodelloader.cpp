@@ -1,4 +1,5 @@
 #include "gltfmodelloader.h"
+#include "embeddedtextureextractor.h"
 #include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -17,59 +18,58 @@ GltfModelLoader::GltfModelLoader(
 	: meshManager(std::move(meshManager))
 	, materialManager(std::move(materialManager))
 	, textureManager(std::move(textureManager)) {
-
 	spdlog::info("glTF model loader created");
 }
 
-bool GltfModelLoader::supportsFormat(const std::string& fileExtension) const {
+bool GltfModelLoader::supportsFormat(const std::string &fileExtension) const {
 	/// Convert to lowercase for case-insensitive comparison
 	/// This ensures we match extensions regardless of capitalization
 	std::string ext = fileExtension;
-	std::transform(ext.begin(), ext.end(), ext.begin(),
-		[](unsigned char c) { return std::tolower(c); });
+	std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+		return std::tolower(c);
+	});
 
 	/// We support both text and binary glTF formats
 	return ext == ".gltf" || ext == ".glb";
 }
 
 std::shared_ptr<scene::SceneNode> GltfModelLoader::loadModel(
-	const std::string& filePath,
-	scene::Scene& scene,
+	const std::string &filePath,
+	scene::Scene &scene,
 	std::shared_ptr<scene::SceneNode> parentNode,
-	const ModelLoadOptions& options) {
-	
+	const ModelLoadOptions &options) {
 	/// Ensure we have a valid parent node, defaulting to scene root if none provided
 	if (!parentNode) {
 		parentNode = scene.getRoot();
 	}
-	
+
 	/// Extract base name from path for node naming
 	std::filesystem::path path(filePath);
 	std::string baseName = path.stem().string();
 	std::string baseDir = path.parent_path().string();
-	
+
 	/// Create a root node for the model
 	auto modelRootNode = scene.createNode(baseName, parentNode);
-	
+
 	/// Parse the glTF file using tinygltf
 	tinygltf::Model gltfModel;
 	tinygltf::TinyGLTF loader;
 	std::string err, warn;
-	
+
 	bool success = false;
-	
+
 	/// Load the appropriate format based on file extension
 	if (path.extension() == ".glb") {
 		success = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, filePath);
 	} else {
 		success = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, filePath);
 	}
-	
+
 	/// Log any warnings - these aren't fatal but might indicate issues
 	if (!warn.empty()) {
 		spdlog::warn("glTF warning while loading '{}': {}", filePath, warn);
 	}
-	
+
 	/// Check if loading was successful
 	if (!success) {
 		spdlog::error("Failed to load glTF model '{}': {}", filePath, err);
@@ -77,59 +77,90 @@ std::shared_ptr<scene::SceneNode> GltfModelLoader::loadModel(
 		scene.removeNode(modelRootNode);
 		return nullptr;
 	}
-	
+
+	/// Create an embedded texture extractor to handle buffer-view textures
+	/// This extracts and registers all embedded textures before material extraction
+	/// so material system can reference these textures
+	auto embeddedTextureExtractor = std::make_shared<models::EmbeddedTextureExtractor>(
+		this->textureManager);
+
+	/// Extract embedded textures from the model
+	/// This is crucial for GLB files which commonly store textures in binary buffers
+	/// rather than as external files. We need to extract these textures before material creation
+	/// so they can be properly referenced by material parameters
+	size_t extractedTextureCount
+		= embeddedTextureExtractor->extractTextures(gltfModel, baseName, options.generateMips);
+
+	if (extractedTextureCount > 0) {
+		spdlog::info(
+			"Extracted {} embedded textures from model '{}'", extractedTextureCount, baseName);
+	} else {
+		spdlog::debug("No embedded textures found in model '{}'", baseName);
+	}
+
 	/// Parse the glTF model into our intermediate representation
 	spdlog::debug("Parsing glTF model '{}'", filePath);
+
+	/// Create a material extractor and provide the embedded texture extractor
+	/// This allows the material extractor to resolve both file-based and embedded textures
+	models::MaterialExtractor materialExtractor(gltfModel);
+	materialExtractor.setEmbeddedTextureExtractor(embeddedTextureExtractor);
+
+	/// Extract model data using the configured extractors
 	ModelData modelData = this->parseGltfModel(gltfModel, options, baseDir);
-	
-	/// Create materials from the model data
-	auto materials = this->createMaterials(modelData, baseDir);
-	
+
+	/// Override the materials in the model data with ones extracted with proper texture support
+	modelData.materials = materialExtractor.extractAllMaterials(baseDir);
+
+	/// Create materials from the model data using MaterialParameterMapper
+	/// for proper texture application
+	auto materialMapper = std::make_unique<models::MaterialParameterMapper>(this->textureManager);
+	auto materials = this->createMaterials(modelData, baseDir, materialMapper.get());
+
 	/// Create meshes from the model data
 	auto meshes = this->createMeshes(modelData, materials);
-	
+
 	/// Build the scene hierarchy using our dedicated constructor
 	SceneGraphConstructor sceneConstructor(gltfModel, modelData, meshes);
 	auto rootNode = sceneConstructor.buildSceneGraph(scene, modelRootNode, options);
 
 	normalizeModelTransform(modelRootNode);
-	
+
 	/// Update the model bounds to ensure proper culling
 	modelRootNode->updateBoundsIfNeeded();
-	
+
 	spdlog::info("Successfully loaded glTF model '{}'", filePath);
 	return modelRootNode;
 }
 
 ModelData GltfModelLoader::parseGltfModel(
-	const tinygltf::Model& gltfModel,
-	const ModelLoadOptions& options,
-	const std::string& baseDir) {
-
+	const tinygltf::Model &gltfModel, const ModelLoadOptions &options, const std::string &baseDir) {
 	ModelData modelData;
 
 	/// Extract the model's default name if available
 	/// Otherwise use a generic name
 	/*if (!gltfModel.asset.name.empty()) {
 		modelData.name = gltfModel.asset.name;
-	} else*/ {
+	} else*/
+	{
 		modelData.name = "GltfModel";
 	}
 
 	/// Parse materials using our dedicated extractor
 	/// This encapsulates all the complex material extraction logic
-	MaterialExtractor materialExtractor(gltfModel);
+	models::MaterialExtractor materialExtractor(gltfModel);
 	modelData.materials = materialExtractor.extractAllMaterials(baseDir);
 
 	/// Parse meshes
 	/// We extract all mesh data from the glTF model
 	spdlog::debug("Parsing {} meshes", gltfModel.meshes.size());
 	for (size_t meshIndex = 0; meshIndex < gltfModel.meshes.size(); ++meshIndex) {
-		const auto& gltfMesh = gltfModel.meshes[meshIndex];
+		const auto &gltfMesh = gltfModel.meshes[meshIndex];
 
 		/// A single glTF mesh can contain multiple primitives (submeshes)
 		/// Each primitive gets its own ModelMeshData entry
-		for (size_t primitiveIndex = 0; primitiveIndex < gltfMesh.primitives.size(); ++primitiveIndex) {
+		for (size_t primitiveIndex = 0; primitiveIndex < gltfMesh.primitives.size();
+			 ++primitiveIndex) {
 			/// Extract the mesh data from this primitive
 			ModelMeshData meshData = this->extractMeshData(
 				gltfModel,
@@ -139,9 +170,10 @@ ModelData GltfModelLoader::parseGltfModel(
 
 			/// Generate a name for the mesh if not already set during extraction
 			if (meshData.name.empty()) {
-				meshData.name = gltfMesh.name.empty() ?
-					"mesh_" + std::to_string(meshIndex) + "_" + std::to_string(primitiveIndex) :
-					gltfMesh.name + "_" + std::to_string(primitiveIndex);
+				meshData.name = gltfMesh.name.empty()
+									? "mesh_" + std::to_string(meshIndex) + "_"
+										  + std::to_string(primitiveIndex)
+									: gltfMesh.name + "_" + std::to_string(primitiveIndex);
 			}
 
 			/// Add the mesh data to our model data
@@ -244,14 +276,15 @@ ModelMeshData GltfModelLoader::extractMeshData(
 	const auto& primitive = gltfMesh.primitives[primitiveIndex];
 
 	/// Set mesh name
-	meshData.name = gltfMesh.name.empty() ?
-		"mesh_" + std::to_string(meshIndex) + "_" + std::to_string(primitiveIndex) :
-		gltfMesh.name + "_" + std::to_string(primitiveIndex);
+	meshData.name = gltfMesh.name.empty()
+						? "mesh_" + std::to_string(meshIndex) + "_" + std::to_string(primitiveIndex)
+						: gltfMesh.name + "_" + std::to_string(primitiveIndex);
 
 	/// Set material name
 	/// glTF materials are referenced by index
-	if (primitive.material >= 0 && primitive.material < static_cast<int>(gltfModel.materials.size())) {
-		const auto& material = gltfModel.materials[primitive.material];
+	if (primitive.material >= 0
+		&& primitive.material < static_cast<int>(gltfModel.materials.size())) {
+		const auto &material = gltfModel.materials[primitive.material];
 		if (!material.name.empty()) {
 			meshData.materialName = material.name;
 		} else {
@@ -459,180 +492,65 @@ ModelMeshData GltfModelLoader::extractMeshData(
 		TangentCalculator::calculateTangents(meshData.vertices, meshData.indices);
 	}
 
-	spdlog::debug("Extracted mesh data for primitive {}:{} with {} vertices and {} indices",
-		meshIndex, primitiveIndex, meshData.vertices.size(), meshData.indices.size());
+	spdlog::debug(
+		"Extracted mesh data for primitive {}:{} with {} vertices and {} indices",
+		meshIndex,
+		primitiveIndex,
+		meshData.vertices.size(),
+		meshData.indices.size());
 
 	return meshData;
 }
 
 ModelData::MaterialInfo GltfModelLoader::extractMaterialInfo(
-	const tinygltf::Model& gltfModel,
-	int materialIndex,
-	const std::string& baseDir) {
-	
+	const tinygltf::Model &gltfModel, int materialIndex, const std::string &baseDir) {
 	/// Use our dedicated MaterialExtractor
-	MaterialExtractor extractor(gltfModel);
+	models::MaterialExtractor extractor(gltfModel);
 	return extractor.extractMaterialInfo(materialIndex, baseDir);
 }
 
 std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> GltfModelLoader::createMaterials(
-	const ModelData& modelData,
-	const std::string& baseDir) {
-	
+	const ModelData &modelData,
+	const std::string &baseDir,
+	models::MaterialParameterMapper *materialMapper) {
 	std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> materials;
-	
-	for (const auto& [name, materialInfo] : modelData.materials) {
+
+	/// If no material mapper is provided, create a local one
+	/// This ensures backward compatibility with existing code
+	std::unique_ptr<models::MaterialParameterMapper> localMapper;
+	if (materialMapper == nullptr) {
+		localMapper = std::make_unique<models::MaterialParameterMapper>(this->textureManager);
+		materialMapper = localMapper.get();
+	}
+
+	for (const auto &[name, materialInfo] : modelData.materials) {
 		/// Create a PBR material using our material manager
 		auto material = this->materialManager->createPBRMaterial(name);
-		
-		/// Set base material properties
-		material->setBaseColor(materialInfo.baseColor);
-		material->setMetallic(materialInfo.metallic);
-		material->setRoughness(materialInfo.roughness);
-		
-		/// Load and assign textures
-		
-		/// Load albedo (base color) texture
-		if (!materialInfo.albedoTexturePath.empty()) {
-			auto texture = this->textureManager->getOrLoadTexture(
-				materialInfo.albedoTexturePath,
-				true, /// Generate mipmaps
-				materialInfo.transparent ? 
-					TextureLoader::Format::RGBA : /// Need alpha channel for transparency
-					TextureLoader::Format::RGB     /// Save memory without alpha
-			);
-			
-			if (texture) {
-				material->setAlbedoTexture(texture);
-				spdlog::debug("Set albedo texture for material {}: {}", 
-					name, materialInfo.albedoTexturePath);
-			}
+
+		/// Use the MaterialParameterMapper to apply all material properties
+		/// This includes both scalar parameters and textures (file-based and embedded)
+		bool success = materialMapper->applyParameters(material, materialInfo, baseDir);
+
+		if (!success) {
+			spdlog::warn("Some parameters for material '{}' could not be applied", name);
 		}
-		
-		/// Load normal map texture
-		if (!materialInfo.normalTexturePath.empty()) {
-			auto texture = this->textureManager->getOrLoadTexture(
-				materialInfo.normalTexturePath,
-				true, /// Generate mipmaps
-				TextureLoader::Format::NormalMap /// Special format for normal maps
-			);
-			
-			if (texture) {
-				material->setNormalMap(texture, materialInfo.normalScale);
-				spdlog::debug("Set normal map for material {}: {} (scale: {})", 
-					name, materialInfo.normalTexturePath, materialInfo.normalScale);
-			}
-		}
-		
-		/// Check if we have a combined metallic-roughness texture
-		if (!materialInfo.metallicTexturePath.empty() && 
-			materialInfo.metallicTexturePath == materialInfo.roughnessTexturePath) {
-			
-			auto texture = this->textureManager->getOrLoadTexture(
-				materialInfo.metallicTexturePath,
-				true, /// Generate mipmaps
-				TextureLoader::Format::RGBA /// Need all channels
-			);
-			
-			if (texture) {
-				/// Set the combined texture with channel mappings
-				/// G channel contains roughness, B channel contains metallic
-				material->setRoughnessMetallicMap(
-					texture,
-					Material::TextureChannel::G, /// Roughness channel
-					Material::TextureChannel::B, /// Metallic channel
-					materialInfo.roughness,
-					materialInfo.metallic
-				);
-				
-				spdlog::debug("Set combined roughness-metallic map for material {}: {}", 
-					name, materialInfo.metallicTexturePath);
-			}
-		} else {
-			/// Handle separate roughness and metallic textures
-			
-			/// Load roughness texture
-			if (!materialInfo.roughnessTexturePath.empty()) {
-				auto texture = this->textureManager->getOrLoadTexture(
-					materialInfo.roughnessTexturePath,
-					true, /// Generate mipmaps
-					TextureLoader::Format::R /// Single channel is enough
-				);
-				
-				if (texture) {
-					material->setRoughnessMap(texture, materialInfo.roughness);
-					spdlog::debug("Set roughness map for material {}: {}", 
-						name, materialInfo.roughnessTexturePath);
-				}
-			}
-			
-			/// Load metallic texture
-			if (!materialInfo.metallicTexturePath.empty()) {
-				auto texture = this->textureManager->getOrLoadTexture(
-					materialInfo.metallicTexturePath,
-					true, /// Generate mipmaps
-					TextureLoader::Format::R /// Single channel is enough
-				);
-				
-				if (texture) {
-					material->setMetallicMap(texture, materialInfo.metallic);
-					spdlog::debug("Set metallic map for material {}: {}", 
-						name, materialInfo.metallicTexturePath);
-				}
-			}
-		}
-		
-		/// Load occlusion texture
-		if (!materialInfo.occlusionTexturePath.empty()) {
-			auto texture = this->textureManager->getOrLoadTexture(
-				materialInfo.occlusionTexturePath,
-				true, /// Generate mipmaps
-				TextureLoader::Format::R /// Single channel is enough
-			);
-			
-			if (texture) {
-				material->setOcclusionMap(texture, materialInfo.occlusion);
-				spdlog::debug("Set occlusion map for material {}: {}", 
-					name, materialInfo.occlusionTexturePath);
-			}
-		}
-		
-		/// Load emissive texture if supported
-		if (!materialInfo.emissiveTexturePath.empty()) {
-			/// Note: Our current PBRMaterial may not support emissive textures
-			/// This would be a good enhancement to add in the future
-			spdlog::debug("Emissive textures not yet supported in material system: {}", 
-				materialInfo.emissiveTexturePath);
-		}
-		
-		/// Handle transparency if needed
-		if (materialInfo.transparent) {
-			/// Note: Our current implementation doesn't directly support
-			/// setting the transparency mode from outside the material constructor.
-			/// This would be an improvement to add to the Material class.
-			spdlog::debug("Transparency for material {} not fully supported: mode={}, cutoff={}", 
-				name, 
-				static_cast<int>(materialInfo.alphaMode), 
-				materialInfo.alphaCutoff);
-		}
-		
+
 		/// Store the created material
 		materials[name] = material;
 	}
-	
+
 	spdlog::info("Created {} materials from model data", materials.size());
 	return materials;
 }
 
 std::vector<std::shared_ptr<Mesh>> GltfModelLoader::createMeshes(
-	const ModelData& modelData,
-	const std::unordered_map<std::string, std::shared_ptr<PBRMaterial>>& materials) {
-
+	const ModelData &modelData,
+	const std::unordered_map<std::string, std::shared_ptr<PBRMaterial>> &materials) {
 	std::vector<std::shared_ptr<Mesh>> meshes;
 	meshes.reserve(modelData.meshes.size());
 
 	/// Process each mesh in the model data
-	for (const auto& meshData : modelData.meshes) {
+	for (const auto &meshData : modelData.meshes) {
 		/// Skip meshes with no geometry
 		if (meshData.vertices.empty()) {
 			spdlog::warn("Skipping mesh '{}' with no vertices", meshData.name);
@@ -646,16 +564,18 @@ std::vector<std::shared_ptr<Mesh>> GltfModelLoader::createMeshes(
 			for (size_t i = 0; i < meshData.vertices.size(); i++) {
 				indices.push_back(static_cast<uint32_t>(i));
 			}
-			spdlog::debug("Generated {} sequential indices for non-indexed mesh '{}'",
-				indices.size(), meshData.name);
+			spdlog::debug(
+				"Generated {} sequential indices for non-indexed mesh '{}'",
+				indices.size(),
+				meshData.name);
 		}
 
 		/// Create a mesh with the extracted geometry
-		auto mesh = this->meshManager->createMeshWithGeometry<ModelMesh>(
-			meshData.vertices, indices);
+		auto mesh = this->meshManager->createMeshWithGeometry<ModelMesh>(meshData.vertices, indices);
 
 		/// Assign material
-		if (!meshData.materialName.empty() && materials.find(meshData.materialName) != materials.end()) {
+		if (!meshData.materialName.empty()
+			&& materials.find(meshData.materialName) != materials.end()) {
 			mesh->setMaterial(materials.at(meshData.materialName));
 		} else {
 			/// Assign default material if none specified or not found
@@ -781,8 +701,8 @@ void GltfModelLoader::normalizeModelTransform(const std::shared_ptr<scene::Scene
 
 		/// Apply normalization transform to root node
 		scene::Transform normalizedTransform;
-		normalizedTransform.position = -modelCenter * normalizeScale;  /// Center the model
-		normalizedTransform.scale = glm::vec3(normalizeScale);         /// Scale to ~2 units
+		normalizedTransform.position = -modelCenter * normalizeScale; /// Center the model
+		normalizedTransform.scale = glm::vec3(normalizeScale);        /// Scale to ~2 units
 
 		rootNode->setLocalTransform(normalizedTransform);
 
@@ -793,10 +713,9 @@ void GltfModelLoader::normalizeModelTransform(const std::shared_ptr<scene::Scene
 }
 
 void GltfModelLoader::collectNodeBounds(
-	const std::shared_ptr<scene::SceneNode>& node,
-	scene::BoundingBox& bounds,
-	const glm::mat4& parentTransform) {
-
+	const std::shared_ptr<scene::SceneNode> &node,
+	scene::BoundingBox &bounds,
+	const glm::mat4 &parentTransform) {
 	/// Get node's local transform
 	glm::mat4 localTransform = node->getLocalTransform().toMatrix();
 	glm::mat4 worldTransform = parentTransform * localTransform;

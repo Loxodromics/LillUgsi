@@ -17,6 +17,9 @@
 #include "materialmanager.h"
 #include "buffermanager.h"
 #include "models/modelmanager.h"
+#include "pipelinefactory.h"
+#include "models/materialparametermapper.h"
+#include "models/textureloadingpipeline.h"
 
 
 #ifdef USE_PLANET
@@ -108,6 +111,28 @@ public:
 		return this->materialManager.get();
 	}
 
+	/// Load a model from file and create necessary pipelines
+	/// This is a high-level method that coordinates the model loading process:
+	/// 1. Load the model file and create scene nodes
+	/// 2. Wait for textures to load
+	/// 3. Create pipelines for materials
+	/// 4. Update bounds for culling
+	/// @param filePath Path to the model file
+	/// @param parentNode Parent node to attach the model to (optional)
+	/// @return Root node of the loaded model, or nullptr if loading failed
+	[[nodiscard]] std::shared_ptr<scene::SceneNode> loadModel(
+		const std::string& filePath,
+		std::shared_ptr<scene::SceneNode> parentNode);
+
+	/// Load a model asynchronously from file
+	/// This starts a background task to load the model without blocking the main thread
+	/// @param filePath Path to the model file
+	/// @param parentNode Parent node to attach the model to (optional)
+	/// @return Future that will contain the root node when loading completes
+	[[nodiscard]] std::future<std::shared_ptr<scene::SceneNode>> loadModelAsync(
+		const std::string& filePath,
+		std::shared_ptr<scene::SceneNode> parentNode = nullptr);
+
 	/// Capture the current frame as a screenshot
 	/// @param filename The name of the file to save (PNG format)
 	/// @return True if the screenshot was saved successfully
@@ -141,6 +166,8 @@ private:
 	void updateLightUniformBuffer() const;
 	void initializeMaterials();
 	void initializeModelManager();
+	/// Sets up the material mapper, texture loader, and pipeline factory
+	void initializeModelLoadingComponents();
 
 	/// Vulkan context managing Vulkan instance, device, and swap chain
 	std::unique_ptr<vulkan::VulkanContext> vulkanContext;
@@ -173,7 +200,7 @@ private:
 	/// Graphics pipeline
 	std::shared_ptr<vulkan::VulkanPipelineHandle> graphicsPipeline;
 	std::shared_ptr<vulkan::VulkanPipelineLayoutHandle> pipelineLayout;
-	std::unique_ptr<vulkan::PipelineManager> pipelineManager;
+	std::shared_ptr<vulkan::PipelineManager> pipelineManager;
 
 	/// MeshManager for creating and managing meshes
 	std::shared_ptr<MeshManager> meshManager;
@@ -229,6 +256,21 @@ private:
 	std::shared_ptr<vulkan::Buffer> cameraBuffer;
 	std::shared_ptr<vulkan::Buffer> lightBuffer;
 	std::unique_ptr<ModelManager> modelManager;
+
+	/// Pipeline factory for model material pipelines
+	/// This centralizes the creation of specialized rendering pipelines
+	/// based on the materials used by loaded models
+	std::unique_ptr<PipelineFactory> pipelineFactory;
+
+	/// Material parameter mapper for model materials
+	/// This converts material data from model formats to our engine format,
+	/// ensuring consistent material parameter handling across different models
+	std::unique_ptr<models::MaterialParameterMapper> materialMapper;
+
+	/// Texture loading pipeline for model textures
+	/// This provides asynchronous loading and texture processing
+	/// to prevent blocking the main thread during model loading
+	std::unique_ptr<TextureLoadingPipeline> textureLoader;
 
 };
 

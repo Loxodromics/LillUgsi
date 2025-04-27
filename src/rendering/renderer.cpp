@@ -156,6 +156,10 @@ bool Renderer::initialize(SDL_Window* window) {
 
 		this->initializeModelManager();
 
+		/// Initialize model loading components
+		/// This sets up the pipeline factory, material mapper, and texture loader
+		this->initializeModelLoadingComponents();
+
 		/// Initialize the scene
 		this->initializeScene();
 
@@ -207,6 +211,12 @@ void Renderer::cleanup() {
 	if (this->vulkanContext) {
 		vkDeviceWaitIdle(this->vulkanContext->getDevice()->getDevice());
 	}
+
+	/// Clean up model loading components first
+	/// These need to be destroyed before the resources they depend on
+	this->pipelineFactory.reset();
+	this->materialMapper.reset();
+	this->textureLoader.reset();
 
 	/// Clean up light resources
 	this->lightBuffer.reset();
@@ -461,6 +471,75 @@ bool Renderer::recreateSwapChain(uint32_t newWidth, uint32_t newHeight) {
 		spdlog::error("Error during swap chain recreation: {}", e.what());
 		return false;
 	}
+}
+
+std::shared_ptr<scene::SceneNode> Renderer::loadModel(
+	const std::string &filePath, std::shared_ptr<scene::SceneNode> parentNode) {
+	/// Default to scene root if no parent node specified
+	if (!parentNode) {
+		parentNode = this->scene->getRoot();
+	}
+
+	spdlog::info("Loading model: {}", filePath);
+
+	/// Step 1: Load the model using ModelManager
+	/// This extracts geometry, materials, and hierarchy from the model file
+	auto modelNode = this->modelManager->loadModel(filePath, *this->scene, parentNode);
+
+	if (!modelNode) {
+		spdlog::error("Failed to load model: {}", filePath);
+		return nullptr;
+	}
+
+	/// Step 2: Wait for any asynchronously loaded textures to complete
+	/// This ensures all materials have their textures before rendering
+	this->textureLoader->waitForAll();
+
+	/// Step 3: Create pipelines for all materials in the model
+	/// We iterate through all materials created during model loading
+	/// and ensure each has a corresponding pipeline
+	bool allPipelinesCreated = true;
+
+	/// For each newly loaded material, create a pipeline
+	for (const auto &[name, material] : this->materialManager->getMaterials()) {
+		/// Skip materials that already have pipelines
+		if (this->pipelineFactory->hasPipeline(name)) {
+			continue;
+		}
+
+		/// Create pipeline for this material
+		if (!this->pipelineFactory->createPipelineForMaterial(name)) {
+			spdlog::warn("Failed to create pipeline for material: {}", name);
+			allPipelinesCreated = false;
+		}
+	}
+
+	if (!allPipelinesCreated) {
+		spdlog::warn("Some pipelines could not be created for model: {}", filePath);
+		/// Continue anyway - missing pipelines will be handled with fallbacks
+	}
+
+	/// Step 4: Update bounds on the model node
+	/// This ensures proper frustum culling and visibility testing
+	modelNode->updateBoundsIfNeeded();
+
+	spdlog::info("Model loaded successfully: {}", filePath);
+	return modelNode;
+}
+
+std::future<std::shared_ptr<scene::SceneNode>> Renderer::loadModelAsync(
+	const std::string& filePath,
+	std::shared_ptr<scene::SceneNode> parentNode) {
+
+	/// Create a copy of the parent node pointer for the async task
+	/// This is necessary because the parent node might change by the time the async task runs
+	auto parentNodeCopy = parentNode ? parentNode : this->scene->getRoot();
+
+	/// Launch an async task to load the model
+	/// This prevents blocking the main thread during loading
+	return std::async(std::launch::async, [this, filePath, parentNodeCopy]() {
+		return this->loadModel(filePath, parentNodeCopy);
+	});
 }
 
 bool Renderer::captureScreenshot(const std::string& filename) {
@@ -1506,6 +1585,36 @@ void Renderer::initializeModelManager() {
 	this->modelManager->setResourceBaseDirectory("resources/models/");
 
 	spdlog::info("Model manager initialized successfully");
+}
+
+void Renderer::initializeModelLoadingComponents() {
+	/// Create texture loading pipeline
+	/// This needs to be initialized first as other components depend on it
+	this->textureLoader = std::make_unique<TextureLoadingPipeline>(this->textureManager);
+
+	/// Set resource path for textures
+	/// This ensures textures can be found relative to the application's resource directory
+	this->textureLoader->setBaseDirectory("resources/textures/");
+
+	/// Configure texture loading options
+	TextureLoadOptions options;
+	options.generateMipmaps = true;  /// Ensure textures have mipmaps for better rendering quality
+	options.useAnisotropicFiltering = true;  /// Enable anisotropic filtering for better quality at angles
+	options.anisotropyLevel = 16.0f;  /// High anisotropy level for best quality
+	this->textureLoader->setDefaultOptions(options);
+
+	/// Create material parameter mapper
+	/// This handles conversion of model materials to engine materials
+	this->materialMapper = std::make_unique<models::MaterialParameterMapper>(this->textureManager);
+
+	/// Create pipeline factory
+	/// This creates and manages the specialized rendering pipelines for model materials
+	this->pipelineFactory = std::make_unique<PipelineFactory>(
+		this->pipelineManager,
+		this->materialManager
+	);
+
+	spdlog::info("Model loading components initialized");
 }
 
 } /// namespace lillugsi::rendering

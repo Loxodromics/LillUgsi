@@ -6,9 +6,9 @@
 
 namespace lillugsi::rendering {
 
-/// TextureLoader provides functionality for loading texture data from files
+/// TextureLoader provides functionality for loading texture data from various sources
 /// This class encapsulates image loading logic and provides a consistent interface
-/// for working with various image formats through stb_image
+/// for working with various image formats and sources
 class TextureLoader {
 public:
 	/// Contains the result of loading a texture
@@ -56,6 +56,23 @@ public:
 	[[nodiscard]] static TextureData loadFromMemory(
 		const void* data,
 		size_t size,
+		Format format = Format::RGBA,
+		bool flipVertically = true
+	);
+
+	/// Load texture data from a glTF buffer view
+	/// Specialized for handling embedded textures in glTF/GLB files
+	///
+	/// @param bufferData Pointer to the raw buffer data
+	/// @param bufferSize Size of the buffer view in bytes
+	/// @param mimeType MIME type of the image (e.g., "image/png")
+	/// @param format Desired output format for the pixel data
+	/// @param flipVertically Whether to flip the image vertically during loading
+	/// @return TextureData containing the loaded pixel data and metadata
+	[[nodiscard]] static TextureData loadFromBufferView(
+		const void* bufferData,
+		size_t bufferSize,
+		const std::string& mimeType,
 		Format format = Format::RGBA,
 		bool flipVertically = true
 	);

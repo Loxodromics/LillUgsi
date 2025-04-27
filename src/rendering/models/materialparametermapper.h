@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-namespace lillugsi::rendering {
+namespace lillugsi::rendering::models {
 
 /// MaterialParameterMapper handles the conversion between model material data
 /// and engine-specific material parameters
@@ -20,7 +20,7 @@ public:
 	/// Create a material parameter mapper
 	/// @param textureManager The texture manager for loading material textures
 	explicit MaterialParameterMapper(std::shared_ptr<TextureManager> textureManager);
-	
+
 	/// Apply material parameters from model data to a PBR material
 	/// This is the main mapping function that handles all parameter types
 	/// @param material The target material to configure
@@ -31,7 +31,7 @@ public:
 		std::shared_ptr<PBRMaterial> material,
 		const ModelData::MaterialInfo& materialInfo,
 		const std::string& basePath = "");
-	
+
 private:
 	/// Apply the basic scalar parameters to the material
 	/// These are the core PBR parameters like base color, metallic, roughness
@@ -41,7 +41,7 @@ private:
 	[[nodiscard]] bool applyScalarParameters(
 		std::shared_ptr<PBRMaterial> material,
 		const ModelData::MaterialInfo& materialInfo);
-	
+
 	/// Load and apply textures to the material
 	/// This handles all texture-related parameters including maps for:
 	/// albedo, normal, roughness, metallic, occlusion, etc.
@@ -53,10 +53,10 @@ private:
 		std::shared_ptr<PBRMaterial> material,
 		const ModelData::MaterialInfo& materialInfo,
 		const std::string& basePath);
-	
+
 	/// Load and apply the base color (albedo) texture
 	/// @param material The target material to configure
-	/// @param texturePath Path to the texture
+	/// @param texturePath Path or identifier for the texture
 	/// @param isTransparent Whether the material uses transparency
 	/// @param basePath Base path for resolving the texture path
 	/// @return True if the texture was successfully applied
@@ -65,10 +65,10 @@ private:
 		const std::string& texturePath,
 		bool isTransparent,
 		const std::string& basePath);
-	
+
 	/// Load and apply the normal map texture
 	/// @param material The target material to configure
-	/// @param texturePath Path to the texture
+	/// @param texturePath Path or identifier for the texture
 	/// @param strength Normal map strength factor
 	/// @param basePath Base path for resolving the texture path
 	/// @return True if the texture was successfully applied
@@ -77,10 +77,10 @@ private:
 		const std::string& texturePath,
 		float strength,
 		const std::string& basePath);
-	
+
 	/// Load and apply the roughness texture
 	/// @param material The target material to configure
-	/// @param texturePath Path to the texture
+	/// @param texturePath Path or identifier for the texture
 	/// @param factor Base roughness factor
 	/// @param basePath Base path for resolving the texture path
 	/// @return True if the texture was successfully applied
@@ -89,10 +89,10 @@ private:
 		const std::string& texturePath,
 		float factor,
 		const std::string& basePath);
-	
+
 	/// Load and apply the metallic texture
 	/// @param material The target material to configure
-	/// @param texturePath Path to the texture
+	/// @param texturePath Path or identifier for the texture
 	/// @param factor Base metallic factor
 	/// @param basePath Base path for resolving the texture path
 	/// @return True if the texture was successfully applied
@@ -101,10 +101,10 @@ private:
 		const std::string& texturePath,
 		float factor,
 		const std::string& basePath);
-	
+
 	/// Load and apply the occlusion texture
 	/// @param material The target material to configure
-	/// @param texturePath Path to the texture
+	/// @param texturePath Path or identifier for the texture
 	/// @param strength Occlusion strength factor
 	/// @param basePath Base path for resolving the texture path
 	/// @return True if the texture was successfully applied
@@ -113,26 +113,42 @@ private:
 		const std::string& texturePath,
 		float strength,
 		const std::string& basePath);
-	
+
 	/// Check if two texture paths reference the same texture
 	/// This helps detect packed texture maps where multiple properties
 	/// are stored in different channels of the same texture
-	/// @param path1 First texture path
-	/// @param path2 Second texture path
+	/// @param path1 First texture path or identifier
+	/// @param path2 Second texture path or identifier
 	/// @return True if the paths reference the same texture
 	[[nodiscard]] bool isSameTexture(const std::string& path1, const std::string& path2) const;
-	
+
+	/// Resolve or obtain a texture based on the path or identifier
+	/// This unified method handles both file paths and embedded texture identifiers
+	/// @param texturePathOrId The texture path or embedded identifier
+	/// @param basePath Base path for resolving file paths (ignored for embedded textures)
+	/// @param format The desired texture format
+	/// @return Shared pointer to the loaded texture
+	[[nodiscard]] std::shared_ptr<Texture> resolveTexture(
+		const std::string& texturePathOrId,
+		const std::string& basePath,
+		TextureLoader::Format format = TextureLoader::Format::RGBA);
+
+	/// Check if a texture path refers to an embedded texture
+	/// @param texturePath The texture path or identifier to check
+	/// @return True if this is an embedded texture identifier
+	[[nodiscard]] bool isEmbeddedTexture(const std::string& texturePath) const;
+
 	/// Resolve a texture path against a base directory
 	/// This handles both absolute and relative paths
 	/// @param texturePath The texture path to resolve
 	/// @param basePath The base path for relative resolution
 	/// @return The resolved absolute path
 	[[nodiscard]] std::string resolveTexturePath(
-		const std::string& texturePath, 
+		const std::string& texturePath,
 		const std::string& basePath) const;
-	
+
 	/// Texture manager for loading material textures
 	std::shared_ptr<TextureManager> textureManager;
 };
 
-} /// namespace lillugsi::rendering
+} /// namespace lillugsi::rendering::models

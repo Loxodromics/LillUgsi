@@ -179,9 +179,11 @@ PipelineManager::MaterialPipeline PipelineManager::getOrCreatePipeline(
 
 	/// Check if we have an existing pipeline for this configuration
 	auto &cacheEntry = this->pipelinesByConfig[configHash];
+	//
+	// /// Create new pipeline and layout if this is a new configuration
+	// if (cacheEntry.referenceCount == 0) {
 
-	/// Create new pipeline and layout if this is a new configuration
-	if (cacheEntry.referenceCount == 0) {
+	if (this->pipelines.find(material.getName()) == this->pipelines.end()) {
 		/// Create pipeline layout first
 		VkPipelineLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
