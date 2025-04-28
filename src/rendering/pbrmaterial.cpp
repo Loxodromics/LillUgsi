@@ -468,6 +468,14 @@ void PBRMaterial::setTextureTiling(TextureType textureType, float uTiling, float
 }
 
 void PBRMaterial::bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) const {
+	spdlog::trace("Binding material '{}' with descriptors: albedo={}, normal={}, roughness={}, metallic={}, occlusion={}",
+		this->name,
+		this->albedoTexture ? "yes" : "no",
+		this->normalMap ? "yes" : "no",
+		this->roughnessMap ? "yes" : "no",
+		this->metallicMap ? "yes" : "no",
+		this->occlusionMap ? "yes" : "no");
+
 	/// Call the base class implementation first
 	/// This ensures we maintain any binding behavior from the base Material class
 	Material::bind(cmdBuffer, pipelineLayout);
