@@ -1358,7 +1358,8 @@ void Renderer::initializeMaterials() {
 	/// We pass the Vulkan device handles needed for resource creation
 	this->materialManager = std::make_unique<MaterialManager>(
 		this->vulkanContext->getDevice()->getDevice(),
-		this->vulkanContext->getPhysicalDevice()
+		this->vulkanContext->getPhysicalDevice(),
+		this->textureManager
 	);
 
 	/// Create default PBR material

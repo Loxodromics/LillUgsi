@@ -2,11 +2,16 @@
 #include "vulkan/vulkanexception.h"
 #include <spdlog/spdlog.h>
 
+#include <utility>
+
 namespace lillugsi::rendering {
 
-MaterialManager::MaterialManager(VkDevice device, VkPhysicalDevice physicalDevice)
+MaterialManager::MaterialManager(VkDevice device,
+	VkPhysicalDevice physicalDevice,
+	std::shared_ptr<TextureManager> textureManager)
 	: device(device)
-	, physicalDevice(physicalDevice) {
+	, physicalDevice(physicalDevice)
+	, textureManager(std::move(textureManager)) {
 	spdlog::info("Material manager initialized");
 }
 
@@ -44,7 +49,16 @@ std::shared_ptr<PBRMaterial> MaterialManager::createPBRMaterial(
 	
 	/// Store in material map
 	this->materials[name] = material;
-	
+
+	/// Set default textures for all material slots, since they are all need when binding
+	/// They might be overwriten with propper textures later
+	auto defaultTexture = this->textureManager->getDefaultTexture();
+	material->setAlbedoTexture(defaultTexture);
+	material->setNormalMap(defaultTexture);
+	material->setRoughnessMap(defaultTexture);
+	material->setMetallicMap(defaultTexture);
+	material->setOcclusionMap(defaultTexture);
+
 	spdlog::info("Created new PBR material '{}'", name);
 	return material;
 }

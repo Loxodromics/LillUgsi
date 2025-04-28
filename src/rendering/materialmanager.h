@@ -1,13 +1,14 @@
 #pragma once
 
+#include "custommaterial.h"
 #include "material.h"
 #include "pbrmaterial.h"
-#include "custommaterial.h"
-#include "wireframematerial.h"
 #include "terrainmaterial.h"
+#include "texturemanager.h"
 #include "vulkan/vulkanwrappers.h"
-#include <string>
+#include "wireframematerial.h"
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 namespace lillugsi::rendering {
@@ -23,7 +24,11 @@ public:
 	/// Create the material manager
 	/// @param device Logical device for creating GPU resources
 	/// @param physicalDevice Physical device for memory allocation
-	MaterialManager(VkDevice device, VkPhysicalDevice physicalDevice);
+	/// @param textureManager TextureManager to assign default textures
+	MaterialManager(
+		VkDevice device,
+		VkPhysicalDevice physicalDevice,
+		std::shared_ptr<TextureManager> textureManager);
 	~MaterialManager();
 
 	/// Prevent copying to ensure single ownership of GPU resources
@@ -74,7 +79,7 @@ public:
 	/// This can be useful for batch operations or debugging
 	/// @return Const reference to the material map
 	[[nodiscard]] const std::unordered_map<std::string, std::shared_ptr<Material>>&
-	getMaterials() const { return this->materials; }
+		getMaterials() const { return this->materials; }
 
 	/// Clean up all materials
 	/// This should be called before the Vulkan device is destroyed
@@ -88,6 +93,7 @@ private:
 
 	VkDevice device;
 	VkPhysicalDevice physicalDevice;
+	std::shared_ptr<TextureManager> textureManager;
 	std::unordered_map<std::string, std::shared_ptr<Material>> materials;
 };
 
