@@ -704,6 +704,10 @@ void GltfModelLoader::normalizeModelTransform(const std::shared_ptr<scene::Scene
 		normalizedTransform.position = -modelCenter * normalizeScale; /// Center the model
 		normalizedTransform.scale = glm::vec3(normalizeScale);        /// Scale to ~2 units
 
+		/// rotate the model. glTF uses a Y-up coordinate system, while we use Z-up
+		glm::quat correction = glm::angleAxis(glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		normalizedTransform.rotation = correction;
+
 		rootNode->setLocalTransform(normalizedTransform);
 
 		spdlog::info("Normalized model from bounds min=({},{},{}), max=({},{},{})",
