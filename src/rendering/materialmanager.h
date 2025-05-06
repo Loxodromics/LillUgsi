@@ -7,6 +7,7 @@
 #include "texturemanager.h"
 #include "vulkan/vulkanwrappers.h"
 #include "wireframematerial.h"
+#include "debugmaterial.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -64,6 +65,8 @@ public:
 	/// @param name Unique identifier for the material
 	/// @return Shared pointer to the created or existing material
 	[[nodiscard]] std::shared_ptr<TerrainMaterial> createTerrainMaterial(const std::string& name);
+
+	[[nodiscard]] std::shared_ptr<DebugMaterial> createDebugMaterial(const std::string& name);
 
 	/// Get a material by name
 	/// @param name The name of the material to retrieve

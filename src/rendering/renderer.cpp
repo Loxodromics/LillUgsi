@@ -1167,154 +1167,61 @@ void Renderer::initializeScene() {
 
 	auto wireframeMaterial = this->materialManager->createWireframeMaterial("wireframe");
 
-// 	/// Get our terrain material
-// 	auto terrainMaterial = this->materialManager->getMaterial("planetTerrain");
-// 	/// Set the planet's base radius
-// 	/// This should match the radius used in TerrainMaterial
-// 	float planetRadius = 2.9f;
-// 	const uint32_t levels = 1;
-// 	// std::static_pointer_cast<TerrainMaterial>(terrainMaterial)->setPlanetRadius(planetRadius);
-//
-// 	/// Add an icosphere to demonstrate spherical geometry
-// 	/// We place it at the center where it's easy to observe
-// 	auto icosphereNode = this->scene->createNode("TestIcosphere", rootNode);
-// 	std::shared_ptr<IcosphereMesh> icosphereMesh = std::dynamic_pointer_cast<IcosphereMesh>(
-// 		this->meshManager->createMesh<IcosphereMesh>(2.9f, 4));
-// 	icosphereMesh->setMaterial(terrainMaterial);
-// 	// icosphereMesh->setMaterial(metallicMaterial);
-// 	// icosphereMesh->setMaterial(wireframeMaterial);
-//
-// #ifdef USE_PLANET
-// 	this->icosphere = std::make_shared<planet::PlanetData>();
-// 	icosphere->subdivide(4);
-//
-// 	planet::PlanetGenerator planetGenerator(icosphere, icosphereMesh);
-// 	planetGenerator.generateTerrain();
-// #endif
-//
-// 	icosphereNode->setMesh(std::move(icosphereMesh));
-//
-// 	/// Position a large icosphere in the middle of all cubes
-// 	/// It intersects some of the cude to see, that depth rendering works correctly
-// 	/// This makes it easier to see its relationship to other objects
-// 	scene::Transform icosphereTransform;
-// 	icosphereTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-// 	// icosphereTransform.scale = glm::vec3(planetRadius);
-// 	icosphereNode->setLocalTransform(icosphereTransform);
-
-	// /// Create a node for our test cube
-	// auto cubeNode = this->scene->createNode("TestCube", rootNode);
-	//
-	// /// Create and set up the cube mesh using MeshManager
-	// auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-	//
-	// /// Set the material before adding to scene
-	// cubeMesh->setMaterial(defaultMaterial);
-	// cubeNode->setMesh(std::move(cubeMesh));
-	//
-	// /// Position the cube slightly offset from center
-	// scene::Transform transform;
-	// transform.position = glm::vec3(-1.0f, -1.0f, -1.0f);
-	// cubeNode->setLocalTransform(transform);
-	//
-	// /// Create a second cube for testing hierarchical transforms
-	// auto cubeNode2 = this->scene->createNode("TestCube2", rootNode);
-	// auto cubeMesh2 = this->meshManager->createMesh<CubeMesh>();
-	//
-	// /// Set the material before adding to scene
-	// cubeMesh2->setMaterial(defaultMaterial);
-	// cubeNode2->setMesh(std::move(cubeMesh2));
-	//
-	// /// Position the second cube offset from the first
-	// scene::Transform transform2;
-	// transform2.position = glm::vec3(1.5f, 1.5f, 1.5f);
-	// cubeNode2->setLocalTransform(transform2);
-	//
-	// /// For the grid of cubes, create some varied materials
-	// auto redMaterial = this->materialManager->createPBRMaterial("red");
-	// redMaterial->setBaseColor(glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
-	// redMaterial->setRoughness(0.7f);
-	//
-	// auto blueMaterial = this->materialManager->createPBRMaterial("blue");
-	// blueMaterial->setBaseColor(glm::vec4(0.2f, 0.2f, 1.0f, 1.0f));
-	// blueMaterial->setMetallic(0.8f);
-
-	/// Add more cubes to better show lighting
-	/// Create a grid of cubes to demonstrate lighting from different angles
-	// for (int x = -2; x <= 2; x++) {
-	// 	for (int z = -2; z <= 2; z++) {
-	// 		auto cubeNode = this->scene->createNode(
-	// 			"GridCube_" + std::to_string(x) + "_" + std::to_string(z),
-	// 			this->scene->getRoot()
-	// 		);
-	//
-	// 		auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-	//
-	// 		/// Assign different materials based on position
-	// 		/// This creates a checkerboard pattern of materials
-	// 		if ((x + z) % 2 == 0) {
-	// 			cubeMesh->setMaterial(redMaterial);
-	// 		} else {
-	// 			cubeMesh->setMaterial(blueMaterial);
-	// 		}
-	//
-	// 		cubeNode->setMesh(std::move(cubeMesh));
-	//
-	// 		scene::Transform transform;
-	// 		transform.position = glm::vec3(x * 2.0f, 0.0f, z * 2.0f);
-	// 		transform.scale = glm::vec3(0.5f);
-	// 		cubeNode->setLocalTransform(transform);
-	// 	}
-	// }
-
-	// auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
-	// this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
-	// auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-
-	// /// Set texture tiling to repeat the texture twice in each direction
-	// /// This demonstrates the texture coordinate scaling functionality
-	// cubeMesh->setTextureTiling(1.0f, 1.0f);
-
-	// /// Assign the textured material to the cube
-	// cubeMesh->setMaterial(texturedMaterial);
-	// this->texturedCubeNode->setMesh(std::move(cubeMesh));
-
-	// /// Position the cube for optimal viewing
-	// scene::Transform transform;
-	// transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	// transform.scale = glm::vec3(3.0f, 3.0f, 3.0f);
-	// this->texturedCubeNode->setLocalTransform(transform);
-
-	/// Load a sample model to demonstrate model loading
-	/// We place it at the center of the scene to showcase the loaded geometry
-	try {
-		spdlog::info("Loading sample model...");
-		
-		/// Create a parent node for our model
-		auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
-		
-		/// Position the model appropriately in the scene
-		scene::Transform modelTransform;
-		modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-		modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
-		modelParentNode->setLocalTransform(modelTransform);
-		
-		/// Load the model and attach it to our parent node
-		/// Using a relative path that will be resolved using the base directory
-		auto modelRootNode = this->modelManager->loadModel(
-			"Duck.glb",
-			*this->scene,
-			modelParentNode
+	auto debugMaterial = this->materialManager->getMaterial("debug");
+	if (!debugMaterial) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Debugmaterial not found",
+			__FUNCTION__, __FILE__, __LINE__
 		);
-		
-		if (modelRootNode) {
-			spdlog::info("Sample model loaded successfully");
-		} else {
-			spdlog::error("Failed to load sample model");
-		}
-	} catch (const std::exception& e) {
-		spdlog::error("Exception during model loading: {}", e.what());
 	}
+
+	/// Create a node for our test cube
+	this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
+
+	
+	/// Create and set up the cube mesh using MeshManager
+	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+	
+	/// Set the material before adding to scene
+	cubeMesh->setMaterial(debugMaterial);
+	this->texturedCubeNode->setMesh(std::move(cubeMesh));
+	
+	/// Position the cube slightly offset from center
+	scene::Transform transform;
+	transform.position = glm::vec3(-1.0f, -1.0f, -1.0f);
+
+
+	// /// Load a sample model to demonstrate model loading
+	// /// We place it at the center of the scene to showcase the loaded geometry
+	// try {
+	// 	spdlog::info("Loading sample model...");
+		
+	// 	/// Create a parent node for our model
+	// 	auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
+		
+	// 	/// Position the model appropriately in the scene
+	// 	scene::Transform modelTransform;
+	// 	modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	// 	modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
+	// 	modelParentNode->setLocalTransform(modelTransform);
+		
+	// 	/// Load the model and attach it to our parent node
+	// 	/// Using a relative path that will be resolved using the base directory
+	// 	auto modelRootNode = this->modelManager->loadModel(
+	// 		"Duck.glb",
+	// 		*this->scene,
+	// 		modelParentNode
+	// 	);
+		
+	// 	if (modelRootNode) {
+	// 		spdlog::info("Sample model loaded successfully");
+	// 	} else {
+	// 		spdlog::error("Failed to load sample model");
+	// 	}
+	// } catch (const std::exception& e) {
+	// 	spdlog::error("Exception during model loading: {}", e.what());
+	// }
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
@@ -1560,6 +1467,19 @@ void Renderer::initializeMaterials() {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
 			"Failed to create pipeline for textured material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	// Add to initializeMaterials() in renderer.cpp
+	auto debugMaterial = this->materialManager->createDebugMaterial("debug");
+
+	/// Create pipeline for debug material
+	auto debugPipeline = this->pipelineManager->createPipeline(*debugMaterial);
+	if (!debugPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for debug material",
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}

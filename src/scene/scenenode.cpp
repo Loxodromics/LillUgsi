@@ -136,7 +136,7 @@ void SceneNode::getRenderData(const Frustum& frustum,
 
 	/// Debug log for nodes with meshes - TEMPORARY
 	if (this->mesh) {
-		spdlog::debug("Node '{}' visibility check: {}, bounds min=({},{},{}), max=({},{},{})",
+		spdlog::trace("Node '{}' visibility check: {}, bounds min=({},{},{}), max=({},{},{})",
 			this->name,
 			visible ? "visible" : "culled",
 			this->worldBounds.getMin().x, this->worldBounds.getMin().y, this->worldBounds.getMin().z,

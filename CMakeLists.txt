@@ -65,6 +65,7 @@ set(MAIN_SOURCES
 		src/rendering/textureloader.cpp
 		src/rendering/texturemanager.cpp
 		src/rendering/orbitcamera.cpp
+		src/rendering/debugmaterial.cpp
 		src/vulkan/commandbuffermanager.cpp
 		src/vulkan/framebuffermanager.cpp
 		src/rendering/buffermanager.cpp
@@ -140,5 +141,7 @@ add_custom_target(Shaders
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/wireframe.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/wireframe.frag.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/terrain.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/terrain.vert.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/terrain.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/terrain.frag.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/debug.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/debug.vert.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/debug.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/debug.frag.spv
 )
 add_dependencies(LillUgsi Shaders)

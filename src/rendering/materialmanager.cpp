@@ -147,6 +147,39 @@ std::shared_ptr<TerrainMaterial> MaterialManager::createTerrainMaterial(const st
 	return material;
 }
 
+std::shared_ptr<DebugMaterial> MaterialManager::createDebugMaterial(const std::string& name) {
+	/// Check if material already exists
+	auto it = this->materials.find(name);
+	if (it != this->materials.end()) {
+		/// Try to cast existing material to DebugMaterial
+		auto debugMaterial = std::dynamic_pointer_cast<DebugMaterial>(it->second);
+		if (debugMaterial) {
+			spdlog::debug("Returning existing Debug material '{}'", name);
+			return debugMaterial;
+		}
+		
+		/// Material exists but is not a Debug material
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Material '" + name + "' exists but is not a Debug material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create new Debug material
+	auto material = std::make_shared<DebugMaterial>(
+		this->device,
+		name,
+		this->physicalDevice
+	);
+	
+	/// Store in material map
+	this->materials[name] = material;
+
+	spdlog::info("Created new Debug material '{}'", name);
+	return material;
+}
+
 std::shared_ptr<Material> MaterialManager::getMaterial(
 	const std::string& name
 ) const {
