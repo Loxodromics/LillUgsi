@@ -16,6 +16,12 @@ public:
 	/// Virtual destructor ensures proper cleanup of derived classes
 	virtual ~Material() = default;
 
+	enum class CullingMode {
+		None,
+		Back,  /// Default for our engine
+		Front  /// For models with inverted winding like glTF
+	    };
+
 	/// Get the shader paths for this material
 	/// Pipeline manager uses this to create shader modules
 	/// @return The shader paths configuration
@@ -49,6 +55,8 @@ public:
 	[[nodiscard]] bool hasFeature(MaterialFeatureFlags feature) const {
 		return (this->features & feature) == feature;
 	}
+
+	void setCullingMode(CullingMode cullingMode) { this->cullingMode = cullingMode; }
 
 	/// Bind this material's resources for rendering
 	/// This includes setting up descriptor sets and push constants
@@ -108,7 +116,9 @@ protected:
 	std::string name;                /// Unique material name
 	MaterialType materialType;       /// Type of this material
 	MaterialFeatureFlags features;   /// Enabled features for this material
+	CullingMode cullingMode{CullingMode::Back}; /// Culling mode for the pipeline
 
+protected:
 	/// GPU resources managed by the material
 	vulkan::VulkanDescriptorSetLayoutHandle descriptorSetLayout;
 	vulkan::VulkanBufferHandle uniformBuffer;

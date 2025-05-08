@@ -20,7 +20,7 @@ DebugMaterial::DebugMaterial(
 	this->createDescriptorSetLayout();
 
 	/// Create and initialize the uniform buffer for debug properties
-	/// This provides GPU access to our color multiplier setting
+	/// This provides GPU access to our debug visualization settings
 	this->createUniformBuffer();
 
 	/// Create descriptor pool and set
@@ -28,7 +28,7 @@ DebugMaterial::DebugMaterial(
 	this->createDescriptorPool();
 	this->createDescriptorSet();
 
-	spdlog::debug("Created debug material '{}' with default white multiplier", this->name);
+	spdlog::debug("Created debug material '{}' with default vertex color mode", this->name);
 }
 
 DebugMaterial::~DebugMaterial() {
@@ -43,7 +43,7 @@ DebugMaterial::~DebugMaterial() {
 
 ShaderPaths DebugMaterial::getShaderPaths() const {
 	/// Return shader paths for debug rendering
-	/// We use specialized shaders that focus on vertex color visualization
+	/// We use specialized shaders that focus on visualization
 	ShaderPaths paths;
 	paths.vertexPath = this->vertexShaderPath;
 	paths.fragmentPath = this->fragmentShaderPath;
@@ -58,6 +58,29 @@ ShaderPaths DebugMaterial::getShaderPaths() const {
 	}
 
 	return paths;
+}
+
+void DebugMaterial::setVisualizationMode(VisualizationMode mode) {
+	/// Convert enum to integer for shader uniform
+	/// We use integer in shader to avoid dealing with enum compatibility
+	this->properties.visualizationMode = static_cast<int>(mode);
+	this->updateUniformBuffer();
+
+	/// Log mode change for debugging
+	const char* modeName;
+	switch (mode) {
+		case VisualizationMode::VertexColors: modeName = "VertexColors"; break;
+		case VisualizationMode::NormalColors: modeName = "NormalColors"; break;
+		case VisualizationMode::WindingOrder: modeName = "WindingOrder"; break;
+		default: modeName = "Unknown";
+	}
+
+	spdlog::info("Set debug visualization mode to '{}' for material '{}'", modeName, this->name);
+}
+
+DebugMaterial::VisualizationMode DebugMaterial::getVisualizationMode() const {
+	/// Convert stored integer back to enum for C++ interface
+	return static_cast<VisualizationMode>(this->properties.visualizationMode);
 }
 
 void DebugMaterial::setColorMultiplier(const glm::vec3& color) {
@@ -76,7 +99,9 @@ void DebugMaterial::createDescriptorSetLayout() {
 	binding.binding = 0;
 	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	binding.descriptorCount = 1;
-	binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	/// We need the properties in both vertex and fragment stages
+	/// This allows us to use them for different visualization modes
+	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	binding.pImmutableSamplers = nullptr;
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};

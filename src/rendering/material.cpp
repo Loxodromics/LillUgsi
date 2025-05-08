@@ -189,7 +189,25 @@ void Material::initializeDepthState(vulkan::PipelineConfig& config) const {
 
 void Material::initializeRasterizationState(vulkan::PipelineConfig& config) const {
 	/// Configure face culling based on material features
+
+	VkCullModeFlags cullMode;
+	switch (this->cullingMode) {
+	case CullingMode::None:
+		cullMode = VK_CULL_MODE_NONE;
+		break;
+	case CullingMode::Front:
+		cullMode = VK_CULL_MODE_FRONT_BIT;
+		break;
+	case CullingMode::Back:
+	default:
+		cullMode = VK_CULL_MODE_BACK_BIT;
+		break;
+	}
+
 	/// Double-sided materials need culling disabled
+	if (this->hasFeature(MaterialFeatureFlags::DoubleSided))
+		cullMode = VK_CULL_MODE_NONE;
+
 	VkCullModeFlags cullMode = this->hasFeature(MaterialFeatureFlags::DoubleSided) ?
 		VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 

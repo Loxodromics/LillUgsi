@@ -7,10 +7,18 @@
 namespace lillugsi::rendering {
 
 /// DebugMaterial provides a simple material for debugging mesh rendering
-/// We use this material to visualize vertex colors without any lighting calculations
-/// This helps us verify correct winding order and face orientation
+/// We use this material to visualize various aspects of mesh geometry
+/// This helps us diagnose rendering issues like incorrect normals or winding order
 class DebugMaterial : public Material {
 public:
+	/// Visualization modes available in the debug material
+	/// Each mode helps us visualize a different aspect of the mesh
+	enum class VisualizationMode {
+		VertexColors,   /// Display raw vertex colors (default)
+		NormalColors,   /// Visualize normals as RGB colors
+		WindingOrder    /// Display winding order (green=front, red=back)
+	};
+
 	/// Default shader paths for debug material
 	/// We place debug shaders in their own directory to keep them separate from production shaders
 	static constexpr const char* DefaultVertexShaderPath = "shaders/debug.vert.spv";
@@ -32,6 +40,15 @@ public:
 	~DebugMaterial() override;
 
 	[[nodiscard]] ShaderPaths getShaderPaths() const override;
+
+	/// Set the visualization mode for debugging
+	/// This controls what aspect of the mesh we're visualizing
+	/// @param mode The visualization mode to use
+	void setVisualizationMode(VisualizationMode mode);
+
+	/// Get the current visualization mode
+	/// @return The active visualization mode
+	[[nodiscard]] VisualizationMode getVisualizationMode() const;
 
 	/// Set a global color multiplier for the debug material
 	/// This allows us to tint all vertices uniformly for testing
@@ -59,10 +76,10 @@ private:
 	void updateUniformBuffer();
 
 	/// GPU-aligned material properties
-	/// We keep this extremely simple for debugging purposes
+	/// We keep this simple for debugging purposes while supporting different visualization modes
 	struct Properties {
 		alignas(16) glm::vec3 colorMultiplier{1.0f}; /// Multiplier for vertex colors
-		float padding;                                /// Required for GPU alignment
+		alignas(4) int visualizationMode{0};         /// Current visualization mode (matches enum)
 	};
 
 	Properties properties;                  /// Current material properties
