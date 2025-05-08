@@ -1192,36 +1192,35 @@ void Renderer::initializeScene() {
 	transform.position = glm::vec3(-1.0f, -1.0f, -1.0f);
 
 
-	// /// Load a sample model to demonstrate model loading
-	// /// We place it at the center of the scene to showcase the loaded geometry
-	// try {
-	// 	spdlog::info("Loading sample model...");
-		
-	// 	/// Create a parent node for our model
-	// 	auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
-		
-	// 	/// Position the model appropriately in the scene
-	// 	scene::Transform modelTransform;
-	// 	modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	// 	modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
-	// 	modelParentNode->setLocalTransform(modelTransform);
-		
-	// 	/// Load the model and attach it to our parent node
-	// 	/// Using a relative path that will be resolved using the base directory
-	// 	auto modelRootNode = this->modelManager->loadModel(
-	// 		"Duck.glb",
-	// 		*this->scene,
-	// 		modelParentNode
-	// 	);
-		
-	// 	if (modelRootNode) {
-	// 		spdlog::info("Sample model loaded successfully");
-	// 	} else {
-	// 		spdlog::error("Failed to load sample model");
-	// 	}
-	// } catch (const std::exception& e) {
-	// 	spdlog::error("Exception during model loading: {}", e.what());
-	// }
+	/// Load a sample model to demonstrate model loading
+	/// We place it at the center of the scene to showcase the loaded geometry
+	try {
+		spdlog::info("Loading sample model...");
+
+		/// Create a parent node for our model
+		auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
+
+		/// Position the model appropriately in the scene
+		scene::Transform modelTransform;
+		modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+		modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
+		modelParentNode->setLocalTransform(modelTransform);
+
+		/// Load the model and attach it to our parent node
+		/// Using a relative path that will be resolved using the base directory
+		auto modelRootNode = this->loadModel(
+			"Duck.glb",
+			modelParentNode
+		);
+
+		if (modelRootNode) {
+			spdlog::info("Sample model loaded successfully");
+		} else {
+			spdlog::error("Failed to load sample model");
+		}
+	} catch (const std::exception& e) {
+		spdlog::error("Exception during model loading: {}", e.what());
+	}
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
