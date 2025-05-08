@@ -116,6 +116,7 @@ protected:
 	std::string name;                /// Unique material name
 	MaterialType materialType;       /// Type of this material
 	MaterialFeatureFlags features;   /// Enabled features for this material
+	/// TODO, not yet implemented
 	CullingMode cullingMode{CullingMode::Back}; /// Culling mode for the pipeline
 
 protected:
