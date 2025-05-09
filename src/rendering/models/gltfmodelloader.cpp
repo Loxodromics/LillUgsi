@@ -363,7 +363,7 @@ ModelMeshData GltfModelLoader::extractMeshData(
 			for (size_t i = 0; i < count; ++i) {
 				meshData.vertices[i].position = glm::vec3(
 					positions[i * 3],     /// X
-					positions[i * 3 + 1], /// Y
+					-1.0 * positions[i * 3 + 1], /// Y
 					positions[i * 3 + 2]  /// Z
 				);
 			}
@@ -379,9 +379,9 @@ ModelMeshData GltfModelLoader::extractMeshData(
 			const float* normals = reinterpret_cast<const float*>(data);
 			for (size_t i = 0; i < count; ++i) {
 				meshData.vertices[i].normal = glm::vec3(
-					normals[i * 3],     /// X
-					normals[i * 3 + 1], /// Y
-					normals[i * 3 + 2]  /// Z
+					-1.0 - normals[i * 3],     /// X
+					-1.0 - normals[i * 3 + 1], /// Y
+					-1.0 - normals[i * 3 + 2]  /// Z
 				);
 			}
 		}
@@ -397,7 +397,7 @@ ModelMeshData GltfModelLoader::extractMeshData(
 			for (size_t i = 0; i < count; ++i) {
 				meshData.vertices[i].texCoord = glm::vec2(
 					texCoords[i * 2],     /// U
-					texCoords[i * 2 + 1]  /// V
+					1.0 - texCoords[i * 2 + 1]  /// V
 				);
 			}
 		}
