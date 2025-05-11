@@ -47,7 +47,7 @@ Renderer::Renderer()
 	/// Initialize the camera with a default position
 	/// We place the camera slightly back and up to view the scene
 	// this->camera = std::make_unique<EditorCamera>(glm::vec3(3.0f, -3.0f, -3.0f), 135, 28);
-	this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0, 0.0, 0.0), 10);
+	this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0, 0.0, 0.0), 5);
 }
 
 Renderer::~Renderer() {
@@ -1176,6 +1176,8 @@ void Renderer::initializeScene() {
 		);
 	}
 
+	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
+
 	/// Create a node for our test cube
 	this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
 
@@ -1184,7 +1186,7 @@ void Renderer::initializeScene() {
 	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
 	
 	/// Set the material before adding to scene
-	cubeMesh->setMaterial(debugMaterial);
+	cubeMesh->setMaterial(texturedMaterial);
 	this->texturedCubeNode->setMesh(std::move(cubeMesh));
 	
 	/// Position the cube slightly offset from center
@@ -1369,7 +1371,7 @@ void Renderer::initializeMaterials() {
 	/// Load test textures
 	/// We load each texture type separately to have full control over parameters
 	std::shared_ptr<rendering::Texture> colorTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock035_1K_Color.png", /// Path to your color texture
+		"resources/textures/MetalPlates003_1K_Color.png", /// Path to your color texture
 		true,                                   /// Generate mipmaps
 		rendering::TextureLoader::Format::RGBA  /// Load with alpha channel
 	);
@@ -1381,7 +1383,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> normalTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock035_1K_Normal.png", /// Path to your normal map
+		"resources/textures/MetalPlates003_1K_Normal.png", /// Path to your normal map
 		true,                                       /// Generate mipmaps
 		rendering::TextureLoader::Format::NormalMap /// Linear color space for normal maps
 	);
@@ -1392,7 +1394,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> roughnessTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock035_1K_Roughness.png", /// Path to your roughness map
+		"resources/textures/MetalPlates003_1K_Roughness.png", /// Path to your roughness map
 		true,                                          /// Generate mipmaps
 		rendering::TextureLoader::Format::R            /// Single channel is sufficient
 	);
@@ -1403,7 +1405,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> metallicTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock035_1K_Metalness.png", /// Path to your metallic map
+		"resources/textures/MetalPlates003_1K_Metalness.png", /// Path to your metallic map
 		true,                                          /// Generate mipmaps
 		rendering::TextureLoader::Format::R            /// Single channel is sufficient
 	);
@@ -1414,7 +1416,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> occlusionTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock035_1K_AmbientOcclusion.png", /// Path to your occlusion map
+		"resources/textures/MetalPlates003_1K_AmbientOcclusion.png", /// Path to your occlusion map
 		true,                                                 /// Generate mipmaps
 		rendering::TextureLoader::Format::R                   /// Single channel is sufficient
 	);
@@ -1430,9 +1432,9 @@ void Renderer::initializeMaterials() {
 	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
 	texturedMaterial->setBaseColor(
 		glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)); // White to show texture clearly
-	texturedMaterial->setMetallic(0.0f);    // Non-metallic base value
-	texturedMaterial->setRoughness(0.7f);   // Slightly rough surface base value
-	texturedMaterial->setAmbient(1.0f);     // Full ambient occlusion base value
+	texturedMaterial->setMetallic(0.0f);    /// Non-metallic base value
+	texturedMaterial->setRoughness(0.7f);   /// Slightly rough surface base value
+	texturedMaterial->setAmbient(1.0f);     /// Full ambient occlusion base value
 
 	/// Apply the color texture to the material
 	texturedMaterial->setAlbedoTexture(colorTexture);
