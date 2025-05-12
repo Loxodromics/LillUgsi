@@ -72,29 +72,35 @@ void main() {
 	/// We normalize in the vertex shader to save per-pixel normalization in the fragment shader
 	fragViewDir = normalize(camera.cameraPos - fragPosition);
 
-	/// Compute tangent-bitangent-normal (TBN) matrix for normal mapping
-	/// This matrix transforms normals from tangent space (normal map) to world space
-	/// We prepare this now even though normal mapping isn't implemented until Stage 2
+	/// Calculate and construct TBN matrix for normal mapping
+	/// The TBN matrix transforms normal vectors from tangent space (normal map) to world space
+	/// This is crucial for normal mapping to correctly orient detailed normals
+
+	/// Transform the tangent to world space using the same normal matrix
+	/// Since tangent is a direction vector like normal, it needs the same transformation
 	vec3 T = normalize(normalMatrix * inTangent);
 
-	/// Re-orthogonalize T with respect to N to ensure perpendicularity
-	/// This is the Gram-Schmidt process which ensures our TBN matrix is orthogonal
-	/// Without this step, normal mapping can produce distorted results with deformed meshes
+	/// Re-orthogonalize tangent with respect to normal using Gram-Schmidt process
+	/// This step is crucial because even if tangents and normals are perpendicular in model space,
+	/// the non-uniform scaling in the model matrix might make them non-perpendicular in world space
+	/// Without this correction, normal mapping can produce distorted results
 	T = normalize(T - dot(T, fragNormal) * fragNormal);
 
-	/// Calculate bitangent from normal and tangent using cross product
-	/// We assume a right-handed coordinate system for consistency
-	/// The bitangent completes our tangent space basis with T and N
-	vec3 B = cross(fragNormal, T);
+	/// Calculate bitangent using cross product of normal and tangent
+	/// We use cross product to ensure the bitangent is perpendicular to both normal and tangent
+	/// This creates a proper orthonormal basis for the tangent space to world space transformation
+	vec3 B = normalize(cross(fragNormal, T));
 
-	/// Assemble the TBN matrix from the three basis vectors
-	/// Each column represents one basis vector of the tangent space
-	/// This matrix transforms vectors from tangent space to world space
+	/// Construct the TBN matrix with the three orthonormal basis vectors
+	/// Each column of the matrix represents one basis vector of the tangent space
+	/// This matrix will transform vectors from tangent space to world space
+	///
+	/// Note that we use the columns in T, B, N order which is the convention for
+	/// tangent space to world space transformation (maps x->T, y->B, z->N)
 	fragTBN = mat3(T, B, fragNormal);
 
-	/// Transform vertex to clip space for rendering
-	/// This is the final position used by the GPU for rasterization
-	/// The pipeline expects gl_Position to be in clip space (post-projection)
+	/// Final required transformation: vertex position to clip space
+	/// This is the position the GPU uses for rasterization and depth testing
 	gl_Position = camera.proj * camera.view * vec4(fragPosition, 1.0);
 
 	/// For Reverse-Z, we invert the Z component
