@@ -65,11 +65,6 @@ const float PI = 3.14159265359;
 const float EPSILON = 0.0001; /// Small value to prevent division by zero
 
 void main() {
-	/// Normalize the interpolated normal
-	/// This is necessary because linear interpolation across the triangle
-	/// can result in non-unit vectors, even if the vertex normals were normalized
-	vec3 normal = normalize(fragNormal);
-
 	/// Get base color, either from texture or material uniform
 	/// The useAlbedoTexture flag controls whether we use the texture or uniform value
 	/// This gives artists flexibility to use either solid colors or textured surfaces
@@ -83,6 +78,46 @@ void main() {
 		/// Use the material's base color directly
 		/// This is useful for simple materials or when prototyping
 		albedo = material.baseColor.rgb;
+	}
+
+	/// Process normal mapping
+	/// Normal maps add fine surface detail without requiring additional geometry
+	/// They store perturbed normal vectors in tangent space (RGB -> XYZ)
+	vec3 normal;
+
+	if (material.useNormalMap > 0.5) {
+		/// Sample the normal map with tiling applied
+		/// We use a separate tiling factor for normal maps to allow different
+		/// detail scales for color and surface perturbation
+		vec2 normalTexCoord = fragTexCoord * material.normalTiling;
+		vec3 normalSample = texture(normalTexture, normalTexCoord).rgb;
+
+		/// Transform normal from [0,1] range to [-1,1] range
+		/// Normal maps typically store normals as RGB colors (0 to 1)
+		/// but normals need to be in the -1 to 1 range for calculations
+		vec3 tangentNormal = normalSample * 2.0 - 1.0;
+
+		/// Apply normal strength factor to control the impact of the normal map
+		/// When strength is 0, the normal remains pointing straight up in tangent space (0,0,1)
+		/// When strength is 1, we use the full value from the normal map
+		/// This lets artists control how pronounced the normal mapping effect is
+		if (material.normalStrength < 1.0) {
+			/// When normal strength is less than 1, we blend between the default
+			/// tangent space normal (0,0,1) and the sampled normal
+			/// Only the X and Y components are affected by strength to preserve the vector length
+			tangentNormal.xy *= material.normalStrength;
+			/// Re-normalize after scaling to ensure unit length
+			tangentNormal = normalize(tangentNormal);
+		}
+
+		/// Transform normal from tangent space to world space using the TBN matrix
+		/// This aligns the perturbed normal with the correct world orientation based on
+		/// the surface geometry and texture coordinates
+		normal = normalize(fragTBN * tangentNormal);
+	} else {
+		/// If no normal map is used, just use the interpolated surface normal
+		/// This provides basic lighting without the added surface detail
+		normal = normalize(fragNormal);
 	}
 
 	/// Initialize the final color with the ambient term
