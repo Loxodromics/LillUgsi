@@ -2,6 +2,20 @@
 
 This file provides a high-level overview of all source files in the LillUgsi renderer project, organized by directory.
 
+## Detailed Index Files
+
+For comprehensive documentation of classes, functions, and methods, refer to these category-specific detailed index files:
+
+- **@detailed_index_core.md** - Core application, game loop, and time management (3 files)
+- **@detailed_index_vulkan.md** - Vulkan API abstraction layer (30 files)
+- **@detailed_index_rendering.md** - Rendering system: renderer, cameras, materials, meshes, textures, lights (48 files)
+- **@detailed_index_models.md** - Model loading system: glTF loader, extractors, material mapping (14 files)
+- **@detailed_index_scene.md** - Scene graph and spatial management (8 files)
+- **@detailed_index_planet.md** - Procedural planet generation module (16 files)
+- **@detailed_index_shaders.md** - GLSL shader programs (8 files)
+
+---
+
 ## src/core/ - Application Layer
 
 - **src/core/application.h** - Main application class managing game loop, time management, and SDL window lifecycle
