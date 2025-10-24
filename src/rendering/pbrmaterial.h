@@ -7,6 +7,33 @@
 
 namespace lillugsi::rendering {
 
+/// Debug visualization modes for normal mapping validation
+/// These modes allow step-by-step verification of the normal mapping pipeline
+/// Each mode visualizes a different aspect of the normal calculation process
+enum class NormalDebugMode : uint32_t {
+	Normal = 0,              /// Standard PBR rendering
+	VertexNormals = 1,       /// Visualize vertex normals as colors
+	Tangents = 2,            /// Visualize tangent vectors
+	Bitangents = 3,          /// Visualize bitangent vectors
+	TBNNormals = 4,          /// Visualize TBN normal component
+	RawNormalMap = 5,        /// Show normal map texture as-is
+	TangentSpaceNormal = 6,  /// Normal in tangent space after conversion
+	WorldMappedNormal = 7,   /// Final world-space normal after TBN
+	UVCoords = 8,            /// Visualize UV coordinates
+	VertexLighting = 9,      /// Lighting with vertex normals only
+	MappedLighting = 10,     /// Lighting with normal-mapped normals
+	NormalDifference = 11,   /// Difference between vertex and mapped normals
+	TBNOrthogonality = 12,   /// Check if T, B, N are perpendicular (CRITICAL: must be white)
+	TBNNormalization = 13,   /// Check if T, B, N are unit length
+	TN_DotProduct = 14,      /// Visualize T·N dot product
+	BN_DotProduct = 15,      /// Visualize B·N dot product
+	TB_DotProduct = 16,      /// Visualize T·B dot product
+	FaceDirection = 17,      /// Show front vs back facing
+	RimLighting = 18,        /// View-dependent rim lighting
+	TangentSpaceViz = 19,    /// Tangent space projection
+	NormalStrength = 20,     /// Normal strength parameter effect
+};
+
 /// PBRMaterial implements a physically-based rendering material
 /// We use the metallic-roughness workflow as it's widely adopted and
 /// provides good artistic control while maintaining physical accuracy
@@ -225,6 +252,21 @@ public:
 		return this->properties.occlusionStrength;
 	}
 
+	/// Set debug visualization mode for normal mapping validation
+	/// Use this to activate specific visualization modes for debugging normals
+	/// @param mode The debug mode to activate (0-20)
+	void setDebugMode(NormalDebugMode mode);
+
+	/// Get current debug mode
+	/// @return The active debug visualization mode
+	[[nodiscard]] NormalDebugMode getDebugMode() const;
+
+	/// Convenience: Enable/disable debug mode
+	/// If enabled=false, switches to Normal rendering mode (mode 0)
+	/// If enabled=true, keeps the current debug mode active
+	/// @param enabled If true, use debug mode; if false, use normal rendering
+	void setDebugEnabled(bool enabled);
+
 	/// Bind this material's resources for rendering
 	/// This method overrides the base class implementation to bind textures
 	/// @param cmdBuffer The command buffer to record binding commands to
@@ -280,13 +322,16 @@ struct Properties {
 	alignas(4) uint32_t metallicChannel{2};   /// Default: B channel (4 bytes)
 	alignas(4) uint32_t occlusionChannel{0};  /// Default: R channel (4 bytes)
 
+	/// Debug visualization mode
+	alignas(4) uint32_t debugMode{0};  /// Default: normal rendering (4 bytes)
+
 	/// Calculate total size for debugging
 	/// This is useful for verifying alignment and buffer requirements
 	static constexpr size_t computeSize() {
 		return sizeof(glm::vec4) +       // baseColor
 			   sizeof(float) * 12 +      // scalar properties and flags
 			   sizeof(glm::vec2) * 5 +   // tiling factors
-			   sizeof(uint32_t) * 3;     // channel masks
+			   sizeof(uint32_t) * 4;     // channel masks + debugMode
 	}
 };
 
