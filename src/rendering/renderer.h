@@ -15,6 +15,7 @@
 #include "rendering/screenshot.h"
 #include "scene/scene.h"
 #include "materialmanager.h"
+#include "pbrmaterial.h"
 #include "buffermanager.h"
 #include "models/modelmanager.h"
 #include "pipelinefactory.h"
@@ -88,11 +89,11 @@ public:
 	/// @return A pointer to the EditorCamera
 	Camera* getCamera() { return this->camera.get(); }
 
-	/// Handle input events for the camera
+	/// Handle input events for the camera and debug controls
 	/// This method should be called for each relevant SDL event
 	/// @param window The SDL window, needed for mouse capture
 	/// @param event The SDL event to process
-	void handleCameraInput(SDL_Window* window, const SDL_Event& event) const;
+	void handleCameraInput(SDL_Window* window, const SDL_Event& event);
 
 	/// Get the scene manager
 	/// This allows external systems to manipulate the scene
@@ -137,6 +138,15 @@ public:
 	/// @param filename The name of the file to save (PNG format)
 	/// @return True if the screenshot was saved successfully
 	bool captureScreenshot(const std::string& filename);
+
+	/// Cycle through debug visualization modes
+	/// This applies the debug mode to all PBR materials in the scene
+	/// @param forward If true, cycle to next mode; if false, cycle to previous mode
+	void cycleDebugMode(bool forward = true);
+
+	/// Print the current debug mode name to the console
+	/// This helps users understand what visualization they're seeing
+	void printDebugModeHelp();
 
 private:
 	/// Struct to hold camera data for GPU
@@ -271,6 +281,14 @@ private:
 	/// This provides asynchronous loading and texture processing
 	/// to prevent blocking the main thread during model loading
 	std::unique_ptr<TextureLoadingPipeline> textureLoader;
+
+	/// Debug visualization tracking
+	uint32_t currentDebugMode = 0;      /// Current active debug mode (0-20)
+	static constexpr uint32_t maxDebugModes = static_cast<uint32_t>(NormalDebugMode::NormalStrength) + 1;  /// Total number of debug modes (derived from enum)
+
+	/// Normal debug material for normal mapping validation
+	/// Stored separately since it uses a custom shader
+	std::shared_ptr<PBRMaterial> normalDebugMaterial;
 
 };
 

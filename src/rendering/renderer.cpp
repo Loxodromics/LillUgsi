@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include "rendering/cubemesh.h"
 #include "rendering/icospheremesh.h"
+#include "rendering/pbrmaterial.h"
 #include "terrainmaterial.h"
 #include "vulkan/indexbuffer.h"
 #include "vulkan/vertexbuffer.h"
@@ -47,7 +48,7 @@ Renderer::Renderer()
 	/// Initialize the camera with a default position
 	/// We place the camera slightly back and up to view the scene
 	// this->camera = std::make_unique<EditorCamera>(glm::vec3(3.0f, -3.0f, -3.0f), 135, 28);
-	this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0, 0.0, 0.0), 5);
+	this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0, 0.0, 0.0), 2);
 }
 
 Renderer::~Renderer() {
@@ -396,7 +397,7 @@ void Renderer::update(float deltaTime) {
 	/// Apply the incremental rotation
 	auto transform = this->texturedCubeNode->getLocalTransform();
 	transform.rotation = transform.rotation * deltaRotation;
-	this->texturedCubeNode->setLocalTransform(transform);
+	// this->texturedCubeNode->setLocalTransform(transform);
 
 	/// Update scene with the provided delta time
 	/// This ensures all scene objects use the same time step
@@ -1055,9 +1056,75 @@ void Renderer::createDescriptorSets() {
 	spdlog::info("Created and updated descriptor sets for {} frames", numFrames);
 }
 
-void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) const {
+void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
+	/// Handle debug visualization keyboard shortcuts first
+	if (event.type == SDL_EVENT_KEY_DOWN) {
+		/// Helper lambda to set debug mode directly without cycling
+		auto setDebugMode = [this](uint32_t mode) {
+			this->currentDebugMode = mode;
+			const auto& materials = this->materialManager->getMaterials();
+			for (const auto& [name, material] : materials) {
+				if (auto pbrMat = std::dynamic_pointer_cast<PBRMaterial>(material)) {
+					pbrMat->setDebugMode(static_cast<NormalDebugMode>(mode));
+				}
+			}
+			/// Also update the normal debug material
+			if (this->normalDebugMaterial) {
+				this->normalDebugMaterial->setDebugMode(static_cast<NormalDebugMode>(mode));
+			}
+			this->printDebugModeHelp();
+		};
+
+		switch (event.key.key) {
+			/// F1-F10: Direct debug mode selection
+			case SDLK_F1:
+				setDebugMode(1);
+				return;
+			case SDLK_F2:
+				setDebugMode(2);
+				return;
+			case SDLK_F3:
+				setDebugMode(3);
+				return;
+			case SDLK_F4:
+				setDebugMode(4);
+				return;
+			case SDLK_F5:
+				setDebugMode(5);
+				return;
+			case SDLK_F6:
+				setDebugMode(6);
+				return;
+			case SDLK_F7:
+				setDebugMode(7);
+				return;
+			case SDLK_F8:
+				setDebugMode(8);
+				return;
+			case SDLK_F9:
+				setDebugMode(9);
+				return;
+			case SDLK_F10:
+				setDebugMode(10);
+				return;
+
+			/// N: Cycle to next debug mode
+			case SDLK_N:
+				this->cycleDebugMode(true);
+				return;
+
+			/// B: Cycle to previous debug mode
+			case SDLK_B:
+				this->cycleDebugMode(false);
+				return;
+
+			default:
+				break;
+		}
+	}
+
 	/// Delegate input handling to the camera
-	/// This keeps the camera logic encapsulated within the EditorCamera class
+	/// This keeps the camera logic encapsulated within the camera class
 	this->camera->handleInput(window, event);
 }
 
@@ -1123,7 +1190,7 @@ void Renderer::initializeDepthBuffer() {
 
 void Renderer::initializeScene() {
 	/// Create main directional light (sun)
-	auto sunLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, 1.0f, -1.0f));
+	auto sunLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, -1.0f, -1.0f));
 	sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.8f));  /// Warm sunlight
 	sunLight->setIntensity(1.0f);
 	sunLight->setAmbient(glm::vec3(0.1f, 0.1f, 0.15f));
@@ -1177,52 +1244,51 @@ void Renderer::initializeScene() {
 	}
 
 	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
+	auto redMaterial = this->materialManager->createPBRMaterial("red");
+
+	/// Create normal debug material with custom normal_debug shader
+	/// This uses the same vertex shader but the debug fragment shader
+	/// Store as member variable so we can update it when cycling debug modes
+	this->normalDebugMaterial = std::make_shared<PBRMaterial>(
+		this->vulkanContext->getDevice()->getDevice(),
+		"normal_debug",
+		this->vulkanContext->getPhysicalDevice(),
+		"shaders/pbr.vert.spv",              /// Same vertex shader
+		"shaders/normal_debug.frag.spv"     /// Debug fragment shader
+	);
+
+	/// Assign default textures to satisfy shader bindings
+	/// Even though debug modes might not use these, Vulkan requires all declared bindings to be valid
+	this->normalDebugMaterial->setAlbedoTexture(this->textureManager->getDefaultTexture());
+	this->normalDebugMaterial->setNormalMap(this->textureManager->getDefaultTexture());
+
+	/// Create pipeline for normal debug material
+	auto normalDebugPipeline = this->pipelineManager->createPipeline(*this->normalDebugMaterial);
+	if (!normalDebugPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for normal debug material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
 
 	/// Create a node for our test cube
 	this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
 
-	
 	/// Create and set up the cube mesh using MeshManager
 	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
-	
+
 	/// Set the material before adding to scene
-	cubeMesh->setMaterial(texturedMaterial);
+	/// Use normal debug material to see normal visualizations
+	// cubeMesh->setMaterial(texturedMaterial);
+	// cubeMesh->setMaterial(redMaterial);
+	cubeMesh->setMaterial(this->normalDebugMaterial);
 	this->texturedCubeNode->setMesh(std::move(cubeMesh));
-	
+
 	/// Position the cube slightly offset from center
 	scene::Transform transform;
-	transform.position = glm::vec3(-1.0f, -1.0f, -1.0f);
-
-
-	/// Load a sample model to demonstrate model loading
-	/// We place it at the center of the scene to showcase the loaded geometry
-	try {
-		spdlog::info("Loading sample model...");
-
-		/// Create a parent node for our model
-		auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
-
-		/// Position the model appropriately in the scene
-		scene::Transform modelTransform;
-		modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-		modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
-		modelParentNode->setLocalTransform(modelTransform);
-
-		/// Load the model and attach it to our parent node
-		/// Using a relative path that will be resolved using the base directory
-		auto modelRootNode = this->loadModel(
-			"Duck.glb",
-			modelParentNode
-		);
-
-		if (modelRootNode) {
-			spdlog::info("Sample model loaded successfully");
-		} else {
-			spdlog::error("Failed to load sample model");
-		}
-	} catch (const std::exception& e) {
-		spdlog::error("Exception during model loading: {}", e.what());
-	}
+	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	this->texturedCubeNode->setLocalTransform(transform);
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
@@ -1305,20 +1371,32 @@ void Renderer::initializeMaterials() {
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}
+	{
+		/// For the grid of cubes, create some varied materials
+		auto redMaterial = this->materialManager->createPBRMaterial("red");
+		redMaterial->setBaseColor(glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
+		redMaterial->setRoughness(0.7f);
 
-	/// For the grid of cubes, create some varied materials
-	auto redMaterial = this->materialManager->createPBRMaterial("red");
-	redMaterial->setBaseColor(glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
-	redMaterial->setRoughness(0.7f);
-
-	/// Create pipeline for red material
-	auto redPipeline = this->pipelineManager->createPipeline(*redMaterial);
-	if (!redPipeline) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Failed to create pipeline for red material",
-			__FUNCTION__, __FILE__, __LINE__
+		std::shared_ptr<rendering::Texture> normalTexture = this->textureManager->getOrLoadTexture(
+			"resources/textures/normal_map_example.png", /// Path to your normal map
+			true,                                       /// Generate mipmaps
+			rendering::TextureLoader::Format::NormalMap /// Linear color space for normal maps
 		);
+
+		/// Apply the normal map if available
+		if (normalTexture) {
+			redMaterial->setNormalMap(normalTexture, 1.0f); /// Full strength normal mapping
+		}
+
+		/// Create pipeline for red material
+		auto redPipeline = this->pipelineManager->createPipeline(*redMaterial);
+		if (!redPipeline) {
+			throw vulkan::VulkanException(
+				VK_ERROR_INITIALIZATION_FAILED,
+				"Failed to create pipeline for red material",
+				__FUNCTION__, __FILE__, __LINE__
+			);
+		}
 	}
 
 	auto blueMaterial = this->materialManager->createPBRMaterial("blue");
@@ -1371,7 +1449,7 @@ void Renderer::initializeMaterials() {
 	/// Load test textures
 	/// We load each texture type separately to have full control over parameters
 	std::shared_ptr<rendering::Texture> colorTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/MetalPlates003_1K_Color.png", /// Path to your color texture
+		"resources/textures/Rock060_1K_Color.png", /// Path to your color texture
 		true,                                   /// Generate mipmaps
 		rendering::TextureLoader::Format::RGBA  /// Load with alpha channel
 	);
@@ -1383,7 +1461,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> normalTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/MetalPlates003_1K_Normal.png", /// Path to your normal map
+		"resources/textures/Rock060_1K_Normal.png", /// Path to your normal map
 		true,                                       /// Generate mipmaps
 		rendering::TextureLoader::Format::NormalMap /// Linear color space for normal maps
 	);
@@ -1394,7 +1472,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> roughnessTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/MetalPlates003_1K_Roughness.png", /// Path to your roughness map
+		"resources/textures/Rock060_1K_Roughness.png", /// Path to your roughness map
 		true,                                          /// Generate mipmaps
 		rendering::TextureLoader::Format::R            /// Single channel is sufficient
 	);
@@ -1405,7 +1483,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> metallicTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/MetalPlates003_1K_Metalness.png", /// Path to your metallic map
+		"resources/textures/Rock060_1K_Metalness.png", /// Path to your metallic map
 		true,                                          /// Generate mipmaps
 		rendering::TextureLoader::Format::R            /// Single channel is sufficient
 	);
@@ -1416,7 +1494,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> occlusionTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/MetalPlates003_1K_AmbientOcclusion.png", /// Path to your occlusion map
+		"resources/textures/Rock060_1K_AmbientOcclusion.png", /// Path to your occlusion map
 		true,                                                 /// Generate mipmaps
 		rendering::TextureLoader::Format::R                   /// Single channel is sufficient
 	);
@@ -1474,6 +1552,7 @@ void Renderer::initializeMaterials() {
 
 	// Add to initializeMaterials() in renderer.cpp
 	auto debugMaterial = this->materialManager->createDebugMaterial("debug");
+	debugMaterial->setVisualizationMode(DebugMaterial::VisualizationMode::NormalColors);
 
 	/// Create pipeline for debug material
 	auto debugPipeline = this->pipelineManager->createPipeline(*debugMaterial);
@@ -1537,6 +1616,63 @@ void Renderer::initializeModelLoadingComponents() {
 	);
 
 	spdlog::info("Model loading components initialized");
+}
+
+void Renderer::cycleDebugMode(bool forward) {
+	/// Update the current debug mode with wraparound
+	if (forward) {
+		this->currentDebugMode = (this->currentDebugMode + 1) % this->maxDebugModes;
+	} else {
+		this->currentDebugMode = (this->currentDebugMode == 0)
+			? this->maxDebugModes - 1
+			: this->currentDebugMode - 1;
+	}
+
+	/// Apply the debug mode to all PBR materials in the scene
+	const auto& materials = this->materialManager->getMaterials();
+	for (const auto& [name, material] : materials) {
+		/// Check if this is a PBR material
+		if (auto pbrMat = std::dynamic_pointer_cast<PBRMaterial>(material)) {
+			pbrMat->setDebugMode(static_cast<NormalDebugMode>(this->currentDebugMode));
+		}
+	}
+
+	/// Also update the normal debug material (not in material manager)
+	if (this->normalDebugMaterial) {
+		this->normalDebugMaterial->setDebugMode(static_cast<NormalDebugMode>(this->currentDebugMode));
+	}
+
+	/// Print information about the current mode
+	this->printDebugModeHelp();
+}
+
+void Renderer::printDebugModeHelp() {
+	/// Mode names for user feedback
+	static const char* modeNames[] = {
+		"Normal Rendering",
+		"Vertex Normals",
+		"Tangents",
+		"Bitangents",
+		"TBN Normals",
+		"Raw Normal Map",
+		"Tangent Space Normal",
+		"World Mapped Normal",
+		"UV Coordinates",
+		"Vertex Lighting",
+		"Mapped Lighting",
+		"Normal Difference",
+		"TBN Orthogonality",
+		"TBN Normalization",
+		"T·N Dot Product",
+		"B·N Dot Product",
+		"T·B Dot Product",
+		"Face Direction",
+		"Rim Lighting",
+		"Tangent Space Viz",
+		"Normal Strength"
+	};
+
+	spdlog::info("Debug Mode {}: {}", this->currentDebugMode, modeNames[this->currentDebugMode]);
 }
 
 } /// namespace lillugsi::rendering
