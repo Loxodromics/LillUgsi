@@ -1074,4 +1074,23 @@ void PBRMaterial::validateUniformBuffer() const {
 }
 #endif
 
+void PBRMaterial::setDebugMode(NormalDebugMode mode) {
+	this->properties.debugMode = static_cast<uint32_t>(mode);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set debug mode to {} for material '{}'",
+		static_cast<uint32_t>(mode), this->name);
+}
+
+NormalDebugMode PBRMaterial::getDebugMode() const {
+	return static_cast<NormalDebugMode>(this->properties.debugMode);
+}
+
+void PBRMaterial::setDebugEnabled(bool enabled) {
+	if (!enabled) {
+		this->setDebugMode(NormalDebugMode::Normal);
+	}
+	/// If enabled, keeps current debug mode (or defaults to Normal if never set)
+}
+
 } /// namespace lillugsi::rendering
