@@ -576,6 +576,7 @@ std::vector<std::shared_ptr<Mesh>> GltfModelLoader::createMeshes(
 		/// Assign material
 		if (!meshData.materialName.empty()
 			&& materials.find(meshData.materialName) != materials.end()) {
+			// mesh->setMaterial(this->materialManager->getMaterial("default"));
 			mesh->setMaterial(materials.at(meshData.materialName));
 		} else {
 			/// Assign default material if none specified or not found
