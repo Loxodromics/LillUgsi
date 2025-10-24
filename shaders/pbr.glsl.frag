@@ -65,6 +65,15 @@ const float PI = 3.14159265359;
 const float EPSILON = 0.0001; /// Small value to prevent division by zero
 
 void main() {
+	/// Renormalize TBN basis vectors after rasterizer interpolation
+	/// Interpolating unit vectors does NOT preserve unit length!
+	/// This is critical for correct normal mapping
+	mat3 TBN = mat3(
+		normalize(fragTBN[0]),  /// T (tangent)
+		normalize(fragTBN[1]),  /// B (bitangent)
+		normalize(fragTBN[2])   /// N (normal)
+	);
+
 	/// Get base color, either from texture or material uniform
 	/// The useAlbedoTexture flag controls whether we use the texture or uniform value
 	/// This gives artists flexibility to use either solid colors or textured surfaces
@@ -113,11 +122,11 @@ void main() {
 		/// Transform normal from tangent space to world space using the TBN matrix
 		/// This aligns the perturbed normal with the correct world orientation based on
 		/// the surface geometry and texture coordinates
-		normal = normalize(fragTBN * tangentNormal);
+		normal = normalize(TBN * tangentNormal);
 	} else {
-		/// If no normal map is used, just use the interpolated surface normal
+		/// If no normal map is used, just use the renormalized surface normal from TBN
 		/// This provides basic lighting without the added surface detail
-		normal = normalize(fragNormal);
+		normal = TBN[2];  /// Already normalized when TBN was constructed
 	}
 
 	/// Initialize the final color with the ambient term
