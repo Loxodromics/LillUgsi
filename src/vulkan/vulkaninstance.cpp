@@ -4,12 +4,12 @@
 namespace lillugsi::vulkan {
 VulkanInstance::VulkanInstance() {
 	/// Initialize validation layers for debug builds
-#ifdef NDEBUG
+#ifndef NDEBUG
 	spdlog::info("enableValidationLayers");
 	this->enableValidationLayers = true;
 #else
 	spdlog::info("disableValidationLayers");
-		this->enableValidationLayers = false;
+	this->enableValidationLayers = false;
 #endif
 
 	this->validationLayers = {"VK_LAYER_KHRONOS_validation"};
