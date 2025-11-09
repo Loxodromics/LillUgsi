@@ -111,7 +111,7 @@ void PipelineManager::createGlobalDescriptorLayouts() {
 		cameraBinding.binding = 0;
 		cameraBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		cameraBinding.descriptorCount = 1;
-		cameraBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		cameraBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 		cameraBinding.pImmutableSamplers = nullptr;
 
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
