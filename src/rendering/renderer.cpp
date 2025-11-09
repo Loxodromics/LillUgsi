@@ -1257,10 +1257,17 @@ void Renderer::initializeScene() {
 		"shaders/normal_debug.frag.spv"     /// Debug fragment shader
 	);
 
-	/// Assign default textures to satisfy shader bindings
+	/// Load test normal map for debugging normal calculations
+	auto testNormalMap = this->textureManager->getOrLoadTexture(
+		"resources/textures/test_normalmap.png",
+		"resources/textures/test_normalmap.png"
+	);
+
+	/// Assign textures to material
 	/// Even though debug modes might not use these, Vulkan requires all declared bindings to be valid
 	this->normalDebugMaterial->setAlbedoTexture(this->textureManager->getDefaultTexture());
-	this->normalDebugMaterial->setNormalMap(this->textureManager->getDefaultTexture());
+	this->normalDebugMaterial->setNormalMap(testNormalMap);
+	this->normalDebugMaterial->setNormalStrength(1.0f);  /// Full strength for testing
 
 	/// Create pipeline for normal debug material
 	auto normalDebugPipeline = this->pipelineManager->createPipeline(*this->normalDebugMaterial);
