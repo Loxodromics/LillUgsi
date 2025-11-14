@@ -236,11 +236,8 @@ PipelineManager::MaterialPipeline PipelineManager::getOrCreatePipeline(
 
 	materialPipeline.layout = std::make_shared<VulkanPipelineLayoutHandle>(
 		cacheEntry.layout, [this, configHash](VkPipelineLayout l) {
-			/// Clean up layout when last reference is gone
-			auto &entry = this->pipelinesByConfig[configHash];
-			if (entry.referenceCount == 0) {
-				vkDestroyPipelineLayout(this->device, l, nullptr);
-			}
+			/// Reference count already decremented by pipeline deleter
+			/// Actual Vulkan resource destruction happens in cleanup()
 		});
 
 	/// Increment reference count for this configuration
@@ -273,9 +270,21 @@ bool PipelineManager::hasPipeline(const std::string& materialName) const {
 }
 
 void PipelineManager::cleanup() {
+	if (this->isCleanedUp) {
+		return; /// Already cleaned up, prevent double-cleanup
+	}
+
 	/// Clean up in reverse order of creation
 	/// Clean up material-specific handles first
+	spdlog::debug("PipelineManager cleanup: About to clear {} material pipelines",
+		this->materialPipelines.size());
+
+	for (const auto& [name, matPipeline] : this->materialPipelines) {
+		spdlog::debug("  Material '{}' will be destroyed", name);
+	}
+
 	this->materialPipelines.clear();
+	spdlog::debug("Material pipelines cleared successfully");
 
 	/// Clean up shared pipeline resources
 	for (const auto& [hash, cache] : this->pipelinesByConfig)
@@ -295,6 +304,8 @@ void PipelineManager::cleanup() {
 	this->cameraDescriptorLayout.reset();
 
 	this->missingPipelineWarnings.clear();
+
+	this->isCleanedUp = true;
 
 	spdlog::info("Pipeline manager resources cleaned up");
 }

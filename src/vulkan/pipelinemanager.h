@@ -172,6 +172,9 @@ private:
 	/// Set of materials we've already warned about
 	/// Prevents log spam for missing materials
 	mutable std::unordered_set<std::string> missingPipelineWarnings;
+
+	/// Track if cleanup has been called
+	bool isCleanedUp{false};
 };
 
 } /// namespace lillugsi::vulkan
