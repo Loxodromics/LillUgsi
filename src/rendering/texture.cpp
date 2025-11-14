@@ -63,10 +63,13 @@ Texture::Texture(VkDevice device,
 	
 	VkImage textureImage;
 	VK_CHECK(vkCreateImage(device, &imageInfo, nullptr, &textureImage));
-	
+
 	/// Wrap in RAII handle for automatic cleanup
-	this->image = vulkan::VulkanImageHandle(textureImage, [this](VkImage img) {
-		vkDestroyImage(this->device, img, nullptr);
+	/// Capture device and name by value to avoid issues if this is destroyed
+	this->image = vulkan::VulkanImageHandle(textureImage, [device, texName = this->name](VkImage img) {
+		spdlog::debug("Image deleter called for texture '{}'", texName.empty() ? "unnamed" : texName);
+		vkDestroyImage(device, img, nullptr);
+		spdlog::debug("Image destroyed successfully for texture '{}'", texName.empty() ? "unnamed" : texName);
 	});
 	
 	/// Allocate memory for the image
@@ -117,26 +120,33 @@ Texture::Texture(VkDevice device,
 	
 	VkImageView textureImageView;
 	VK_CHECK(vkCreateImageView(device, &viewInfo, nullptr, &textureImageView));
-	
+
 	/// Wrap in RAII handle for automatic cleanup
-	this->imageView = vulkan::VulkanImageViewHandle(textureImageView, [this](VkImageView view) {
-		vkDestroyImageView(this->device, view, nullptr);
+	/// Capture device and name by value to avoid issues if this is destroyed
+	this->imageView = vulkan::VulkanImageViewHandle(textureImageView, [device, texName = this->name](VkImageView view) {
+		spdlog::debug("Image view deleter called for texture '{}'", texName.empty() ? "unnamed" : texName);
+		vkDestroyImageView(device, view, nullptr);
+		spdlog::debug("Image view destroyed successfully for texture '{}'", texName.empty() ? "unnamed" : texName);
 	});
 }
 
 Texture::~Texture() {
+	spdlog::debug("BEGIN Texture destructor for '{}'", this->name.empty() ? "unnamed" : this->name);
+
 	/// Free GPU resources
 	/// The RAII handles will automatically clean up the image and image view
 	/// We just need to handle the manually allocated memory
 	if (this->imageMemory != VK_NULL_HANDLE) {
-		spdlog::debug("Freeing image memory 0x{:x} for texture '{}'",
+		spdlog::debug("About to free image memory 0x{:x} for texture '{}'",
 			reinterpret_cast<uint64_t>(this->imageMemory),
 			this->name.empty() ? "unnamed" : this->name);
 		vkFreeMemory(this->device, this->imageMemory, nullptr);
 		this->imageMemory = VK_NULL_HANDLE;
+		spdlog::debug("Freed image memory successfully for texture '{}'",
+			this->name.empty() ? "unnamed" : this->name);
 	}
-	
-	spdlog::debug("Texture '{}' destroyed", this->name.empty() ? "unnamed" : this->name);
+
+	spdlog::debug("END Texture destructor for '{}'", this->name.empty() ? "unnamed" : this->name);
 }
 
 void Texture::uploadData(const void* data, size_t size, VkCommandPool commandPool, VkQueue queue,
