@@ -219,6 +219,14 @@ void Renderer::cleanup() {
 	this->materialMapper.reset();
 	this->textureLoader.reset();
 
+	/// Clean up model manager before materials
+	/// ModelManager holds a reference to MaterialManager, so we must reset it
+	/// before vulkanContext to ensure materials are destroyed while VkDevice is still valid
+	if (this->modelManager) {
+		this->modelManager->waitForAsyncOperations();
+		this->modelManager.reset();
+	}
+
 	/// Clean up light resources
 	this->lightBuffer.reset();
 	this->lightManager.reset();
