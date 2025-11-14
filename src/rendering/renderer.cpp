@@ -1068,10 +1068,6 @@ void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
 					pbrMat->setDebugMode(static_cast<NormalDebugMode>(mode));
 				}
 			}
-			/// Also update the normal debug material
-			if (this->normalDebugMaterial) {
-				this->normalDebugMaterial->setDebugMode(static_cast<NormalDebugMode>(mode));
-			}
 			this->printDebugModeHelp();
 		};
 
@@ -1248,11 +1244,9 @@ void Renderer::initializeScene() {
 
 	/// Create normal debug material with custom normal_debug shader
 	/// This uses the same vertex shader but the debug fragment shader
-	/// Store as member variable so we can update it when cycling debug modes
-	this->normalDebugMaterial = std::make_shared<PBRMaterial>(
-		this->vulkanContext->getDevice()->getDevice(),
+	/// Managed by MaterialManager for proper cleanup ordering
+	auto normalDebugMaterial = this->materialManager->createPBRMaterialWithCustomShaders(
 		"normal_debug",
-		this->vulkanContext->getPhysicalDevice(),
 		"shaders/pbr.vert.spv",              /// Same vertex shader
 		"shaders/normal_debug.frag.spv"     /// Debug fragment shader
 	);
@@ -1264,13 +1258,12 @@ void Renderer::initializeScene() {
 	);
 
 	/// Assign textures to material
-	/// Even though debug modes might not use these, Vulkan requires all declared bindings to be valid
-	this->normalDebugMaterial->setAlbedoTexture(this->textureManager->getDefaultTexture());
-	this->normalDebugMaterial->setNormalMap(testNormalMap);
-	this->normalDebugMaterial->setNormalStrength(1.0f);  /// Full strength for testing
+	/// The MaterialManager already set default textures, we only need to override the normal map
+	normalDebugMaterial->setNormalMap(testNormalMap);
+	normalDebugMaterial->setNormalStrength(1.0f);  /// Full strength for testing
 
 	/// Create pipeline for normal debug material
-	auto normalDebugPipeline = this->pipelineManager->createPipeline(*this->normalDebugMaterial);
+	auto normalDebugPipeline = this->pipelineManager->createPipeline(*normalDebugMaterial);
 	if (!normalDebugPipeline) {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
@@ -1289,7 +1282,7 @@ void Renderer::initializeScene() {
 	/// Use normal debug material to see normal visualizations
 	// cubeMesh->setMaterial(texturedMaterial);
 	// cubeMesh->setMaterial(redMaterial);
-	cubeMesh->setMaterial(this->normalDebugMaterial);
+	cubeMesh->setMaterial(normalDebugMaterial);
 	this->texturedCubeNode->setMesh(std::move(cubeMesh));
 
 	/// Position the cube slightly offset from center
@@ -1642,11 +1635,6 @@ void Renderer::cycleDebugMode(bool forward) {
 		if (auto pbrMat = std::dynamic_pointer_cast<PBRMaterial>(material)) {
 			pbrMat->setDebugMode(static_cast<NormalDebugMode>(this->currentDebugMode));
 		}
-	}
-
-	/// Also update the normal debug material (not in material manager)
-	if (this->normalDebugMaterial) {
-		this->normalDebugMaterial->setDebugMode(static_cast<NormalDebugMode>(this->currentDebugMode));
 	}
 
 	/// Print information about the current mode

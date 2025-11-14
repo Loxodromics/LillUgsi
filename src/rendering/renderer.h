@@ -286,10 +286,6 @@ private:
 	uint32_t currentDebugMode = 0;      /// Current active debug mode (0-20)
 	static constexpr uint32_t maxDebugModes = static_cast<uint32_t>(NormalDebugMode::NormalStrength) + 1;  /// Total number of debug modes (derived from enum)
 
-	/// Normal debug material for normal mapping validation
-	/// Stored separately since it uses a custom shader
-	std::shared_ptr<PBRMaterial> normalDebugMaterial;
-
 };
 
 } /// namespace lillugsi::rendering
