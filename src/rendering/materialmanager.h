@@ -42,6 +42,19 @@ public:
 	/// @return Shared pointer to the created or existing material
 	[[nodiscard]] std::shared_ptr<PBRMaterial> createPBRMaterial(const std::string& name);
 
+	/// Create a new PBR material with custom shaders
+	/// This allows using PBR material functionality with different shaders
+	/// @param name Unique identifier for the material
+	/// @param vertexShaderPath Path to vertex shader SPIR-V file
+	/// @param fragmentShaderPath Path to fragment shader SPIR-V file
+	/// @return Shared pointer to the created material
+	/// @throws VulkanException if a material with the name exists
+	[[nodiscard]] std::shared_ptr<PBRMaterial> createPBRMaterialWithCustomShaders(
+		const std::string& name,
+		const std::string& vertexShaderPath,
+		const std::string& fragmentShaderPath
+	);
+
 	/// Create a new custom material with specified shaders
 	/// @param name Unique identifier for the material
 	/// @param vertexShaderPath Path to vertex shader SPIR-V file
