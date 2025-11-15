@@ -1196,7 +1196,7 @@ void Renderer::initializeScene() {
 	/// Create main directional light (sun)
 	auto sunLight = std::make_shared<DirectionalLight>(glm::vec3(1.0f, -1.0f, -1.0f));
 	sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.8f));  /// Warm sunlight
-	sunLight->setIntensity(1.0f);
+	sunLight->setIntensity(5.0f);
 	sunLight->setAmbient(glm::vec3(0.1f, 0.1f, 0.15f));
 	this->lightManager->addLight(sunLight);
 
@@ -1288,9 +1288,9 @@ void Renderer::initializeScene() {
 
 	/// Set the material before adding to scene
 	/// Use normal debug material to see normal visualizations
-	// cubeMesh->setMaterial(texturedMaterial);
+	cubeMesh->setMaterial(texturedMaterial);
 	// cubeMesh->setMaterial(redMaterial);
-	cubeMesh->setMaterial(normalDebugMaterial);
+	// cubeMesh->setMaterial(normalDebugMaterial);
 	this->texturedCubeNode->setMesh(std::move(cubeMesh));
 
 	/// Position the cube slightly offset from center
@@ -1457,7 +1457,7 @@ void Renderer::initializeMaterials() {
 	/// Load test textures
 	/// We load each texture type separately to have full control over parameters
 	std::shared_ptr<rendering::Texture> colorTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock060_1K_Color.png", /// Path to your color texture
+		"resources/textures/Rock035_1K_Color.png", /// Path to your color texture
 		true,                                   /// Generate mipmaps
 		rendering::TextureLoader::Format::RGBA  /// Load with alpha channel
 	);
@@ -1469,7 +1469,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> normalTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock060_1K_Normal.png", /// Path to your normal map
+		"resources/textures/Rock035_1K_Normal.png", /// Path to your normal map
 		true,                                       /// Generate mipmaps
 		rendering::TextureLoader::Format::NormalMap /// Linear color space for normal maps
 	);
@@ -1480,7 +1480,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> roughnessTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock060_1K_Roughness.png", /// Path to your roughness map
+		"resources/textures/Rock035_1K_Roughness.png", /// Path to your roughness map
 		true,                                          /// Generate mipmaps
 		rendering::TextureLoader::Format::R            /// Single channel is sufficient
 	);
@@ -1491,7 +1491,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> metallicTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock060_1K_Metalness.png", /// Path to your metallic map
+		"resources/textures/Rock035_1K_Metalness.png", /// Path to your metallic map
 		true,                                          /// Generate mipmaps
 		rendering::TextureLoader::Format::R            /// Single channel is sufficient
 	);
@@ -1502,7 +1502,7 @@ void Renderer::initializeMaterials() {
 	}
 
 	std::shared_ptr<rendering::Texture> occlusionTexture = this->textureManager->getOrLoadTexture(
-		"resources/textures/Rock060_1K_AmbientOcclusion.png", /// Path to your occlusion map
+		"resources/textures/Rock035_1K_AmbientOcclusion.png", /// Path to your occlusion map
 		true,                                                 /// Generate mipmaps
 		rendering::TextureLoader::Format::R                   /// Single channel is sufficient
 	);
