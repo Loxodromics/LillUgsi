@@ -64,6 +64,64 @@ layout(set = 2, binding = 5) uniform sampler2D occlusionTexture; /// Occlusion m
 const float PI = 3.14159265359;
 const float EPSILON = 0.0001; /// Small value to prevent division by zero
 
+/// GGX Normal Distribution Function (Trowbridge-Reitz)
+/// Determines the distribution of microfacet normals
+/// NoH: dot(normal, halfVector)
+/// roughness: surface roughness parameter [0,1]
+float distributionGGX(float NoH, float roughness) {
+	float a = roughness * roughness;
+	float a2 = a * a;
+	float NoH2 = NoH * NoH;
+	float denom = (NoH2 * (a2 - 1.0) + 1.0);
+	denom = PI * denom * denom;
+	return a2 / denom;
+}
+
+/// Schlick-GGX Geometry Function (single direction)
+/// Models self-shadowing and masking of microfacets
+/// NdotV: dot product between normal and view/light direction
+/// roughness: surface roughness parameter [0,1]
+float geometrySchlickGGX(float NdotV, float roughness) {
+	float r = (roughness + 1.0);
+	float k = (r * r) / 8.0;  /// Direct lighting formulation
+	float denom = NdotV * (1.0 - k) + k;
+	return NdotV / denom;
+}
+
+/// Smith's Method - Geometry Function
+/// Combines view and light direction geometry attenuation
+/// Accounts for both viewing and lighting geometry obstruction
+/// NoV: dot(normal, viewDir)
+/// NoL: dot(normal, lightDir)
+/// roughness: surface roughness parameter [0,1]
+float geometrySmith(float NoV, float NoL, float roughness) {
+	float ggx1 = geometrySchlickGGX(NoV, roughness);  /// View direction
+	float ggx2 = geometrySchlickGGX(NoL, roughness);  /// Light direction
+	return ggx1 * ggx2;
+}
+
+/// Fresnel-Schlick Approximation
+/// Calculates view-dependent reflectivity (increases at grazing angles)
+/// cosTheta: dot(halfVector, viewDir) or dot(normal, viewDir) depending on use
+/// F0: base reflectivity at normal incidence (0.04 for dielectrics, albedo for metals)
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+/// Extract Single Channel from Texture Sample
+/// Useful for packed textures (e.g., ORM = Occlusion+Roughness+Metallic)
+/// texSample: sampled texture value (vec4)
+/// channelIndex: 0=R, 1=G, 2=B, 3=A
+float extractChannel(vec4 texSample, uint channelIndex) {
+	switch (channelIndex) {
+		case 0: return texSample.r;
+		case 1: return texSample.g;
+		case 2: return texSample.b;
+		case 3: return texSample.a;
+		default: return texSample.r;  /// Fallback to red channel
+	}
+}
+
 void main() {
 	/// Renormalize TBN basis vectors after rasterizer interpolation
 	/// Interpolating unit vectors does NOT preserve unit length!
