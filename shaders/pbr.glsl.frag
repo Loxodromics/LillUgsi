@@ -213,15 +213,40 @@ void main() {
 		/// It provides a base level of illumination to avoid completely dark shadows
 		ambientColor += light.ambient.rgb * lightIntensity;
 
+		/// Calculate half-vector between view and light directions
+		/// Used for specular reflection calculations
+		vec3 H = normalize(fragViewDir + lightDir);
+
+		/// Calculate dot products needed for BRDF terms
+		float NoL = max(dot(normal, lightDir), 0.0);     /// Lambert term (also used for diffuse)
+		float NoV = max(dot(normal, fragViewDir), 0.0);  /// View angle
+		float NoH = max(dot(normal, H), 0.0);            /// Half-vector angle
+		float VoH = max(dot(fragViewDir, H), 0.0);       /// View-half angle
+
+		/// Temporary F0 for non-metallic surfaces (dielectric baseline)
+		/// 0.04 = 4% reflectance typical for plastics, rubber, etc.
+		/// Phase 3 will make this dynamic based on metallic parameter
+		vec3 F0 = vec3(0.04);
+
 		/// Calculate diffuse term using Lambert's cosine law
-		/// The max() ensures we don't get negative lighting from lights behind the surface
 		/// The division by PI normalizes the Lambert BRDF to ensure energy conservation
-		float NoL = max(dot(normal, lightDir), 0.0);
 		vec3 diffuse = albedo / PI * NoL;
 
-		/// Add this light's contribution to the final color
-		/// Each light adds both its diffuse and ambient contribution
-		finalColor += diffuse * lightColor;
+		/// Cook-Torrance Specular BRDF
+		/// BRDF = (D * F * G) / (4 * NoV * NoL)
+		/// where D = distribution, F = fresnel, G = geometry
+		float D = distributionGGX(NoH, material.roughness);
+		vec3 F = fresnelSchlick(VoH, F0);
+		float G = geometrySmith(NoV, NoL, material.roughness);
+
+		/// Combine terms (prevent division by zero with epsilon)
+		vec3 numerator = D * F * G;
+		float denominator = 4.0 * NoV * NoL + EPSILON;
+		vec3 specular = numerator / denominator;
+
+		/// Add both diffuse and specular contributions
+		/// Energy conservation will be added in Phase 4
+		finalColor += (diffuse + specular) * lightColor;
 	}
 
 	/// Add accumulated ambient light
