@@ -223,10 +223,11 @@ void main() {
 		float NoH = max(dot(normal, H), 0.0);            /// Half-vector angle
 		float VoH = max(dot(fragViewDir, H), 0.0);       /// View-half angle
 
-		/// Temporary F0 for non-metallic surfaces (dielectric baseline)
-		/// 0.04 = 4% reflectance typical for plastics, rubber, etc.
-		/// Phase 3 will make this dynamic based on metallic parameter
-		vec3 F0 = vec3(0.04);
+		/// Calculate F0 (base reflectivity) based on metallic parameter
+		/// Dielectrics (metallic=0): F0 = 0.04 (4% reflectance, white specular)
+		/// Metals (metallic=1): F0 = albedo (colored specular from base color)
+		/// This is the core of the metallic workflow
+		vec3 F0 = mix(vec3(0.04), albedo, material.metallic);
 
 		/// Calculate diffuse term using Lambert's cosine law
 		/// The division by PI normalizes the Lambert BRDF to ensure energy conservation
