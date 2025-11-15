@@ -219,12 +219,7 @@ TerrainMaterial::TerrainMaterial(
 }
 
 TerrainMaterial::~TerrainMaterial() {
-	/// Clean up uniform buffer memory
-	/// Base class and RAII handles handle other cleanup
-	if (this->uniformBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->device, this->uniformBufferMemory, nullptr);
-	}
-
+	/// RAII handles and base class handle all cleanup automatically
 	spdlog::debug("Destroyed terrain material '{}'", this->name);
 }
 
@@ -403,10 +398,12 @@ void TerrainMaterial::createUniformBuffer() {
 	));
 
 	/// Wrap in RAII handle
+	/// Capture device by value to ensure it's valid when deleter runs during shutdown
+	VkDevice device = this->device;
 	this->uniformBufferMemory = vulkan::VulkanDeviceMemoryHandle(
 		rawMemoryHandle,
-		[this](VkDeviceMemory mem) {
-			vkFreeMemory(this->device, mem, nullptr);
+		[device](VkDeviceMemory mem) {
+			vkFreeMemory(device, mem, nullptr);
 		}
 	);
 
