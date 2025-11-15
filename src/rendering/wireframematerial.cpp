@@ -28,12 +28,7 @@ WireframeMaterial::WireframeMaterial(
 }
 
 WireframeMaterial::~WireframeMaterial() {
-	/// Clean up uniform buffer memory
-	/// The base Material class handles other cleanup
-	if (this->uniformBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->device, this->uniformBufferMemory, nullptr);
-	}
-
+	/// RAII handles and base class handle all cleanup automatically
 	spdlog::debug("Destroyed wireframe material '{}'", this->name);
 }
 
@@ -133,10 +128,12 @@ void WireframeMaterial::createUniformBuffer() {
 	));
 
 	/// Wrap in RAII handle
+	/// Capture device by value to ensure it's valid when deleter runs during shutdown
+	VkDevice device = this->device;
 	this->uniformBufferMemory = vulkan::VulkanDeviceMemoryHandle(
 		rawMemoryHandle,
-		[this](VkDeviceMemory mem) {
-			vkFreeMemory(this->device, mem, nullptr);
+		[device](VkDeviceMemory mem) {
+			vkFreeMemory(device, mem, nullptr);
 		}
 	);
 

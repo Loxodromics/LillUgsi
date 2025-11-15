@@ -662,10 +662,12 @@ void PBRMaterial::createUniformBuffer() {
 	));
 
 	/// Wrap in RAII handle
+	/// Capture device by value to ensure it's valid when deleter runs during shutdown
+	VkDevice device = this->device;
 	this->uniformBufferMemory = vulkan::VulkanDeviceMemoryHandle(
 		rawMemoryHandle,
-		[this](VkDeviceMemory mem) {
-			vkFreeMemory(this->device, mem, nullptr);
+		[device](VkDeviceMemory mem) {
+			vkFreeMemory(device, mem, nullptr);
 		}
 	);
 
