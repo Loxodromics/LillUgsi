@@ -240,14 +240,23 @@ void main() {
 		vec3 F = fresnelSchlick(VoH, F0);
 		float G = geometrySmith(NoV, NoL, material.roughness);
 
+		/// Calculate kD (diffuse coefficient) for energy conservation
+		/// kD represents the fraction of light that is refracted (diffuse) rather than reflected (specular)
+		/// - (1.0 - F): Light not reflected is refracted (diffuse)
+		/// - (1.0 - metallic): Metals have no diffuse component (kD = 0 when metallic = 1)
+		/// This ensures energy conservation: diffuse + specular <= 1.0
+		vec3 kD = (1.0 - F) * (1.0 - material.metallic);
+
 		/// Combine terms (prevent division by zero with epsilon)
 		vec3 numerator = D * F * G;
 		float denominator = 4.0 * NoV * NoL + EPSILON;
 		vec3 specular = numerator / denominator;
 
-		/// Add both diffuse and specular contributions
-		/// Energy conservation will be added in Phase 4
-		finalColor += (diffuse + specular) * lightColor;
+		/// Apply energy conservation
+		/// Multiply diffuse by kD to ensure total energy (diffuse + specular) <= 1.0
+		/// When F is high (grazing angles or metals), kD is low (less diffuse)
+		/// When metallic = 1.0, kD = 0 (no diffuse contribution for pure metals)
+		finalColor += (kD * diffuse + specular) * lightColor;
 	}
 
 	/// Add accumulated ambient light
