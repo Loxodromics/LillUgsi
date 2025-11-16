@@ -187,6 +187,47 @@ void main() {
 		normal = TBN[2];  /// Already normalized when TBN was constructed
 	}
 
+	/// Sample roughness from texture or use uniform value
+	/// Roughness controls the size of specular highlights (smooth vs rough surfaces)
+	float roughness;
+	if (material.useRoughnessMap > 0.5) {
+		/// Apply tiling to texture coordinates for roughness map
+		vec2 roughnessTexCoord = fragTexCoord * material.roughnessTiling;
+
+		/// Sample roughness texture and extract the appropriate channel
+		/// Many roughness maps are single-channel (grayscale) stored in R, G, or B
+		vec4 roughnessSample = texture(roughnessTexture, roughnessTexCoord);
+		roughness = extractChannel(roughnessSample, material.roughnessChannel);
+
+		/// Apply roughness strength factor to control the influence of the texture
+		/// When strength is 0, we use the base material.roughness value
+		/// When strength is 1, we use the full texture value
+		roughness = mix(material.roughness, roughness, material.roughnessStrength);
+	} else {
+		/// If no roughness map is enabled, use the uniform material value
+		roughness = material.roughness;
+	}
+
+	/// Sample metallic from texture or use uniform value
+	/// Metallic determines if a surface is metal (1.0) or dielectric (0.0)
+	float metallic;
+	if (material.useMetallicMap > 0.5) {
+		/// Apply tiling to texture coordinates for metallic map
+		vec2 metallicTexCoord = fragTexCoord * material.metallicTiling;
+
+		/// Sample metallic texture and extract the appropriate channel
+		/// Metallic maps are typically single-channel, often packed with roughness
+		vec4 metallicSample = texture(metallicTexture, metallicTexCoord);
+		metallic = extractChannel(metallicSample, material.metallicChannel);
+
+		/// Apply metallic strength factor
+		/// Allows artists to modulate the texture values
+		metallic = mix(material.metallic, metallic, material.metallicStrength);
+	} else {
+		/// If no metallic map is enabled, use the uniform material value
+		metallic = material.metallic;
+	}
+
 	/// Initialize the final color with the ambient term
 	/// This represents indirect light from the environment
 	/// Even shadowed areas receive this minimal lighting
@@ -223,29 +264,31 @@ void main() {
 		float NoH = max(dot(normal, H), 0.0);            /// Half-vector angle
 		float VoH = max(dot(fragViewDir, H), 0.0);       /// View-half angle
 
-		/// Calculate F0 (base reflectivity) based on metallic parameter
+		/// Calculate F0 (base reflectivity) based on sampled metallic value
+		/// Now uses texture-driven metallic for spatially-varying metal/dielectric behavior
 		/// Dielectrics (metallic=0): F0 = 0.04 (4% reflectance, white specular)
 		/// Metals (metallic=1): F0 = albedo (colored specular from base color)
-		/// This is the core of the metallic workflow
-		vec3 F0 = mix(vec3(0.04), albedo, material.metallic);
+		vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
 		/// Calculate diffuse term using Lambert's cosine law
 		/// The division by PI normalizes the Lambert BRDF to ensure energy conservation
 		vec3 diffuse = albedo / PI * NoL;
 
-		/// Cook-Torrance Specular BRDF
+		/// Cook-Torrance Specular BRDF with sampled roughness
 		/// BRDF = (D * F * G) / (4 * NoV * NoL)
 		/// where D = distribution, F = fresnel, G = geometry
-		float D = distributionGGX(NoH, material.roughness);
+		/// Roughness now varies across the surface based on the texture
+		float D = distributionGGX(NoH, roughness);
 		vec3 F = fresnelSchlick(VoH, F0);
-		float G = geometrySmith(NoV, NoL, material.roughness);
+		float G = geometrySmith(NoV, NoL, roughness);
 
 		/// Calculate kD (diffuse coefficient) for energy conservation
 		/// kD represents the fraction of light that is refracted (diffuse) rather than reflected (specular)
 		/// - (1.0 - F): Light not reflected is refracted (diffuse)
 		/// - (1.0 - metallic): Metals have no diffuse component (kD = 0 when metallic = 1)
 		/// This ensures energy conservation: diffuse + specular <= 1.0
-		vec3 kD = (1.0 - F) * (1.0 - material.metallic);
+		/// kD now varies spatially with the metallic texture
+		vec3 kD = (1.0 - F) * (1.0 - metallic);
 
 		/// Combine terms (prevent division by zero with epsilon)
 		vec3 numerator = D * F * G;
