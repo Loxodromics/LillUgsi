@@ -198,6 +198,21 @@ public:
 	/// @param vTiling Vertical tiling factor
 	void setTextureTiling(TextureType textureType, float uTiling, float vTiling);
 
+	/// Set which channel to sample from the roughness texture
+	/// Useful for R8 textures (use channel R) vs packed ORM textures (use channel G)
+	/// @param channel The channel to sample (R=0, G=1, B=2, A=3)
+	void setRoughnessChannel(TextureChannel channel);
+
+	/// Set which channel to sample from the metallic texture
+	/// Useful for R8 textures (use channel R) vs packed ORM textures (use channel B)
+	/// @param channel The channel to sample (R=0, G=1, B=2, A=3)
+	void setMetallicChannel(TextureChannel channel);
+
+	/// Set which channel to sample from the occlusion texture
+	/// Useful for R8 textures (use channel R) vs packed ORM textures (use channel R)
+	/// @param channel The channel to sample (R=0, G=1, B=2, A=3)
+	void setOcclusionChannel(TextureChannel channel);
+
 	/// Get the current albedo texture
 	/// @return Shared pointer to the current albedo texture, or nullptr if none set
 	[[nodiscard]] std::shared_ptr<Texture> getAlbedoTexture() const {
