@@ -1546,6 +1546,8 @@ void Renderer::initializeMaterials() {
 
 	if (occlusionTexture) {
 		texturedMaterial->setOcclusionMap(occlusionTexture, 1.0f);
+		/// R8_UNORM textures store data in R channel (index 0)
+		texturedMaterial->setOcclusionChannel(rendering::Material::TextureChannel::R);
 	}
 
 	/// Set texture tiling to repeat the textures at an appropriate scale

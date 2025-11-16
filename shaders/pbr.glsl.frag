@@ -228,6 +228,28 @@ void main() {
 		metallic = material.metallic;
 	}
 
+	/// Sample ambient occlusion from texture or use uniform value
+	/// AO defines how much ambient light reaches different parts of the surface
+	/// Crevices and occluded areas typically have lower values (darker)
+	float occlusion;
+	if (material.useOcclusionMap > 0.5) {
+		/// Apply tiling to texture coordinates for occlusion map
+		vec2 occlusionTexCoord = fragTexCoord * material.occlusionTiling;
+
+		/// Sample occlusion texture and extract the appropriate channel
+		/// Occlusion maps are typically single-channel (R) or packed in ORM textures
+		vec4 occlusionSample = texture(occlusionTexture, occlusionTexCoord);
+		occlusion = extractChannel(occlusionSample, material.occlusionChannel);
+
+		/// Apply occlusion strength factor to control the influence of the texture
+		/// When strength is 0, we use the base material.ambient value
+		/// When strength is 1, we use the full texture value
+		occlusion = mix(material.ambient, occlusion, material.occlusionStrength);
+	} else {
+		/// If no occlusion map is enabled, use the uniform material value
+		occlusion = material.ambient;
+	}
+
 	/// Initialize the final color with the ambient term
 	/// This represents indirect light from the environment
 	/// Even shadowed areas receive this minimal lighting
@@ -302,10 +324,11 @@ void main() {
 		finalColor += (kD * diffuse + specular) * lightColor;
 	}
 
-	/// Add accumulated ambient light
-	/// We use the material's ambient occlusion factor to modulate ambient lighting
-	/// This helps create more realistic shadows in crevices and occluded areas
-	finalColor += ambientColor * albedo * material.ambient;
+	/// Add accumulated ambient light with occlusion
+	/// Occlusion now varies spatially based on the texture
+	/// Areas with low occlusion (dark AO map) receive less ambient light
+	/// This creates realistic shadowing in crevices, corners, and contact points
+	finalColor += ambientColor * albedo * occlusion;
 
 	/// Simple tone mapping (Reinhard operator)
 	/// This compresses HDR values into LDR range for display
