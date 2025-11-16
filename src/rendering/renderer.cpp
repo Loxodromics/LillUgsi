@@ -1534,10 +1534,14 @@ void Renderer::initializeMaterials() {
 	/// These won't be used until we enhance the shader further, but setting them up now is good
 	if (roughnessTexture) {
 		texturedMaterial->setRoughnessMap(roughnessTexture, 1.0f);
+		/// R8_UNORM textures store data in R channel (index 0), not G channel (default 1)
+		texturedMaterial->setRoughnessChannel(rendering::Material::TextureChannel::R);
 	}
 
 	if (metallicTexture) {
 		texturedMaterial->setMetallicMap(metallicTexture, 1.0f);
+		/// R8_UNORM textures store data in R channel (index 0), not B channel (default 2)
+		texturedMaterial->setMetallicChannel(rendering::Material::TextureChannel::R);
 	}
 
 	if (occlusionTexture) {

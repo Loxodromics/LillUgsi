@@ -467,6 +467,30 @@ void PBRMaterial::setTextureTiling(TextureType textureType, float uTiling, float
 		static_cast<int>(textureType), uTiling, vTiling, this->name);
 }
 
+void PBRMaterial::setRoughnessChannel(TextureChannel channel) {
+	this->properties.roughnessChannel = this->channelToMask(channel);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set roughness channel to {} for material '{}'",
+		static_cast<int>(channel), this->name);
+}
+
+void PBRMaterial::setMetallicChannel(TextureChannel channel) {
+	this->properties.metallicChannel = this->channelToMask(channel);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set metallic channel to {} for material '{}'",
+		static_cast<int>(channel), this->name);
+}
+
+void PBRMaterial::setOcclusionChannel(TextureChannel channel) {
+	this->properties.occlusionChannel = this->channelToMask(channel);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set occlusion channel to {} for material '{}'",
+		static_cast<int>(channel), this->name);
+}
+
 void PBRMaterial::bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) const {
 	spdlog::trace("Binding material '{}' with descriptors: albedo={}, normal={}, roughness={}, metallic={}, occlusion={}",
 		this->name,
