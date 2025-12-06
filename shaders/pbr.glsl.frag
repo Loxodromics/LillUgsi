@@ -299,7 +299,9 @@ void main() {
 		vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
 		/// Calculate diffuse term using Lambert's cosine law
-		/// The division by PI normalizes the Lambert BRDF to ensure energy conservation
+		/// Division by PI normalizes the Lambert BRDF for energy conservation
+		/// This is physically correct but requires higher light intensity values
+		/// (e.g., 8.0 instead of 1.0) to achieve similar brightness
 		vec3 diffuse = albedo / PI * NoL;
 
 		/// Cook-Torrance Specular BRDF with sampled roughness

@@ -331,11 +331,12 @@ struct Properties {
 	alignas(8) glm::vec2 metallicTiling{1.0f};   /// Metallic map tiling (8 bytes)
 	alignas(8) glm::vec2 occlusionTiling{1.0f};  /// Occlusion map tiling (8 bytes)
 
-	/// Channel masks for texture sampling
-	/// These define which channels to use from combined textures
-	alignas(4) uint32_t roughnessChannel{1};  /// Default: G channel (R=0, G=1, B=2, A=3) (4 bytes)
-	alignas(4) uint32_t metallicChannel{2};   /// Default: B channel (4 bytes)
-	alignas(4) uint32_t occlusionChannel{0};  /// Default: R channel (4 bytes)
+	/// Texture channel indices for multi-channel packed textures
+	/// Default values assume ORM texture packing (Occlusion=R, Roughness=G, Metallic=B)
+	/// For single-channel R8 textures, use setRoughnessChannel(TextureChannel::R), etc.
+	alignas(4) uint32_t roughnessChannel{1};  /// Default: G channel (ORM packed) (4 bytes)
+	alignas(4) uint32_t metallicChannel{2};   /// Default: B channel (ORM packed) (4 bytes)
+	alignas(4) uint32_t occlusionChannel{0};  /// Default: R channel (ORM packed) (4 bytes)
 
 	/// Debug visualization mode
 	alignas(4) uint32_t debugMode{0};  /// Default: normal rendering (4 bytes)

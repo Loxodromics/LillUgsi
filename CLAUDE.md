@@ -111,6 +111,25 @@ glslc shaders/pbr.glsl.frag -o build/shaders/pbr.frag.spv
 - Normal mapping in tangent space
 - Async model loading to prevent main thread blocking
 
+### PBR Material Conventions
+
+**Light Intensity Values:**
+- Lambert BRDF uses division by PI for energy conservation
+- This requires higher light intensity values (e.g., 8.0 instead of 1.0)
+- Physically correct but less intuitive than unnormalized values
+
+**Texture Channel Configuration:**
+- Default channel indices assume ORM packed textures:
+  - Roughness: G channel (index 1)
+  - Metallic: B channel (index 2)
+  - Occlusion: R channel (index 0)
+- Single-channel R8 textures require explicit configuration:
+  ```cpp
+  material->setRoughnessChannel(Material::TextureChannel::R);
+  material->setMetallicChannel(Material::TextureChannel::R);
+  material->setOcclusionChannel(Material::TextureChannel::R);
+  ```
+
 ### Dependencies & Libraries
 - Vulkan SDK 1.3.216+ for graphics API
 - SDL3 for windowing and input
@@ -147,6 +166,6 @@ I have provided you with a comprehensive indexing system organized by subsystem:
 - @detailed_index_models.md - Model loading system (14 files)
 - @detailed_index_scene.md - Scene management (8 files)
 - @detailed_index_planet.md - Planet generation module (16 files)
-- @detailed_index_shaders.md - GLSL shaders (8 files)
+- @detailed_index_shaders.md - GLSL shaders (9 files)
 
 Each detailed index contains comprehensive class, function, and method documentation with signatures and descriptions. This index may or may not be up to date.
