@@ -250,6 +250,11 @@ void main() {
 		occlusion = material.ambient;
 	}
 
+	/// Renormalize view direction after rasterizer interpolation
+	/// Interpolating unit vectors does NOT preserve unit length
+	/// This is critical for accurate specular calculations
+	vec3 viewDir = normalize(fragViewDir);
+
 	/// Initialize the final color with the ambient term
 	/// This represents indirect light from the environment
 	/// Even shadowed areas receive this minimal lighting
@@ -278,13 +283,13 @@ void main() {
 
 		/// Calculate half-vector between view and light directions
 		/// Used for specular reflection calculations
-		vec3 H = normalize(fragViewDir + lightDir);
+		vec3 H = normalize(viewDir + lightDir);
 
 		/// Calculate dot products needed for BRDF terms
 		float NoL = max(dot(normal, lightDir), 0.0);     /// Lambert term (also used for diffuse)
-		float NoV = max(dot(normal, fragViewDir), 0.0);  /// View angle
+		float NoV = max(dot(normal, viewDir), 0.0);  /// View angle
 		float NoH = max(dot(normal, H), 0.0);            /// Half-vector angle
-		float VoH = max(dot(fragViewDir, H), 0.0);       /// View-half angle
+		float VoH = max(dot(viewDir, H), 0.0);       /// View-half angle
 
 		/// Calculate F0 (base reflectivity) based on sampled metallic value
 		/// Now uses texture-driven metallic for spatially-varying metal/dielectric behavior
