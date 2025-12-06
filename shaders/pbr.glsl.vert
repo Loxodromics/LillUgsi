@@ -34,6 +34,7 @@ struct Light {
 /// Separate set allows for efficient light updates
 layout(set = 1, binding = 0) uniform LightBuffer {
 	Light lights[16];  /// Array size matches LightManager::MaxLights
+	uint lightCount;   /// Number of active lights
 } lightData;
 
 /// Push constant block for model matrix
