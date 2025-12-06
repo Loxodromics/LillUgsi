@@ -76,28 +76,28 @@ std::shared_ptr<Light> LightManager::getLight(uint32_t index) const {
 	return this->lights[index];
 }
 
-std::vector<LightData> LightManager::getLightData() const {
-	/// Create vector to hold GPU-formatted light data
-	/// We prepare all light data at once for efficient GPU upload
-	std::vector<LightData> lightData;
-	lightData.reserve(this->lights.size());
+LightBufferUBO LightManager::getLightBufferUBO() const {
+	/// Create the complete light buffer structure
+	/// This includes both the light array and the active light count
+	LightBufferUBO ubo{};
 
-	/// Convert each light to its GPU format
-	for (const auto& light : this->lights) {
-		lightData.push_back(light->getLightData());
+	/// Convert each active light to its GPU format
+	/// We populate the array up to the number of active lights
+	for (size_t i = 0; i < this->lights.size(); ++i) {
+		ubo.lights[i] = this->lights[i]->getLightData();
 	}
 
-	/// Pad the buffer to MaxLights if necessary
-	/// This ensures consistent buffer size for the GPU
-	/// We fill unused slots with default-constructed LightData
-	while (lightData.size() < MaxLights) {
-		lightData.push_back(LightData{});
-	}
+	/// Set the active light count
+	/// Shaders will use this to avoid iterating over inactive lights
+	ubo.lightCount = static_cast<uint32_t>(this->lights.size());
 
-	spdlog::trace("Prepared GPU data for {} lights (buffer size: {})",
-		this->lights.size(), lightData.size());
+	/// Remaining slots are already zero-initialized by default construction
+	/// No need to explicitly pad with empty LightData
 
-	return lightData;
+	spdlog::trace("Prepared GPU data for {} active lights",
+		ubo.lightCount);
+
+	return ubo;
 }
 
 } /// namespace lillugsi::rendering

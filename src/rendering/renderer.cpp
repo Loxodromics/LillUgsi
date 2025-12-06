@@ -1305,34 +1305,35 @@ void Renderer::initializeScene() {
 }
 
 void Renderer::createLightUniformBuffer() {
-	/// Calculate required buffer size
-	VkDeviceSize bufferSize = sizeof(LightData) * LightManager::MaxLights;
+	/// Calculate required buffer size (complete UBO structure)
+	VkDeviceSize bufferSize = sizeof(LightBufferUBO);
 
-	/// Initialize buffer with empty light data
-	std::vector<LightData> initialData(LightManager::MaxLights);
+	/// Initialize buffer with empty light buffer UBO
+	LightBufferUBO initialData{};
 
 	/// Create the uniform buffer using buffer manager
-	this->lightBuffer = this->bufferManager->createUniformBuffer(bufferSize, initialData.data());
+	this->lightBuffer = this->bufferManager->createUniformBuffer(bufferSize, &initialData);
 
 	spdlog::info("Light uniform buffer created with size {} bytes", bufferSize);
 }
 
 void Renderer::updateLightUniformBuffer() const {
-	/// Get current light data from the manager
-	auto lightData = this->lightManager->getLightData();
+	/// Get current light buffer UBO from the manager
+	/// This includes both the light array and the active light count
+	auto lightBufferUBO = this->lightManager->getLightBufferUBO();
 
-	/// Calculate buffer size
-	VkDeviceSize bufferSize = sizeof(LightData) * LightManager::MaxLights;
+	/// Calculate buffer size (full UBO structure)
+	VkDeviceSize bufferSize = sizeof(LightBufferUBO);
 
 	/// Update buffer with new light data
 	this->bufferManager->updateBuffer(
 		this->lightBuffer,
-		lightData.data(),
+		&lightBufferUBO,
 		bufferSize,
 		0);
 
-	spdlog::trace("Updated light uniform buffer with {} lights",
-		this->lightManager->getLightCount());
+	spdlog::trace("Updated light uniform buffer with {} active lights",
+		lightBufferUBO.lightCount);
 }
 
 void Renderer::initializeMaterials() {

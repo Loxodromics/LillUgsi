@@ -60,8 +60,8 @@ public:
 
 	/// Get GPU data for all lights
 	/// This prepares the light data in a format ready for GPU upload
-	/// @return Vector of GPU-formatted light data
-	[[nodiscard]] std::vector<LightData> getLightData() const;
+	/// @return Complete light buffer UBO with light array and count
+	[[nodiscard]] LightBufferUBO getLightBufferUBO() const;
 
 	/// Check if adding another light is possible
 	/// @return true if another light can be added

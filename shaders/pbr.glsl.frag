@@ -23,6 +23,7 @@ struct Light {
 /// Separate set from material allows for efficient updates
 layout(set = 1, binding = 0) uniform LightBuffer {
 	Light lights[16];  /// Array size matches LightManager::MaxLights
+	uint lightCount;   /// Number of active lights
 } lightData;
 
 /// PBR material properties (set = 2)
@@ -261,10 +262,10 @@ void main() {
 	vec3 finalColor = vec3(0.0);
 	vec3 ambientColor = vec3(0.0);
 
-	/// Process all lights
-	/// We loop through all available lights to accumulate their contributions
-	/// Each light adds both direct illumination and ambient light
-	for (int i = 0; i < 16; i++) {  /// Using fixed size for simplicity in this stage
+	/// Process active lights
+	/// Using dynamic light count avoids iterating over inactive lights
+	/// This improves performance when fewer than the maximum lights are active
+	for (int i = 0; i < int(lightData.lightCount); i++) {
 		Light light = lightData.lights[i];
 
 		/// Skip lights with zero intensity (inactive lights)
