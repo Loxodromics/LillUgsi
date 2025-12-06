@@ -220,12 +220,13 @@ For comprehensive documentation of classes, functions, and methods, refer to the
 - **modules/planet/src/planet/planetformater.h** - Formatting utilities for planet data
 - **modules/planet/src/planet/main.cpp** - Planet module standalone entry point
 
-## shaders/ - GLSL Shader Programs
+## shaders/ - GLSL Shader Programs (9 files)
 
 - **shaders/pbr.glsl.vert** - PBR vertex shader with Reverse-Z depth and tangent space
 - **shaders/pbr.glsl.frag** - PBR fragment shader with metallic-roughness workflow and normal mapping
 - **shaders/debug.glsl.vert** - Debug visualization vertex shader
 - **shaders/debug.glsl.frag** - Debug fragment shader for normals, colors, and winding order
+- **shaders/normal_debug.glsl.frag** - Advanced normal mapping debug shader with 21 visualization modes
 - **shaders/wireframe.glsl.vert** - Wireframe rendering vertex shader
 - **shaders/wireframe.glsl.frag** - Wireframe rendering fragment shader
 - **shaders/terrain.glsl.vert** - Terrain rendering vertex shader with height-based positioning
@@ -241,6 +242,6 @@ For comprehensive documentation of classes, functions, and methods, refer to the
 - **Model Loading**: 14 files
 - **Scene Management**: 8 files
 - **Planet Module**: 16 files (optional)
-- **Shaders**: 8 files
+- **Shaders**: 9 files
 
-**Total**: ~127 source and shader files (excluding external dependencies)
+**Total**: ~128 source and shader files (excluding external dependencies)

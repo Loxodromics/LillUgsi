@@ -82,6 +82,53 @@ This file contains detailed information about the GLSL shader programs.
 
 ---
 
+## shaders/normal_debug.glsl.frag
+
+**Description:** Advanced debug shader for validating normal mapping implementation with extensive visualization modes.
+
+**Features:**
+- 21 distinct visualization modes for debugging normal mapping
+- TBN matrix validation (orthogonality, normalization)
+- Normal map sampling and transformation visualization
+- Lighting comparisons (with/without normal mapping)
+- UV coordinate visualization
+- View-dependent effects
+
+**Visualization Modes:**
+- Mode 0: Normal rendering with Lambert lighting
+- Mode 1: Vertex normals (world space)
+- Mode 2-4: TBN components (tangent, bitangent, normal)
+- Mode 5: Raw normal map sample (as RGB texture)
+- Mode 6: Normal map in tangent space
+- Mode 7: Final world-space normal after TBN transform
+- Mode 8: UV coordinates
+- Mode 9-10: Lighting comparison (vertex normals vs mapped normals)
+- Mode 11: Difference between vertex and mapped normals
+- Mode 12-13: TBN orthogonality and length validation
+- Mode 14-16: Individual TBN dot product visualizations
+- Mode 17: Face direction check
+- Mode 18: View-dependent rim lighting
+- Mode 19: Tangent space visualization
+- Mode 20: Normal map strength parameter visualization
+
+**Inputs:**
+- Fragment position, normal, color
+- Texture coordinates
+- TBN matrix (mat3)
+- View direction
+
+**Outputs:**
+- Visualization color based on debug mode
+
+**Uniform Blocks:**
+- CameraUBO (set=0): view, projection, cameraPos
+- MaterialUBO (set=2): PBR properties, debug mode selector
+
+**Samplers:**
+- albedoTexture, normalTexture
+
+---
+
 ## shaders/wireframe.glsl.vert
 
 **Description:** Wireframe rendering vertex shader.
