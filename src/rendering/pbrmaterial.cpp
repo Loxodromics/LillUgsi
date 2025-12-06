@@ -467,6 +467,30 @@ void PBRMaterial::setTextureTiling(TextureType textureType, float uTiling, float
 		static_cast<int>(textureType), uTiling, vTiling, this->name);
 }
 
+void PBRMaterial::setRoughnessChannel(TextureChannel channel) {
+	this->properties.roughnessChannel = this->channelToMask(channel);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set roughness channel to {} for material '{}'",
+		static_cast<int>(channel), this->name);
+}
+
+void PBRMaterial::setMetallicChannel(TextureChannel channel) {
+	this->properties.metallicChannel = this->channelToMask(channel);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set metallic channel to {} for material '{}'",
+		static_cast<int>(channel), this->name);
+}
+
+void PBRMaterial::setOcclusionChannel(TextureChannel channel) {
+	this->properties.occlusionChannel = this->channelToMask(channel);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set occlusion channel to {} for material '{}'",
+		static_cast<int>(channel), this->name);
+}
+
 void PBRMaterial::bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) const {
 	spdlog::trace("Binding material '{}' with descriptors: albedo={}, normal={}, roughness={}, metallic={}, occlusion={}",
 		this->name,
@@ -662,10 +686,12 @@ void PBRMaterial::createUniformBuffer() {
 	));
 
 	/// Wrap in RAII handle
+	/// Capture device by value to ensure it's valid when deleter runs during shutdown
+	VkDevice device = this->device;
 	this->uniformBufferMemory = vulkan::VulkanDeviceMemoryHandle(
 		rawMemoryHandle,
-		[this](VkDeviceMemory mem) {
-			vkFreeMemory(this->device, mem, nullptr);
+		[device](VkDeviceMemory mem) {
+			vkFreeMemory(device, mem, nullptr);
 		}
 	);
 
@@ -1073,5 +1099,24 @@ void PBRMaterial::validateUniformBuffer() const {
 	vkUnmapMemory(this->device, this->uniformBufferMemory);
 }
 #endif
+
+void PBRMaterial::setDebugMode(NormalDebugMode mode) {
+	this->properties.debugMode = static_cast<uint32_t>(mode);
+	this->updateUniformBuffer();
+
+	spdlog::debug("Set debug mode to {} for material '{}'",
+		static_cast<uint32_t>(mode), this->name);
+}
+
+NormalDebugMode PBRMaterial::getDebugMode() const {
+	return static_cast<NormalDebugMode>(this->properties.debugMode);
+}
+
+void PBRMaterial::setDebugEnabled(bool enabled) {
+	if (!enabled) {
+		this->setDebugMode(NormalDebugMode::Normal);
+	}
+	/// If enabled, keeps current debug mode (or defaults to Normal if never set)
+}
 
 } /// namespace lillugsi::rendering

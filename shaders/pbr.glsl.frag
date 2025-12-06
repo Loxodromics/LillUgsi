@@ -23,6 +23,7 @@ struct Light {
 /// Separate set from material allows for efficient updates
 layout(set = 1, binding = 0) uniform LightBuffer {
 	Light lights[16];  /// Array size matches LightManager::MaxLights
+	uint lightCount;   /// Number of active lights
 } lightData;
 
 /// PBR material properties (set = 2)
@@ -41,6 +42,16 @@ layout(set = 2, binding = 0) uniform MaterialUBO {
 	float roughnessStrength; /// Roughness map strength factor
 	float metallicStrength; /// Metallic map strength factor
 	float occlusionStrength; /// Occlusion map strength factor
+/// Texture tiling factors
+	vec2 albedoTiling;     /// Tiling factor for albedo texture
+	vec2 normalTiling;     /// Tiling factor for normal map
+	vec2 roughnessTiling;  /// Tiling factor for roughness map
+	vec2 metallicTiling;   /// Tiling factor for metallic map
+	vec2 occlusionTiling;  /// Tiling factor for occlusion map
+/// Channel masks for multi-channel textures
+	uint roughnessChannel; /// Channel index for roughness (0=R, 1=G, 2=B, 3=A)
+	uint metallicChannel;  /// Channel index for metallic
+	uint occlusionChannel; /// Channel index for occlusion
 } material;
 
 /// Material textures (set = 2)
@@ -50,278 +61,290 @@ layout(set = 2, binding = 3) uniform sampler2D roughnessTexture; /// Roughness m
 layout(set = 2, binding = 4) uniform sampler2D metallicTexture;  /// Metallic map texture
 layout(set = 2, binding = 5) uniform sampler2D occlusionTexture; /// Occlusion map texture
 
-const float PI = 3.14159265359;
-
 /// Define constants used in PBR calculations
-#define PI 3.14159265359
-#define EPSILON 0.0001 /// Small value to prevent division by zero
+const float PI = 3.14159265359;
+const float EPSILON = 0.0001; /// Small value to prevent division by zero
 
-/// Calculate the Normal Distribution Function using GGX/Trowbridge-Reitz distribution
-/// This models the statistical distribution of microfacets on the surface
-/// @param normal The surface normal
-/// @param halfway The halfway vector between view and light
-/// @param roughness The surface roughness parameter [0,1]
-/// @return The NDF value representing microfacet alignment probability
-float distributionGGX(vec3 normal, vec3 halfway, float roughness) {
-	/// Square the roughness to provide more intuitive artist control
-	/// Linear roughness feels inconsistent at different values, squared provides better visual mapping
-	float alpha = roughness * roughness;
-	float alphaSqr = alpha * alpha;
-
-	/// Calculate how well the halfway vector aligns with the surface normal
-	float NdotH = max(dot(normal, halfway), 0.0);
-	float NdotH2 = NdotH * NdotH;
-
-	/// Compute the GGX distribution
-	/// This gives the statistical probability that microfacets are oriented along the halfway vector
-	/// The denominator creates the characteristic "long tail" of GGX highlights
-	float denominator = (NdotH2 * (alphaSqr - 1.0) + 1.0);
-	denominator = PI * denominator * denominator;
-
-	/// Return the normalized distribution value
-	/// We add an epsilon to prevent division by zero for perfectly smooth surfaces
-	return alphaSqr / max(denominator, EPSILON);
+/// GGX Normal Distribution Function (Trowbridge-Reitz)
+/// Determines the distribution of microfacet normals
+/// NoH: dot(normal, halfVector)
+/// roughness: surface roughness parameter [0,1]
+float distributionGGX(float NoH, float roughness) {
+	float a = roughness * roughness;
+	float a2 = a * a;
+	float NoH2 = NoH * NoH;
+	float denom = (NoH2 * (a2 - 1.0) + 1.0);
+	denom = PI * denom * denom;
+	return a2 / denom;
 }
 
-/// Calculate the Schlick-GGX Geometry Function for a single vector
-/// This computes self-shadowing from microfacets along one direction (view or light)
-/// @param NdotX Dot product between normal and the direction vector
-/// @param roughness The surface roughness parameter [0,1]
-/// @return Geometry term for the given direction
-float geometrySchlickGGX(float NdotX, float roughness) {
-	/// Remapping roughness for the geometry term
-	/// For direct lighting, we use this remapping to account for the different behavior
-	/// of geometry shadowing compared to the normal distribution function
+/// Schlick-GGX Geometry Function (single direction)
+/// Models self-shadowing and masking of microfacets
+/// NdotV: dot product between normal and view/light direction
+/// roughness: surface roughness parameter [0,1]
+float geometrySchlickGGX(float NdotV, float roughness) {
 	float r = (roughness + 1.0);
-	float k = (r * r) / 8.0;
-
-	/// Calculate the shadowing term
-	/// This represents how much light is blocked by microfacets
-	/// Higher roughness values lead to more self-shadowing
-	float numerator = NdotX;
-	float denominator = NdotX * (1.0 - k) + k;
-
-	/// Return the geometry term
-	/// Clamped to prevent division by zero
-	return numerator / max(denominator, EPSILON);
+	float k = (r * r) / 8.0;  /// Direct lighting formulation
+	float denom = NdotV * (1.0 - k) + k;
+	return NdotV / denom;
 }
 
-/// Calculate the Smith model for combined geometry shadowing/masking
-/// The Smith model combines shadowing from both view and light directions
-/// @param normal The surface normal
-/// @param view The view direction
-/// @param light The light direction
-/// @param roughness The surface roughness parameter [0,1]
-/// @return Combined geometry term for both directions
-float geometrySmith(vec3 normal, vec3 view, vec3 light, float roughness) {
-	/// Calculate geometry term for both directions
-	/// We compute how much light is obscured for both the incoming and outgoing directions
-	float NdotV = max(dot(normal, view), 0.0);
-	float NdotL = max(dot(normal, light), 0.0);
-
-	/// Use Schlick-GGX approximation for each direction
-	float ggx1 = geometrySchlickGGX(NdotV, roughness);
-	float ggx2 = geometrySchlickGGX(NdotL, roughness);
-
-	/// Combine terms using Smith method
-	/// The combined term handles correlations between viewing and light directions
+/// Smith's Method - Geometry Function
+/// Combines view and light direction geometry attenuation
+/// Accounts for both viewing and lighting geometry obstruction
+/// NoV: dot(normal, viewDir)
+/// NoL: dot(normal, lightDir)
+/// roughness: surface roughness parameter [0,1]
+float geometrySmith(float NoV, float NoL, float roughness) {
+	float ggx1 = geometrySchlickGGX(NoV, roughness);  /// View direction
+	float ggx2 = geometrySchlickGGX(NoL, roughness);  /// Light direction
 	return ggx1 * ggx2;
 }
 
-/// Calculate Fresnel reflectance using Schlick's approximation
-/// This determines how much light is reflected vs. refracted based on view angle
-/// @param cosTheta Cosine of angle between halfway vector and view direction
-/// @param F0 Surface reflection at zero incidence (straight-on viewing angle)
-/// @return The Fresnel reflectance
+/// Fresnel-Schlick Approximation
+/// Calculates view-dependent reflectivity (increases at grazing angles)
+/// cosTheta: dot(halfVector, viewDir) or dot(normal, viewDir) depending on use
+/// F0: base reflectivity at normal incidence (0.04 for dielectrics, albedo for metals)
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
-	/// Schlick's approximation to Fresnel equation
-	/// This is a simple but effective approximation to the full Fresnel equations
-	/// At grazing angles (cosTheta near 0), all surfaces approach 100% reflectivity
-	return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
+	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-/// Calculate contribution from a single directional light using Cook-Torrance BRDF
-/// This function implements physically-based lighting using the Cook-Torrance microfacet BRDF
-/// @param light The light source data (direction, color, intensity)
-/// @param normal Surface normal in world space
-/// @param albedo Surface base color
-/// @param viewDir View direction (normalized vector toward camera)
-/// @param roughness Surface roughness (controls microfacet distribution)
-/// @param metallic Surface metalness (controls specular response)
-/// @return Final lit color including diffuse and specular components
-vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 albedo, vec3 viewDir, float roughness, float metallic) {
-	/// Extract light properties from the light structure
-	vec3 lightDir = -normalize(light.direction.xyz);
-	vec3 lightColor = light.colorAndIntensity.rgb;
-	float lightIntensity = light.colorAndIntensity.a;
-
-	/// Calculate essential dot products used throughout the BRDF
-	float NdotL = max(dot(normal, lightDir), 0.0);
-	float NdotV = max(dot(normal, viewDir), EPSILON); /// Using small epsilon to prevent divide-by-zero
-
-	/// Early exit for surfaces facing away from the light source
-	/// This optimization skips expensive calculations when the surface can't directly see the light
-	if (NdotL <= 0.0) {
-		/// Return only ambient contribution when surface faces away from light
-		return albedo * light.ambient.rgb;
+/// Extract Single Channel from Texture Sample
+/// Useful for packed textures (e.g., ORM = Occlusion+Roughness+Metallic)
+/// texSample: sampled texture value (vec4)
+/// channelIndex: 0=R, 1=G, 2=B, 3=A
+float extractChannel(vec4 texSample, uint channelIndex) {
+	switch (channelIndex) {
+		case 0: return texSample.r;
+		case 1: return texSample.g;
+		case 2: return texSample.b;
+		case 3: return texSample.a;
+		default: return texSample.r;  /// Fallback to red channel
 	}
-
-	/// Calculate the halfway vector between view and light directions
-	/// The halfway vector represents the surface normal that would perfectly reflect light to the viewer
-	vec3 halfwayVector = normalize(lightDir + viewDir);
-	float HdotV = max(dot(halfwayVector, viewDir), 0.0);
-
-	/// Define the surface's specular color (F0)
-	/// For dielectrics (non-metals), this is a constant 0.04
-	/// For metals, we use the albedo color itself, controlled by metallic parameter
-	vec3 F0 = vec3(0.04);
-	F0 = mix(F0, albedo, metallic);
-
-	/// Calculate the three components of the Cook-Torrance BRDF:
-	/// 1. Normal Distribution Function (D) - Statistical distribution of microfacets
-	float D = distributionGGX(normal, halfwayVector, roughness);
-
-	/// 2. Fresnel Term (F) - Reflectivity that varies with viewing angle
-	vec3 F = fresnelSchlick(HdotV, F0);
-
-	/// 3. Geometry Term (G) - Self-shadowing of microfacets
-	float G = geometrySmith(normal, viewDir, lightDir, roughness);
-
-	/// Calculate the Cook-Torrance specular BRDF
-	/// The complete specular BRDF consists of the distribution, fresnel, and geometry terms
-	/// divided by the normalization factor (4 * NdotV * NdotL)
-	vec3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, EPSILON);
-
-	/// Calculate the diffuse component using Lambert
-	/// Lambert diffuse is simple but effective for most non-specialized materials
-	/// Normalized by PI to ensure energy conservation
-	vec3 diffuse = albedo / PI;
-
-	/// Apply energy conservation
-	/// As surfaces become more reflective (higher F) or more metallic,
-	/// the diffuse component should decrease to conserve energy
-	vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
-
-	/// Combine diffuse and specular components, modulated by light properties
-	/// Scale by NdotL to account for light incident angle
-	vec3 finalColor = (kD * diffuse + specular) * lightColor * lightIntensity * NdotL;
-
-	/// Add ambient contribution
-	/// This provides a base level of illumination representing light bounced from the environment
-	finalColor += albedo * light.ambient.rgb;
-
-	return finalColor;
 }
 
 void main() {
-	/// Get base normal from vertex attributes
-	vec3 normal = normalize(fragNormal);
+	/// Renormalize TBN basis vectors after rasterizer interpolation
+	/// Interpolating unit vectors does NOT preserve unit length!
+	/// This is critical for correct normal mapping
+	mat3 TBN = mat3(
+		normalize(fragTBN[0]),  /// T (tangent)
+		normalize(fragTBN[1]),  /// B (bitangent)
+		normalize(fragTBN[2])   /// N (normal)
+	);
 
-	/// Apply normal mapping if enabled
-	if (material.useNormalMap > 0.5) {
-		/// Sample the normal map
-		vec3 normalMap = texture(normalTexture, fragTexCoord).rgb;
-
-		/// Convert from [0,1] to [-1,1] range
-		normalMap = normalMap * 2.0 - 1.0;
-
-//		normalMap.xy = -normalMap.xy;
-//		normalMap.xyz = -normalMap.xyz;
-
-		/// Apply normal strength factor
-		/// This allows control over the intensity of the normal map effect
-		/// A value of 0 would use the original normal, 1 uses the full normal map
-		normalMap.xy *= material.normalStrength;
-
-		/// Make sure the Z component is positive (pointing outward)
-		/// This recalculation maintains the length of the normal
-		normalMap.z = sqrt(1.0 - min(1.0, dot(normalMap.xy, normalMap.xy)));
-
-		/// Transform the normal from tangent space to world space using the TBN matrix
-		normal = normalize(fragTBN * normalMap);
-	}
-
-	/// Sample albedo texture if enabled, otherwise use the base color
+	/// Get base color, either from texture or material uniform
+	/// The useAlbedoTexture flag controls whether we use the texture or uniform value
+	/// This gives artists flexibility to use either solid colors or textured surfaces
 	vec3 albedo;
 	if (material.useAlbedoTexture > 0.5) {
-		/// Sample the texture using the interpolated texture coordinates
-		vec4 texColor = texture(albedoTexture, fragTexCoord);
-
-		/// Combine texture with vertex color and material base color
-		/// This allows for tinting textures with the material color
-		albedo = texColor.rgb * fragColor * material.baseColor.rgb;
+		/// Sample the albedo texture with tiling applied
+		/// We apply the tiling factor to create repetition of textures across larger surfaces
+		vec2 tiledTexCoord = fragTexCoord * material.albedoTiling;
+		albedo = texture(albedoTexture, tiledTexCoord).rgb;
 	} else {
-		/// If no texture is used, fall back to the original behavior
-		albedo = fragColor * material.baseColor.rgb;
+		/// Use the material's base color directly
+		/// This is useful for simple materials or when prototyping
+		albedo = material.baseColor.rgb;
 	}
 
-	/// Sample and apply roughness map if enabled
-	float roughnessValue = material.roughness;
+	/// Process normal mapping
+	/// Normal maps add fine surface detail without requiring additional geometry
+	/// They store perturbed normal vectors in tangent space (RGB -> XYZ)
+	vec3 normal;
+
+	if (material.useNormalMap > 0.5) {
+		/// Sample the normal map with tiling applied
+		/// We use a separate tiling factor for normal maps to allow different
+		/// detail scales for color and surface perturbation
+		vec2 normalTexCoord = fragTexCoord * material.normalTiling;
+		vec3 normalSample = texture(normalTexture, normalTexCoord).rgb;
+
+		/// Transform normal from [0,1] range to [-1,1] range
+		/// Normal maps typically store normals as RGB colors (0 to 1)
+		/// but normals need to be in the -1 to 1 range for calculations
+		vec3 tangentNormal = normalSample * 2.0 - 1.0;
+
+		/// Apply normal strength factor to control the impact of the normal map
+		/// When strength is 0, the normal remains pointing straight up in tangent space (0,0,1)
+		/// When strength is 1, we use the full value from the normal map
+		/// This lets artists control how pronounced the normal mapping effect is
+		if (material.normalStrength < 1.0) {
+			/// When normal strength is less than 1, we blend between the default
+			/// tangent space normal (0,0,1) and the sampled normal
+			/// Only the X and Y components are affected by strength to preserve the vector length
+			tangentNormal.xy *= material.normalStrength;
+			/// Re-normalize after scaling to ensure unit length
+			tangentNormal = normalize(tangentNormal);
+		}
+
+		/// Transform normal from tangent space to world space using the TBN matrix
+		/// This aligns the perturbed normal with the correct world orientation based on
+		/// the surface geometry and texture coordinates
+		normal = normalize(TBN * tangentNormal);
+	} else {
+		/// If no normal map is used, just use the renormalized surface normal from TBN
+		/// This provides basic lighting without the added surface detail
+		normal = TBN[2];  /// Already normalized when TBN was constructed
+	}
+
+	/// Sample roughness from texture or use uniform value
+	/// Roughness controls the size of specular highlights (smooth vs rough surfaces)
+	float roughness;
 	if (material.useRoughnessMap > 0.5) {
-		/// Sample roughness texture - typically stored in R channel
-		float texRoughness = texture(roughnessTexture, fragTexCoord).r;
+		/// Apply tiling to texture coordinates for roughness map
+		vec2 roughnessTexCoord = fragTexCoord * material.roughnessTiling;
 
-		/// Blend between base roughness and texture value based on strength
-		roughnessValue = mix(material.roughness, texRoughness, material.roughnessStrength);
+		/// Sample roughness texture and extract the appropriate channel
+		/// Many roughness maps are single-channel (grayscale) stored in R, G, or B
+		vec4 roughnessSample = texture(roughnessTexture, roughnessTexCoord);
+		roughness = extractChannel(roughnessSample, material.roughnessChannel);
+
+		/// Apply roughness strength factor to control the influence of the texture
+		/// When strength is 0, we use the base material.roughness value
+		/// When strength is 1, we use the full texture value
+		roughness = mix(material.roughness, roughness, material.roughnessStrength);
+	} else {
+		/// If no roughness map is enabled, use the uniform material value
+		roughness = material.roughness;
 	}
 
-	/// Sample and apply metallic map if enabled
-	float metallicValue = material.metallic;
+	/// Sample metallic from texture or use uniform value
+	/// Metallic determines if a surface is metal (1.0) or dielectric (0.0)
+	float metallic;
 	if (material.useMetallicMap > 0.5) {
-		/// Sample metallic texture - typically stored in R channel
-		float texMetallic = texture(metallicTexture, fragTexCoord).r;
+		/// Apply tiling to texture coordinates for metallic map
+		vec2 metallicTexCoord = fragTexCoord * material.metallicTiling;
 
-		/// Blend between base metallic and texture value based on strength
-		metallicValue = mix(material.metallic, texMetallic, material.metallicStrength);
+		/// Sample metallic texture and extract the appropriate channel
+		/// Metallic maps are typically single-channel, often packed with roughness
+		vec4 metallicSample = texture(metallicTexture, metallicTexCoord);
+		metallic = extractChannel(metallicSample, material.metallicChannel);
+
+		/// Apply metallic strength factor
+		/// Allows artists to modulate the texture values
+		metallic = mix(material.metallic, metallic, material.metallicStrength);
+	} else {
+		/// If no metallic map is enabled, use the uniform material value
+		metallic = material.metallic;
 	}
 
-	/// Sample and apply occlusion map if enabled
-	float occlusionValue = material.ambient;
+	/// Sample ambient occlusion from texture or use uniform value
+	/// AO defines how much ambient light reaches different parts of the surface
+	/// Crevices and occluded areas typically have lower values (darker)
+	float occlusion;
 	if (material.useOcclusionMap > 0.5) {
-		/// Sample occlusion texture - typically stored in R channel
-		float texOcclusion = texture(occlusionTexture, fragTexCoord).r;
+		/// Apply tiling to texture coordinates for occlusion map
+		vec2 occlusionTexCoord = fragTexCoord * material.occlusionTiling;
 
-		/// Blend between base occlusion and texture value based on strength
-		occlusionValue = mix(material.ambient, texOcclusion, material.occlusionStrength);
+		/// Sample occlusion texture and extract the appropriate channel
+		/// Occlusion maps are typically single-channel (R) or packed in ORM textures
+		vec4 occlusionSample = texture(occlusionTexture, occlusionTexCoord);
+		occlusion = extractChannel(occlusionSample, material.occlusionChannel);
+
+		/// Apply occlusion strength factor to control the influence of the texture
+		/// When strength is 0, we use the base material.ambient value
+		/// When strength is 1, we use the full texture value
+		occlusion = mix(material.ambient, occlusion, material.occlusionStrength);
+	} else {
+		/// If no occlusion map is enabled, use the uniform material value
+		occlusion = material.ambient;
 	}
 
-	vec3 finalColor = vec3(0.0);
-
-	/// Get normalized view direction for specular calculations
+	/// Renormalize view direction after rasterizer interpolation
+	/// Interpolating unit vectors does NOT preserve unit length
+	/// This is critical for accurate specular calculations
 	vec3 viewDir = normalize(fragViewDir);
 
-	/// Accumulate lighting from all active lights
-	/// We add contributions from each light to create the final lighting
-	for (int i = 0; i < 16; ++i) {  /// MaxLights from C++ code
-		/// Only process lights with non-zero intensity
-		if (lightData.lights[i].colorAndIntensity.a > 0.0) {
-			finalColor += calculateDirectionalLight(
-			lightData.lights[i],
-			normal,
-			albedo,
-			viewDir,
-			roughnessValue,
-			metallicValue
-			);
-		}
+	/// Initialize the final color with the ambient term
+	/// This represents indirect light from the environment
+	/// Even shadowed areas receive this minimal lighting
+	vec3 finalColor = vec3(0.0);
+	vec3 ambientColor = vec3(0.0);
+
+	/// Process active lights
+	/// Using dynamic light count avoids iterating over inactive lights
+	/// This improves performance when fewer than the maximum lights are active
+	for (int i = 0; i < int(lightData.lightCount); i++) {
+		Light light = lightData.lights[i];
+
+		/// Skip lights with zero intensity (inactive lights)
+		/// This optimization prevents unnecessary calculations for unused lights
+		float lightIntensity = light.colorAndIntensity.w;
+		if (lightIntensity < EPSILON) continue;
+
+		/// Extract light color and direction
+		vec3 lightColor = light.colorAndIntensity.rgb * lightIntensity;
+		vec3 lightDir = normalize(-light.direction.xyz);
+
+		/// Add ambient contribution from this light
+		/// Ambient light represents indirect illumination from this light source
+		/// It provides a base level of illumination to avoid completely dark shadows
+		ambientColor += light.ambient.rgb * lightIntensity;
+
+		/// Calculate half-vector between view and light directions
+		/// Used for specular reflection calculations
+		vec3 H = normalize(viewDir + lightDir);
+
+		/// Calculate dot products needed for BRDF terms
+		float NoL = max(dot(normal, lightDir), 0.0);     /// Lambert term (also used for diffuse)
+		float NoV = max(dot(normal, viewDir), 0.0);  /// View angle
+		float NoH = max(dot(normal, H), 0.0);            /// Half-vector angle
+		float VoH = max(dot(viewDir, H), 0.0);       /// View-half angle
+
+		/// Calculate F0 (base reflectivity) based on sampled metallic value
+		/// Now uses texture-driven metallic for spatially-varying metal/dielectric behavior
+		/// Dielectrics (metallic=0): F0 = 0.04 (4% reflectance, white specular)
+		/// Metals (metallic=1): F0 = albedo (colored specular from base color)
+		vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
+		/// Calculate diffuse term using Lambert's cosine law
+		/// Division by PI normalizes the Lambert BRDF for energy conservation
+		/// This is physically correct but requires higher light intensity values
+		/// (e.g., 8.0 instead of 1.0) to achieve similar brightness
+		vec3 diffuse = albedo / PI * NoL;
+
+		/// Cook-Torrance Specular BRDF with sampled roughness
+		/// BRDF = (D * F * G) / (4 * NoV * NoL)
+		/// where D = distribution, F = fresnel, G = geometry
+		/// Roughness now varies across the surface based on the texture
+		float D = distributionGGX(NoH, roughness);
+		vec3 F = fresnelSchlick(VoH, F0);
+		float G = geometrySmith(NoV, NoL, roughness);
+
+		/// Calculate kD (diffuse coefficient) for energy conservation
+		/// kD represents the fraction of light that is refracted (diffuse) rather than reflected (specular)
+		/// - (1.0 - F): Light not reflected is refracted (diffuse)
+		/// - (1.0 - metallic): Metals have no diffuse component (kD = 0 when metallic = 1)
+		/// This ensures energy conservation: diffuse + specular <= 1.0
+		/// kD now varies spatially with the metallic texture
+		vec3 kD = (1.0 - F) * (1.0 - metallic);
+
+		/// Combine terms (prevent division by zero with epsilon)
+		vec3 numerator = D * F * G;
+		float denominator = 4.0 * NoV * NoL + EPSILON;
+		vec3 specular = numerator / denominator;
+
+		/// Apply energy conservation
+		/// Multiply diffuse by kD to ensure total energy (diffuse + specular) <= 1.0
+		/// When F is high (grazing angles or metals), kD is low (less diffuse)
+		/// When metallic = 1.0, kD = 0 (no diffuse contribution for pure metals)
+		finalColor += (kD * diffuse + specular) * lightColor;
 	}
 
-	/// Apply metallic and roughness factors
-	finalColor = mix(finalColor, finalColor * metallicValue, metallicValue);
-	finalColor = mix(finalColor, finalColor * roughnessValue, roughnessValue);
+	/// Add accumulated ambient light with occlusion
+	/// Occlusion now varies spatially based on the texture
+	/// Areas with low occlusion (dark AO map) receive less ambient light
+	/// This creates realistic shadowing in crevices, corners, and contact points
+	finalColor += ambientColor * albedo * occlusion;
 
-	/// Apply ambient occlusion
-	finalColor *= occlusionValue;
-
-	/// Apply a simple tone mapping to prevent over-saturation
+	/// Simple tone mapping (Reinhard operator)
+	/// This compresses HDR values into LDR range for display
+	/// We'll implement more sophisticated tone mapping in later stages
 	finalColor = finalColor / (finalColor + vec3(1.0));
 
-	/// Output final color with material alpha
-	float alpha = material.baseColor.a;
-	if (material.useAlbedoTexture > 0.5) {
-		/// If using texture, blend material alpha with texture alpha
-		alpha *= texture(albedoTexture, fragTexCoord).a;
-	}
-
-	outColor = vec4(finalColor, alpha);
+	/// Set output color with opaque alpha
+	/// We use the alpha channel from the material's base color
+	/// This preserves any transparency settings set by the artist
+	outColor = vec4(finalColor, material.baseColor.a);
 }

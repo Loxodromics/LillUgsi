@@ -63,6 +63,39 @@ std::shared_ptr<PBRMaterial> MaterialManager::createPBRMaterial(
 	return material;
 }
 
+std::shared_ptr<PBRMaterial> MaterialManager::createPBRMaterialWithCustomShaders(
+	const std::string& name,
+	const std::string& vertexShaderPath,
+	const std::string& fragmentShaderPath
+) {
+	/// Validate material name before creation
+	this->validateMaterialName(name);
+
+	/// Create new PBR material with custom shaders
+	auto material = std::make_shared<PBRMaterial>(
+		this->device,
+		name,
+		this->physicalDevice,
+		vertexShaderPath,
+		fragmentShaderPath
+	);
+
+	/// Store in material map
+	this->materials[name] = material;
+
+	/// Set default textures for all material slots
+	auto defaultTexture = this->textureManager->getDefaultTexture();
+	material->setAlbedoTexture(defaultTexture);
+	material->setNormalMap(defaultTexture);
+	material->setRoughnessMap(defaultTexture);
+	material->setMetallicMap(defaultTexture);
+	material->setOcclusionMap(defaultTexture);
+
+	spdlog::info("Created new PBR material '{}' with custom shaders: {} and {}",
+		name, vertexShaderPath, fragmentShaderPath);
+	return material;
+}
+
 std::shared_ptr<CustomMaterial> MaterialManager::createCustomMaterial(
 	const std::string& name,
 	const std::string& vertexShaderPath,

@@ -34,6 +34,7 @@ struct Light {
 /// Separate set allows for efficient light updates
 layout(set = 1, binding = 0) uniform LightBuffer {
 	Light lights[16];  /// Array size matches LightManager::MaxLights
+	uint lightCount;   /// Number of active lights
 } lightData;
 
 /// Push constant block for model matrix
@@ -46,52 +47,65 @@ layout(push_constant) uniform PushConstants {
 } push;
 
 void main() {
-	/// Calculate world-space position
-	vec4 worldPos = push.model * vec4(inPosition, 1.0);
+	/// Calculate world-space position by transforming vertex position with model matrix
+	/// We need the world position for lighting calculations in the fragment shader
+	/// and to calculate the view direction from the camera to this fragment
+	fragPosition = vec3(push.model * vec4(inPosition, 1.0));
 
-	/// Pass world-space position to fragment shader
-	fragPosition = worldPos.xyz;
-
-	/// Calculate view direction (from position to camera)
-	/// Normalize for consistent lighting calculations
-	fragViewDir = normalize(camera.cameraPos - worldPos.xyz);
-
-	/// Transform vertex position to clip space
-	gl_Position = camera.proj * camera.view * worldPos;
-
-	/// Transform normal to world space
-	/// We use the inverse transpose of the model matrix to handle non-uniform scaling
+	/// Calculate world-space normal by applying the normal matrix to the input normal
+	/// We use the transpose of the inverse of the model matrix for correct normal transformation
+	/// This ensures normals remain perpendicular to surfaces even with non-uniform scaling
 	mat3 normalMatrix = transpose(inverse(mat3(push.model)));
-	vec3 worldNormal = normalize(normalMatrix * inNormal);
-	fragNormal = worldNormal;
+	fragNormal = normalize(normalMatrix * inNormal);
 
-	/// Transform tangent to world space
-	/// This uses the same normal matrix as for the normal vector
-	vec3 worldTangent = normalize(normalMatrix * inTangent);
-
-	/// Re-orthogonalize tangent with respect to normal
-	/// This ensures we have an orthogonal TBN basis
-	worldTangent = normalize(worldTangent - worldNormal * dot(worldNormal, worldTangent));
-
-	/// Calculate bitangent from normal and tangent
-	/// Using the cross product ensures we have a proper orthonormal basis
-	vec3 worldBitangent = cross(worldNormal, worldTangent);
-
-	/// Build the TBN matrix for transforming normals from tangent space to world space
-	/// Each column of the matrix is one of our basis vectors
-	fragTBN = mat3(
-	worldTangent,    // First column: tangent (X axis in tangent space)
-	worldBitangent,  // Second column: bitangent (Y axis in tangent space)
-	worldNormal      // Third column: normal (Z axis in tangent space)
-	);
-
-	/// Pass the vertex color to fragment shader
+	/// Pass vertex color directly to fragment shader
+	/// This serves as a fallback color when textures aren't available
+	/// and can also be used for vertex painting techniques
 	fragColor = inColor;
 
-	/// Pass texture coordinates to fragment shader
+	/// Pass texture coordinates to fragment shader for texture sampling
+	/// We don't apply any transformations at this stage, as tiling is handled
+	/// in the fragment shader based on per-texture settings
 	fragTexCoord = inTexCoord;
 
-	/// For Reverse-Z, we invert the Z component
-	/// This provides better depth precision
-	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
+	/// Calculate view direction from camera to fragment in world space
+	/// This is needed for specular reflection calculations in the PBR BRDF
+	/// We normalize in the vertex shader to save per-pixel normalization in the fragment shader
+	fragViewDir = normalize(camera.cameraPos - fragPosition);
+
+	/// Calculate and construct TBN matrix for normal mapping
+	/// The TBN matrix transforms normal vectors from tangent space (normal map) to world space
+	/// This is crucial for normal mapping to correctly orient detailed normals
+
+	/// Transform the tangent to world space using the same normal matrix
+	/// Since tangent is a direction vector like normal, it needs the same transformation
+	vec3 T = normalize(normalMatrix * inTangent);
+
+	/// Re-orthogonalize tangent with respect to normal using Gram-Schmidt process
+	/// This step is crucial because even if tangents and normals are perpendicular in model space,
+	/// the non-uniform scaling in the model matrix might make them non-perpendicular in world space
+	/// Without this correction, normal mapping can produce distorted results
+	T = normalize(T - dot(T, fragNormal) * fragNormal);
+
+	/// Calculate bitangent using cross product of normal and tangent
+	/// We use cross product to ensure the bitangent is perpendicular to both normal and tangent
+	/// This creates a proper orthonormal basis for the tangent space to world space transformation
+	vec3 B = normalize(cross(fragNormal, T));
+
+	/// Construct the TBN matrix with the three orthonormal basis vectors
+	/// Each column of the matrix represents one basis vector of the tangent space
+	/// This matrix will transform vectors from tangent space to world space
+	///
+	/// Note that we use the columns in T, B, N order which is the convention for
+	/// tangent space to world space transformation (maps x->T, y->B, z->N)
+	fragTBN = mat3(T, B, fragNormal);
+
+	/// Final required transformation: vertex position to clip space
+	/// This is the position the GPU uses for rasterization and depth testing
+	gl_Position = camera.proj * camera.view * vec4(fragPosition, 1.0);
+
+	/// Negate Z for Reverse-Z depth mapping
+	/// The swapped near/far parameters in glm::perspective() produce negative Z values
+	/// Negating restores correct Reverse-Z: near objects→1.0, far objects→0.0
+	gl_Position.z = -gl_Position.z;
 }

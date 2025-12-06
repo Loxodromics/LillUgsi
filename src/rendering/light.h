@@ -26,6 +26,17 @@ struct alignas(16) LightData {
 	glm::vec4 ambient{0.1f, 0.1f, 0.1f, 0.0f};
 };
 
+/// LightBufferUBO represents the complete light uniform buffer structure
+/// This includes the light array and metadata like active light count
+struct alignas(16) LightBufferUBO {
+	/// Array of light data (fixed size for GPU compatibility)
+	LightData lights[16];
+
+	/// Number of active lights in the array
+	/// This allows shaders to iterate only over active lights
+	alignas(4) uint32_t lightCount{0};
+};
+
 /// Base class for all light types
 /// This provides common functionality and interface for different light types
 /// We use a class hierarchy to support different light types while maintaining

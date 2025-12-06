@@ -6,7 +6,24 @@
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
+/// RAII wrapper for spdlog lifetime management
+/// Ensures spdlog is properly initialized at startup and shutdown at exit
+/// This prevents crashes when logging during cleanup after static destructors run
+struct SpdlogLifetime {
+	SpdlogLifetime() {
+		spdlog::set_level(spdlog::level::debug);
+	}
+
+	~SpdlogLifetime() {
+		spdlog::shutdown();
+	}
+};
+
 int main(int argc, char* argv[]) {
+	/// Initialize spdlog with RAII lifetime management
+	/// This ensures spdlog::shutdown() is called on all exit paths
+	SpdlogLifetime spdlogLifetime;
+
 	try {
 		// spdlog::set_level(spdlog::level::trace);
 		// const std::shared_ptr<lillugsi::planet::PlanetData> icosphere = std::make_shared<lillugsi::planet::PlanetData>();
@@ -25,9 +42,6 @@ int main(int argc, char* argv[]) {
 		// planetGenerator.generateTerrain();
 		// return 0;
 
-
-		/// Initialize spdlog
-		spdlog::set_level(spdlog::level::debug);
 		spdlog::info("Starting LillUgsi Vulkan Learning Renderer");
 
 		/// Create and initialize the application

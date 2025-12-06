@@ -379,9 +379,9 @@ ModelMeshData GltfModelLoader::extractMeshData(
 			const float* normals = reinterpret_cast<const float*>(data);
 			for (size_t i = 0; i < count; ++i) {
 				meshData.vertices[i].normal = glm::vec3(
-					-1.0 - normals[i * 3],     /// X
-					-1.0 - normals[i * 3 + 1], /// Y
-					-1.0 - normals[i * 3 + 2]  /// Z
+					1.0 * normals[i * 3],      /// X
+					-1.0 * normals[i * 3 + 1], /// Y
+					1.0 * normals[i * 3 + 2]   /// Z
 				);
 			}
 		}
@@ -576,6 +576,7 @@ std::vector<std::shared_ptr<Mesh>> GltfModelLoader::createMeshes(
 		/// Assign material
 		if (!meshData.materialName.empty()
 			&& materials.find(meshData.materialName) != materials.end()) {
+			// mesh->setMaterial(this->materialManager->getMaterial("default"));
 			mesh->setMaterial(materials.at(meshData.materialName));
 		} else {
 			/// Assign default material if none specified or not found

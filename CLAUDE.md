@@ -6,6 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LillUgsi is a C++ Vulkan learning renderer built for educational purposes. It features a modular architecture with modern C++ practices, physically-based rendering (PBR), and a comprehensive scene management system.
 
+## Coding Style Guidelines
+
+- Use camelCase for methods and variables, PascalCase for classes and enums
+- Use kPascalCase for constants
+- Use all lowercase letters for filenames without underscores or hyphens
+- Use lowercase with underscores for namespaces
+- Follow Qt's coding style guidelines, but access all members via this-> instead of prefixing with m_
+- Use "pointer-to-type" style
+- Use K&R brace placement
+- Place implementation (.cpp) and header (.h) files next to each other in the src directory
+- Use three slashes (///) for comments to differentiate from commented code
+- Use tabs for indentation with 4-space tab stops
+- Comments should explain complex algorithms, business decisions, and non-obvious code patterns. Do not comment self-explanatory code like simple getters, setters, or obvious operations. Focus on WHY the code exists, not WHAT it does. If a function name clearly describes what it does, additional comments are usually unnecessary
+- Comments are written saying 'we' instead of 'I' or passive voice
+- Use descriptive names for classes, variables, and functions
+- Use const and constexpr for variables and methods where applicable
+- Write modern C++ code (C++20) with modern features
+- Discourage auto usage except where it genuinely improves readability
+- Prefer std::unique_ptr by default for managed pointers. Use std::shared_ptr only when you genuinely need shared ownership semantics
+- Use [[nodiscard]] for functions where ignoring the return value would be an error (validation functions, resource acquisition). Avoid for simple getters or functions where the return value is commonly ignored
+
 ## Build System & Development Commands
 
 ### Dependencies
@@ -90,6 +111,25 @@ glslc shaders/pbr.glsl.frag -o build/shaders/pbr.frag.spv
 - Normal mapping in tangent space
 - Async model loading to prevent main thread blocking
 
+### PBR Material Conventions
+
+**Light Intensity Values:**
+- Lambert BRDF uses division by PI for energy conservation
+- This requires higher light intensity values (e.g., 8.0 instead of 1.0)
+- Physically correct but less intuitive than unnormalized values
+
+**Texture Channel Configuration:**
+- Default channel indices assume ORM packed textures:
+  - Roughness: G channel (index 1)
+  - Metallic: B channel (index 2)
+  - Occlusion: R channel (index 0)
+- Single-channel R8 textures require explicit configuration:
+  ```cpp
+  material->setRoughnessChannel(Material::TextureChannel::R);
+  material->setMetallicChannel(Material::TextureChannel::R);
+  material->setOcclusionChannel(Material::TextureChannel::R);
+  ```
+
 ### Dependencies & Libraries
 - Vulkan SDK 1.3.216+ for graphics API
 - SDL3 for windowing and input
@@ -114,7 +154,18 @@ glslc shaders/pbr.glsl.frag -o build/shaders/pbr.frag.spv
 
 ## Codebase Index
 
-I have provided you with two files:
-- The file @general_index.md contains a list of all the files in the codebase along with a simple description of what it does.
-- The file @detailed_index.md contains the names of all the functions in the file along with its explanation/documentation.
-This index may or may not be up to date.
+I have provided you with a comprehensive indexing system organized by subsystem:
+
+**General Overview:**
+- The file @general_index.md contains a high-level list of all files in the codebase with simple descriptions.
+
+**Detailed API Documentation (by category):**
+- @detailed_index_core.md - Core application layer (3 files)
+- @detailed_index_vulkan.md - Vulkan abstraction (30 files)
+- @detailed_index_rendering.md - Rendering system (48 files)
+- @detailed_index_models.md - Model loading system (14 files)
+- @detailed_index_scene.md - Scene management (8 files)
+- @detailed_index_planet.md - Planet generation module (16 files)
+- @detailed_index_shaders.md - GLSL shaders (9 files)
+
+Each detailed index contains comprehensive class, function, and method documentation with signatures and descriptions. This index may or may not be up to date.

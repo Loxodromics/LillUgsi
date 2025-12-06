@@ -143,5 +143,7 @@ add_custom_target(Shaders
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/terrain.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/terrain.frag.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/debug.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/debug.vert.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/debug.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/debug.frag.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/normal_debug.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/normal_debug.frag.spv
+	COMMENT "Compiling shaders"
 )
 add_dependencies(LillUgsi Shaders)
