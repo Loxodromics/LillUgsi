@@ -125,19 +125,6 @@ bool Renderer::initialize(SDL_Window* window) {
 			this->commandBufferManager
 		);
 
-		this->commandBufferManager = std::make_shared<vulkan::CommandBufferManager>(
-			this->vulkanContext->getDevice()->getDevice());
-		if (!this->commandBufferManager->initialize()) {
-			spdlog::error("Failed to initialize command buffer manager");
-			return false;
-		}
-
-		/// Create main command pool for rendering operations
-		/// The CommandBufferManager maintains ownership of the pool
-		this->commandPool = this->commandBufferManager->createCommandPool(
-			this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex(),
-			VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-
 		/// Create camera uniform buffer
 		this->createCameraUniformBuffer();
 
@@ -244,6 +231,13 @@ void Renderer::cleanup() {
 	/// Clean up synchronization objects
 	this->cleanupSyncObjects();
 
+	/// Clean up buffer manager before command buffer manager
+	/// BufferManager uses CommandBufferManager during cleanup, so it must be cleaned up first
+	if (this->bufferManager) {
+		this->bufferManager->cleanup();
+		this->bufferManager.reset();
+	}
+
 	/// Clean up command buffer manager before vulkan context
 	/// This ensures proper resource cleanup order
 	if (this->commandBufferManager) {
@@ -266,13 +260,6 @@ void Renderer::cleanup() {
 	/// Clean up camera and light uniform buffers
 	this->cameraBuffer.reset();
 	this->lightBuffer.reset();
-
-	/// Clean up buffer manager before mesh manager
-	/// This ensures proper resource cleanup order
-	if (this->bufferManager) {
-		this->bufferManager->cleanup();
-		this->bufferManager.reset();
-	}
 
 	/// Clear texture manager to ensure textures are released
 	if (this->textureManager) {
@@ -1297,6 +1284,37 @@ void Renderer::initializeScene() {
 	scene::Transform transform;
 	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
 	this->texturedCubeNode->setLocalTransform(transform);
+
+	/// Load a sample model to demonstrate model loading
+	/// We place it at the center of the scene to showcase the loaded geometry
+	try {
+		spdlog::info("Loading sample model...");
+
+		/// Create a parent node for our model
+		auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
+
+		/// Position the model appropriately in the scene
+		scene::Transform modelTransform;
+		modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+		modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
+		modelParentNode->setLocalTransform(modelTransform);
+
+		/// Load the model and attach it to our parent node
+		/// Using a relative path that will be resolved using the base directory
+		auto modelRootNode = this->loadModel(
+			"DamagedHelmet.glb",
+			modelParentNode
+		);
+
+		if (modelRootNode) {
+			spdlog::info("Sample model loaded successfully");
+		} else {
+			spdlog::error("Failed to load sample model");
+		}
+	} catch (const std::exception& e) {
+		spdlog::error("Exception during model loading: {}", e.what());
+	}
+
 
 	/// Update bounds after creating all objects
 	rootNode->updateBoundsIfNeeded();
