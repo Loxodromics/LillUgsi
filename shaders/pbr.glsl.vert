@@ -107,5 +107,5 @@ void main() {
 	/// Negate Z for Reverse-Z depth mapping
 	/// The swapped near/far parameters in glm::perspective() produce negative Z values
 	/// Negating restores correct Reverse-Z: near objects→1.0, far objects→0.0
-	gl_Position.z = -gl_Position.z;
+	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 }
