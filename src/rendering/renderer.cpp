@@ -215,7 +215,9 @@ void Renderer::cleanup() {
 	}
 
 	/// Clean up light resources
-	this->lightBuffer.reset();
+	for (auto& buffer : this->lightBuffers) {
+		buffer.reset();
+	}
 	this->lightManager.reset();
 
 	/// Clean up materials before scene
@@ -258,8 +260,12 @@ void Renderer::cleanup() {
 	}
 
 	/// Clean up camera and light uniform buffers
-	this->cameraBuffer.reset();
-	this->lightBuffer.reset();
+	for (auto& buffer : this->cameraBuffers) {
+		buffer.reset();
+	}
+	for (auto& buffer : this->lightBuffers) {
+		buffer.reset();
+	}
 
 	/// Clear texture manager to ensure textures are released
 	if (this->textureManager) {
@@ -296,20 +302,24 @@ void Renderer::cleanup() {
 }
 
 void Renderer::drawFrame() {
-	/// Wait for the previous frame to finish
-	/// This ensures that we're not using resources that may still be in use by the GPU
-	VK_CHECK(vkWaitForFences(this->vulkanContext->getDevice()->getDevice(), 1, &this->inFlightFence, VK_TRUE, UINT64_MAX));
+	/// Get the current frame index for frames-in-flight
+	uint32_t frameIndex = this->currentFrame;
+
+	/// Wait for this frame's fence to ensure we're not using resources still in use by the GPU
+	VK_CHECK(vkWaitForFences(this->vulkanContext->getDevice()->getDevice(),
+		1, &this->inFlightFences[frameIndex], VK_TRUE, UINT64_MAX));
 
 	/// Reset the fence to the unsignaled state for use in the current frame
-	VK_CHECK(vkResetFences(this->vulkanContext->getDevice()->getDevice(), 1, &this->inFlightFence));
+	VK_CHECK(vkResetFences(this->vulkanContext->getDevice()->getDevice(),
+		1, &this->inFlightFences[frameIndex]));
 
-	/// Acquire an image from the swap chain
+	/// Acquire an image from the swap chain using this frame's semaphore
 	uint32_t imageIndex;
 	VkResult result = vkAcquireNextImageKHR(
 		this->vulkanContext->getDevice()->getDevice(),
 		this->vulkanContext->getSwapChain()->getSwapChain(),
-		UINT64_MAX, /// Disable timeout
-		this->imageAvailableSemaphore, /// Semaphore to signal when the image is available
+		UINT64_MAX,
+		this->imageAvailableSemaphores[frameIndex],
 		VK_NULL_HANDLE,
 		&imageIndex
 	);
@@ -320,13 +330,13 @@ void Renderer::drawFrame() {
 		this->recreateSwapChain(this->width, this->height);
 		return;
 	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-		throw vulkan::VulkanException(result, "Failed to acquire swap chain image", __FUNCTION__, __FILE__, __LINE__);
+		throw vulkan::VulkanException(result, "Failed to acquire swap chain image",
+			__FUNCTION__, __FILE__, __LINE__);
 	}
 
-	/// Update uniform buffer with current camera data
-	this->updateCameraUniformBuffer();
-
-	this->updateLightUniformBuffer();
+	/// Update uniform buffers using this frame's buffers
+	this->updateCameraUniformBuffer(frameIndex);
+	this->updateLightUniformBuffer(frameIndex);
 
 	/// Record command buffers with current scene state
 	this->recordCommandBuffers();
@@ -339,7 +349,7 @@ void Renderer::drawFrame() {
 	/// We want to wait on the color attachment output stage before we start writing colors
 	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &this->imageAvailableSemaphore;
+	submitInfo.pWaitSemaphores = &this->imageAvailableSemaphores[frameIndex];
 	submitInfo.pWaitDstStageMask = waitStages;
 
 	/// Set up the command buffer to submit
@@ -348,16 +358,17 @@ void Renderer::drawFrame() {
 
 	/// Set up the semaphore to signal when rendering is finished
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &this->renderFinishedSemaphore;
+	submitInfo.pSignalSemaphores = &this->renderFinishedSemaphores[frameIndex];
 
-	/// Submit the command buffer
-	VK_CHECK(vkQueueSubmit(this->vulkanContext->getDevice()->getGraphicsQueue(), 1, &submitInfo, this->inFlightFence));
+	/// Submit the command buffer with this frame's fence
+	VK_CHECK(vkQueueSubmit(this->vulkanContext->getDevice()->getGraphicsQueue(),
+		1, &submitInfo, this->inFlightFences[frameIndex]));
 
 	/// Set up the present info struct
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &this->renderFinishedSemaphore;
+	presentInfo.pWaitSemaphores = &this->renderFinishedSemaphores[frameIndex];
 
 	VkSwapchainKHR swapChains[] = {this->vulkanContext->getSwapChain()->getSwapChain()};
 	presentInfo.swapchainCount = 1;
@@ -375,8 +386,12 @@ void Renderer::drawFrame() {
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
 		this->recreateSwapChain(this->width, this->height);
 	} else if (result != VK_SUCCESS) {
-		throw vulkan::VulkanException(result, "Failed to present swap chain image", __FUNCTION__, __FILE__, __LINE__);
+		throw vulkan::VulkanException(result, "Failed to present swap chain image",
+			__FUNCTION__, __FILE__, __LINE__);
 	}
+
+	/// Advance to the next frame in the rotation
+	this->currentFrame = (this->currentFrame + 1) % kMaxFramesInFlight;
 }
 
 void Renderer::update(float deltaTime) {
@@ -826,9 +841,10 @@ void Renderer::recordCommandBuffers() {
 				vkCmdSetScissor(this->commandBuffers[i], 0, 1, &scissor);
 
 				/// Bind camera and light descriptor sets (sets 0 and 1)
+				/// Use the current frame's descriptor sets to match the uniform buffers
 				std::array<VkDescriptorSet, 2> globalSets = {
-					this->cameraDescriptorSets[i],
-					this->lightDescriptorSets[i]
+					this->cameraDescriptorSets[this->currentFrame][i],
+					this->lightDescriptorSets[this->currentFrame][i]
 				};
 				vkCmdBindDescriptorSets(
 					this->commandBuffers[i],
@@ -892,13 +908,17 @@ void Renderer::createCameraUniformBuffer() {
 	initialData.cameraPos = glm::vec3(0.0f);
 	initialData.padding = 0.0f;
 
-	/// Create the uniform buffer using buffer manager
-	this->cameraBuffer = this->bufferManager->createUniformBuffer(bufferSize, &initialData);
+	/// Create uniform buffers for each frame in flight
+	/// Each frame needs its own buffer to avoid synchronization issues
+	for (uint32_t i = 0; i < kMaxFramesInFlight; i++) {
+		this->cameraBuffers[i] = this->bufferManager->createUniformBuffer(bufferSize, &initialData);
+		spdlog::debug("Camera uniform buffer {} created with size {}", i, bufferSize);
+	}
 
-	spdlog::info("Camera uniform buffer created successfully");
+	spdlog::info("Camera uniform buffers created for {} frames in flight", kMaxFramesInFlight);
 }
 
-void Renderer::updateCameraUniformBuffer() const {
+void Renderer::updateCameraUniformBuffer(uint32_t frameIndex) const {
 	CameraUBO ubo{};
 
 	/// Get the current view matrix from the camera
@@ -917,9 +937,9 @@ void Renderer::updateCameraUniformBuffer() const {
 	/// Padding for alignment
 	ubo.padding = 0.0f;
 
-	/// Update GPU buffer with new camera data
+	/// Update GPU buffer for this frame with new camera data
 	this->bufferManager->updateBuffer(
-		this->cameraBuffer,
+		this->cameraBuffers[frameIndex],
 		&ubo,
 		sizeof(ubo),
 		0);
@@ -933,23 +953,22 @@ void Renderer::createDescriptorPool() {
 	uint32_t swapChainImageCount = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
 
 	/// Camera buffer pool size
-	/// One descriptor per swap chain image
+	/// Multiply by kMaxFramesInFlight since each frame in flight needs its own descriptors
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImageCount);
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImageCount * kMaxFramesInFlight);
 
 	/// Light buffer pool size
-	/// One descriptor per swap chain image
+	/// Multiply by kMaxFramesInFlight since each frame in flight needs its own descriptors
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImageCount);
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImageCount * kMaxFramesInFlight);
 
 	/// Create the descriptor pool
-	/// We need enough space for both camera and light descriptors per frame
+	/// maxSets = (camera + light) * swapChainImages * framesInFlight
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	/// Multiply maxSets by 2 because we need two sets (camera + light) per frame
-	poolInfo.maxSets = static_cast<uint32_t>(swapChainImageCount * 2);
+	poolInfo.maxSets = static_cast<uint32_t>(swapChainImageCount * 2 * kMaxFramesInFlight);
 
 	VK_CHECK(vkCreateDescriptorPool(
 		this->vulkanContext->getDevice()->getDevice(),
@@ -957,98 +976,98 @@ void Renderer::createDescriptorPool() {
 		nullptr,
 		&this->descriptorPool));
 
-	spdlog::info("Created descriptor pool for camera and light descriptors");
+	spdlog::info("Created descriptor pool for {} frames in flight", kMaxFramesInFlight);
 }
 
 void Renderer::createDescriptorSets() {
-	/// Calculate number of descriptor sets needed
-	uint32_t numFrames = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
+	/// Calculate number of swap chain images
+	uint32_t numSwapChainImages = this->vulkanContext->getSwapChain()->getSwapChainImages().size();
 
-	/// Create storage for camera descriptor sets
-	this->cameraDescriptorSets.resize(numFrames);
-	/// Create storage for light descriptor sets
-	this->lightDescriptorSets.resize(numFrames);
+	/// Create descriptor sets for each frame in flight
+	/// Each frame has its own set of descriptors pointing to its own buffers
+	for (uint32_t frameIndex = 0; frameIndex < kMaxFramesInFlight; frameIndex++) {
+		/// Resize storage for this frame's descriptor sets
+		this->cameraDescriptorSets[frameIndex].resize(numSwapChainImages);
+		this->lightDescriptorSets[frameIndex].resize(numSwapChainImages);
 
-	/// First, allocate camera descriptor sets
-	{
-		/// Create layouts array using global layout from pipeline manager
-		std::vector<VkDescriptorSetLayout>
-			cameraLayouts(numFrames, this->pipelineManager->getCameraDescriptorLayout());
-
-		VkDescriptorSetAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocInfo.descriptorPool = this->descriptorPool;
-		allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
-		allocInfo.pSetLayouts = cameraLayouts.data();
-
-		VK_CHECK(vkAllocateDescriptorSets(
-			this->vulkanContext->getDevice()->getDevice(),
-			&allocInfo,
-			this->cameraDescriptorSets.data()));
-	}
-
-	/// Then, allocate light descriptor sets
-	{
-		/// Create layouts array using global layout from pipeline manager
-		std::vector<VkDescriptorSetLayout>
-			lightLayouts(numFrames, this->pipelineManager->getLightDescriptorLayout());
-
-		VkDescriptorSetAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocInfo.descriptorPool = this->descriptorPool;
-		allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
-		allocInfo.pSetLayouts = lightLayouts.data();
-
-		VK_CHECK(vkAllocateDescriptorSets(
-			this->vulkanContext->getDevice()->getDevice(),
-			&allocInfo,
-			this->lightDescriptorSets.data()));
-	}
-
-	/// Update descriptors for each frame
-	for (size_t i = 0; i < numFrames; i++) {
-		/// Update camera descriptor
+		/// Allocate camera descriptor sets for this frame
 		{
-			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = this->cameraBuffer->get();
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(CameraUBO);
+			std::vector<VkDescriptorSetLayout> cameraLayouts(
+				numSwapChainImages, this->pipelineManager->getCameraDescriptorLayout());
 
-			VkWriteDescriptorSet descriptorWrite{};
-			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrite.dstSet = this->cameraDescriptorSets[i];
-			descriptorWrite.dstBinding = 0;
-			descriptorWrite.dstArrayElement = 0;
-			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrite.descriptorCount = 1;
-			descriptorWrite.pBufferInfo = &bufferInfo;
+			VkDescriptorSetAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = this->descriptorPool;
+			allocInfo.descriptorSetCount = numSwapChainImages;
+			allocInfo.pSetLayouts = cameraLayouts.data();
 
-			vkUpdateDescriptorSets(
-				this->vulkanContext->getDevice()->getDevice(), 1, &descriptorWrite, 0, nullptr);
+			VK_CHECK(vkAllocateDescriptorSets(
+				this->vulkanContext->getDevice()->getDevice(),
+				&allocInfo,
+				this->cameraDescriptorSets[frameIndex].data()));
 		}
 
-		/// Update light descriptor
+		/// Allocate light descriptor sets for this frame
 		{
-			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = this->lightBuffer->get();
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(LightData) * LightManager::MaxLights;
+			std::vector<VkDescriptorSetLayout> lightLayouts(
+				numSwapChainImages, this->pipelineManager->getLightDescriptorLayout());
 
-			VkWriteDescriptorSet descriptorWrite{};
-			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrite.dstSet = this->lightDescriptorSets[i];
-			descriptorWrite.dstBinding = 0;
-			descriptorWrite.dstArrayElement = 0;
-			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrite.descriptorCount = 1;
-			descriptorWrite.pBufferInfo = &bufferInfo;
+			VkDescriptorSetAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = this->descriptorPool;
+			allocInfo.descriptorSetCount = numSwapChainImages;
+			allocInfo.pSetLayouts = lightLayouts.data();
+
+			VK_CHECK(vkAllocateDescriptorSets(
+				this->vulkanContext->getDevice()->getDevice(),
+				&allocInfo,
+				this->lightDescriptorSets[frameIndex].data()));
+		}
+
+		/// Update descriptors to point to this frame's buffers
+		for (size_t i = 0; i < numSwapChainImages; i++) {
+			/// Update camera descriptor
+			VkDescriptorBufferInfo cameraBufferInfo{};
+			cameraBufferInfo.buffer = this->cameraBuffers[frameIndex]->get();
+			cameraBufferInfo.offset = 0;
+			cameraBufferInfo.range = sizeof(CameraUBO);
+
+			VkWriteDescriptorSet cameraDescriptorWrite{};
+			cameraDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			cameraDescriptorWrite.dstSet = this->cameraDescriptorSets[frameIndex][i];
+			cameraDescriptorWrite.dstBinding = 0;
+			cameraDescriptorWrite.dstArrayElement = 0;
+			cameraDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			cameraDescriptorWrite.descriptorCount = 1;
+			cameraDescriptorWrite.pBufferInfo = &cameraBufferInfo;
+
+			/// Update light descriptor
+			VkDescriptorBufferInfo lightBufferInfo{};
+			lightBufferInfo.buffer = this->lightBuffers[frameIndex]->get();
+			lightBufferInfo.offset = 0;
+			lightBufferInfo.range = sizeof(LightBufferUBO);
+
+			VkWriteDescriptorSet lightDescriptorWrite{};
+			lightDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			lightDescriptorWrite.dstSet = this->lightDescriptorSets[frameIndex][i];
+			lightDescriptorWrite.dstBinding = 0;
+			lightDescriptorWrite.dstArrayElement = 0;
+			lightDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			lightDescriptorWrite.descriptorCount = 1;
+			lightDescriptorWrite.pBufferInfo = &lightBufferInfo;
+
+			std::array<VkWriteDescriptorSet, 2> descriptorWrites = {
+				cameraDescriptorWrite, lightDescriptorWrite
+			};
 
 			vkUpdateDescriptorSets(
-				this->vulkanContext->getDevice()->getDevice(), 1, &descriptorWrite, 0, nullptr);
+				this->vulkanContext->getDevice()->getDevice(),
+				static_cast<uint32_t>(descriptorWrites.size()),
+				descriptorWrites.data(), 0, nullptr);
 		}
 	}
 
-	spdlog::info("Created and updated descriptor sets for {} frames", numFrames);
+	spdlog::info("Created descriptor sets for {} frames in flight", kMaxFramesInFlight);
 }
 
 void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
@@ -1120,7 +1139,8 @@ void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
 }
 
 void Renderer::createSyncObjects() {
-	/// Create semaphores and fence for frame synchronization
+	/// Create semaphores and fences for frame synchronization
+	/// Each frame in flight needs its own set of synchronization primitives
 	/// Semaphores are used to coordinate operations within the GPU command queue
 	/// Fences are used to synchronize the CPU with the GPU
 
@@ -1129,24 +1149,34 @@ void Renderer::createSyncObjects() {
 
 	VkFenceCreateInfo fenceInfo{};
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	/// Create the fence in a signaled state so that the first frame doesn't wait indefinitely
+	/// Create fences in a signaled state so that the first frame doesn't wait indefinitely
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	/// Create semaphores and fence
-	VK_CHECK(vkCreateSemaphore(this->vulkanContext->getDevice()->getDevice(), &semaphoreInfo, nullptr, &this->imageAvailableSemaphore));
-	VK_CHECK(vkCreateSemaphore(this->vulkanContext->getDevice()->getDevice(), &semaphoreInfo, nullptr, &this->renderFinishedSemaphore));
-	VK_CHECK(vkCreateFence(this->vulkanContext->getDevice()->getDevice(), &fenceInfo, nullptr, &this->inFlightFence));
+	/// Create semaphores and fences for each frame in flight
+	for (uint32_t i = 0; i < kMaxFramesInFlight; i++) {
+		VK_CHECK(vkCreateSemaphore(this->vulkanContext->getDevice()->getDevice(),
+			&semaphoreInfo, nullptr, &this->imageAvailableSemaphores[i]));
+		VK_CHECK(vkCreateSemaphore(this->vulkanContext->getDevice()->getDevice(),
+			&semaphoreInfo, nullptr, &this->renderFinishedSemaphores[i]));
+		VK_CHECK(vkCreateFence(this->vulkanContext->getDevice()->getDevice(),
+			&fenceInfo, nullptr, &this->inFlightFences[i]));
+	}
 
-	spdlog::info("Synchronization objects created successfully");
+	spdlog::info("Synchronization objects created for {} frames in flight", kMaxFramesInFlight);
 }
 
 void Renderer::cleanupSyncObjects() {
-	/// Clean up synchronization objects
+	/// Clean up synchronization objects for all frames in flight
 	/// This should be called during the Renderer's cleanup process
 
-	vkDestroySemaphore(this->vulkanContext->getDevice()->getDevice(), this->renderFinishedSemaphore, nullptr);
-	vkDestroySemaphore(this->vulkanContext->getDevice()->getDevice(), this->imageAvailableSemaphore, nullptr);
-	vkDestroyFence(this->vulkanContext->getDevice()->getDevice(), this->inFlightFence, nullptr);
+	for (uint32_t i = 0; i < kMaxFramesInFlight; i++) {
+		vkDestroySemaphore(this->vulkanContext->getDevice()->getDevice(),
+			this->renderFinishedSemaphores[i], nullptr);
+		vkDestroySemaphore(this->vulkanContext->getDevice()->getDevice(),
+			this->imageAvailableSemaphores[i], nullptr);
+		vkDestroyFence(this->vulkanContext->getDevice()->getDevice(),
+			this->inFlightFences[i], nullptr);
+	}
 
 	spdlog::info("Synchronization objects cleaned up");
 }
@@ -1329,13 +1359,17 @@ void Renderer::createLightUniformBuffer() {
 	/// Initialize buffer with empty light buffer UBO
 	LightBufferUBO initialData{};
 
-	/// Create the uniform buffer using buffer manager
-	this->lightBuffer = this->bufferManager->createUniformBuffer(bufferSize, &initialData);
+	/// Create uniform buffers for each frame in flight
+	/// Each frame needs its own buffer to avoid synchronization issues
+	for (uint32_t i = 0; i < kMaxFramesInFlight; i++) {
+		this->lightBuffers[i] = this->bufferManager->createUniformBuffer(bufferSize, &initialData);
+		spdlog::debug("Light uniform buffer {} created with size {}", i, bufferSize);
+	}
 
-	spdlog::info("Light uniform buffer created with size {} bytes", bufferSize);
+	spdlog::info("Light uniform buffers created for {} frames in flight", kMaxFramesInFlight);
 }
 
-void Renderer::updateLightUniformBuffer() const {
+void Renderer::updateLightUniformBuffer(uint32_t frameIndex) const {
 	/// Get current light buffer UBO from the manager
 	/// This includes both the light array and the active light count
 	auto lightBufferUBO = this->lightManager->getLightBufferUBO();
@@ -1343,15 +1377,15 @@ void Renderer::updateLightUniformBuffer() const {
 	/// Calculate buffer size (full UBO structure)
 	VkDeviceSize bufferSize = sizeof(LightBufferUBO);
 
-	/// Update buffer with new light data
+	/// Update buffer for this frame with new light data
 	this->bufferManager->updateBuffer(
-		this->lightBuffer,
+		this->lightBuffers[frameIndex],
 		&lightBufferUBO,
 		bufferSize,
 		0);
 
-	spdlog::trace("Updated light uniform buffer with {} active lights",
-		lightBufferUBO.lightCount);
+	spdlog::trace("Updated light uniform buffer {} with {} active lights",
+		frameIndex, lightBufferUBO.lightCount);
 }
 
 void Renderer::initializeMaterials() {

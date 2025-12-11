@@ -31,6 +31,7 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
+#include <array>
 
 namespace lillugsi::rendering {
 
@@ -57,6 +58,10 @@ namespace lillugsi::rendering {
 
 class Renderer {
 public:
+	/// Maximum frames that can be processed concurrently
+	/// Using 2 frames allows CPU to prepare frame N+1 while GPU renders frame N
+	static constexpr uint32_t kMaxFramesInFlight = 2;
+
 	/// Constructor
 	Renderer();
 
@@ -165,7 +170,7 @@ private:
 	void createGraphicsPipeline();
 	void recordCommandBuffers();
 	void createCameraUniformBuffer();
-	void updateCameraUniformBuffer() const;
+	void updateCameraUniformBuffer(uint32_t frameIndex) const;
 	void createDescriptorPool();
 	void createDescriptorSets();
 	void createSyncObjects();
@@ -173,7 +178,7 @@ private:
 	void initializeDepthBuffer();
 	void initializeScene();
 	void createLightUniformBuffer();
-	void updateLightUniformBuffer() const;
+	void updateLightUniformBuffer(uint32_t frameIndex) const;
 	void initializeMaterials();
 	void initializeModelManager();
 	/// Sets up the material mapper, texture loader, and pipeline factory
@@ -198,14 +203,19 @@ private:
 	/// Descriptor pool
 	VkDescriptorPool descriptorPool;
 
-	/// Descriptor sets
-	std::vector<VkDescriptorSet> cameraDescriptorSets;  /// Set = 0 for camera data
-	std::vector<VkDescriptorSet> lightDescriptorSets;   /// Set = 1 for light data
+	/// Per-frame descriptor sets
+	/// Each frame in flight has its own set of descriptor sets to avoid synchronization issues
+	std::array<std::vector<VkDescriptorSet>, kMaxFramesInFlight> cameraDescriptorSets;  /// Set = 0 for camera data
+	std::array<std::vector<VkDescriptorSet>, kMaxFramesInFlight> lightDescriptorSets;   /// Set = 1 for light data
 
-	/// Synchronization objects
-	VkSemaphore imageAvailableSemaphore;
-	VkSemaphore renderFinishedSemaphore;
-	VkFence inFlightFence;
+	/// Synchronization objects for frames-in-flight
+	/// Each frame in flight has its own set of synchronization primitives
+	std::array<VkSemaphore, kMaxFramesInFlight> imageAvailableSemaphores;
+	std::array<VkSemaphore, kMaxFramesInFlight> renderFinishedSemaphores;
+	std::array<VkFence, kMaxFramesInFlight> inFlightFences;
+
+	/// Current frame index for frame-in-flight rotation
+	uint32_t currentFrame = 0;
 
 	/// Graphics pipeline
 	std::shared_ptr<vulkan::VulkanPipelineHandle> graphicsPipeline;
@@ -263,8 +273,12 @@ private:
 	std::unique_ptr<vulkan::FramebufferManager> framebufferManager;
 
 	std::shared_ptr<BufferManager> bufferManager;
-	std::shared_ptr<vulkan::Buffer> cameraBuffer;
-	std::shared_ptr<vulkan::Buffer> lightBuffer;
+
+	/// Per-frame uniform buffers
+	/// Each frame in flight has its own buffers to avoid synchronization issues
+	std::array<std::shared_ptr<vulkan::Buffer>, kMaxFramesInFlight> cameraBuffers;
+	std::array<std::shared_ptr<vulkan::Buffer>, kMaxFramesInFlight> lightBuffers;
+
 	std::unique_ptr<ModelManager> modelManager;
 
 	/// Pipeline factory for model material pipelines
