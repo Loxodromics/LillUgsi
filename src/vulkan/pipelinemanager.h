@@ -93,6 +93,28 @@ class PipelineManager {
 	/// @return True if a pipeline exists for this material
 	[[nodiscard]] bool hasPipeline(const std::string& materialName) const;
 
+	/// Create a compute pipeline with a descriptor layout
+	/// @param name Unique name for this compute pipeline
+	/// @param shaderPath Path to the compute shader SPIR-V file
+	/// @param descriptorLayout Descriptor set layout for compute resources
+	/// @return A shared pointer to the created compute pipeline handle
+	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> createComputePipeline(
+		const std::string& name,
+		const std::string& shaderPath,
+		VkDescriptorSetLayout descriptorLayout);
+
+	/// Get a compute pipeline by name
+	/// @param name The name of the compute pipeline to retrieve
+	/// @return A shared pointer to the requested compute pipeline handle, or nullptr if not found
+	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> getComputePipeline(
+		const std::string& name);
+
+	/// Get a compute pipeline layout by name
+	/// @param name The name of the compute pipeline layout to retrieve
+	/// @return A shared pointer to the requested compute pipeline layout handle
+	[[nodiscard]] std::shared_ptr<VulkanPipelineLayoutHandle> getComputePipelineLayout(
+		const std::string& name) const;
+
 	/// Clean up all pipelines and shader resources
 	void cleanup();
 
@@ -172,6 +194,10 @@ private:
 	/// Set of materials we've already warned about
 	/// Prevents log spam for missing materials
 	mutable std::unordered_set<std::string> missingPipelineWarnings;
+
+	/// Compute pipeline storage
+	/// Separate from graphics pipelines for clarity
+	std::unordered_map<std::string, MaterialPipeline> computePipelines;
 
 	/// Track if cleanup has been called
 	bool isCleanedUp{false};

@@ -269,6 +269,92 @@ bool PipelineManager::hasPipeline(const std::string& materialName) const {
 	return exists;
 }
 
+std::shared_ptr<VulkanPipelineHandle> PipelineManager::createComputePipeline(
+	const std::string& name,
+	const std::string& shaderPath,
+	VkDescriptorSetLayout descriptorLayout) {
+	/// Check if pipeline already exists
+	auto it = this->computePipelines.find(name);
+	if (it != this->computePipelines.end()) {
+		spdlog::debug("Reusing existing compute pipeline '{}'", name);
+		return it->second.pipeline;
+	}
+
+	/// Load compute shader using ShaderProgram
+	auto computeProgram = ShaderProgram::createComputeProgram(this->device, shaderPath);
+
+	/// Create pipeline layout
+	VkPipelineLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount = 1;
+	layoutInfo.pSetLayouts = &descriptorLayout;
+	layoutInfo.pushConstantRangeCount = 0;
+	layoutInfo.pPushConstantRanges = nullptr;
+
+	VkPipelineLayout pipelineLayout;
+	VK_CHECK(vkCreatePipelineLayout(this->device, &layoutInfo, nullptr, &pipelineLayout));
+
+	/// Create compute pipeline
+	/// This is much simpler than graphics pipelines - just shader and layout
+	VkComputePipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineInfo.stage = computeProgram->getComputeShader()->getStageCreateInfo();
+	pipelineInfo.layout = pipelineLayout;
+
+	VkPipeline pipeline;
+	VK_CHECK(vkCreateComputePipelines(
+		this->device,
+		VK_NULL_HANDLE,  /// No pipeline cache for now
+		1,
+		&pipelineInfo,
+		nullptr,
+		&pipeline
+	));
+
+	/// Wrap in RAII handles
+	MaterialPipeline computePipeline;
+	computePipeline.pipeline = std::make_shared<VulkanPipelineHandle>(
+		pipeline,
+		[this](VkPipeline p) {
+			vkDestroyPipeline(this->device, p, nullptr);
+		}
+	);
+	computePipeline.layout = std::make_shared<VulkanPipelineLayoutHandle>(
+		pipelineLayout,
+		[this](VkPipelineLayout l) {
+			vkDestroyPipelineLayout(this->device, l, nullptr);
+		}
+	);
+
+	/// Cache the pipeline
+	this->computePipelines[name] = computePipeline;
+
+	spdlog::info("Created compute pipeline '{}'", name);
+	return computePipeline.pipeline;
+}
+
+std::shared_ptr<VulkanPipelineHandle> PipelineManager::getComputePipeline(
+	const std::string& name) {
+	auto it = this->computePipelines.find(name);
+	if (it != this->computePipelines.end()) {
+		return it->second.pipeline;
+	}
+
+	spdlog::warn("Compute pipeline '{}' not found", name);
+	return nullptr;
+}
+
+std::shared_ptr<VulkanPipelineLayoutHandle> PipelineManager::getComputePipelineLayout(
+	const std::string& name) const {
+	auto it = this->computePipelines.find(name);
+	if (it != this->computePipelines.end()) {
+		return it->second.layout;
+	}
+
+	spdlog::warn("Compute pipeline layout '{}' not found", name);
+	return nullptr;
+}
+
 void PipelineManager::cleanup() {
 	if (this->isCleanedUp) {
 		return; /// Already cleaned up, prevent double-cleanup
@@ -285,6 +371,12 @@ void PipelineManager::cleanup() {
 
 	this->materialPipelines.clear();
 	spdlog::debug("Material pipelines cleared successfully");
+
+	/// Clean up compute pipelines
+	spdlog::debug("PipelineManager cleanup: About to clear {} compute pipelines",
+		this->computePipelines.size());
+	this->computePipelines.clear();
+	spdlog::debug("Compute pipelines cleared successfully");
 
 	/// Clean up shared pipeline resources
 	for (const auto& [hash, cache] : this->pipelinesByConfig)

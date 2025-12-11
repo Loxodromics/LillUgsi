@@ -43,6 +43,23 @@ public:
 	/// @return Optional reference to the fragment shader module
 	const std::optional<ShaderModule>& getFragmentShader() const { return this->fragmentShader; }
 
+	/// Create a compute program from a compute shader file
+	/// @param device The logical device to create the shader on
+	/// @param computePath Path to the compute shader SPIR-V file
+	/// @return A new ShaderProgram instance configured for compute
+	static std::shared_ptr<ShaderProgram> createComputeProgram(
+		VkDevice device,
+		const std::string& computePath
+	);
+
+	/// Get the compute shader module
+	/// @return Optional reference to the compute shader module
+	const std::optional<ShaderModule>& getComputeShader() const { return this->computeShader; }
+
+	/// Check if this is a compute program
+	/// @return True if this program contains a compute shader
+	bool isComputeProgram() const { return this->computeShader.has_value(); }
+
 	/// FIXME: This shoudl be a private constructor to enforce creation through factory methods
 	/// But with the change to std::shared_ptr<ShaderProgram> createGraphicsProgram, I don't know how to do it
 	explicit ShaderProgram(VkDevice device);
@@ -55,9 +72,7 @@ private:
 	/// We use std::optional because not all programs will use all stages
 	std::optional<ShaderModule> vertexShader;
 	std::optional<ShaderModule> fragmentShader;
-
-	/// Future: Add compute shader support
-	/// std::optional<ShaderModule> computeShader;
+	std::optional<ShaderModule> computeShader;
 };
 
 } /// namespace lillugsi::vulkan

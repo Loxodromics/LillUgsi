@@ -40,6 +40,30 @@ std::shared_ptr<ShaderProgram> ShaderProgram::createGraphicsProgram(
 	return program;
 }
 
+std::shared_ptr<ShaderProgram> ShaderProgram::createComputeProgram(
+	VkDevice device,
+	const std::string& computePath
+) {
+	/// Create a new shader program instance
+	std::shared_ptr<ShaderProgram> program = std::make_shared<ShaderProgram>(device);
+
+	try {
+		/// Create the compute shader module
+		program->computeShader.emplace(
+			ShaderModule::fromSpirV(device, computePath, VK_SHADER_STAGE_COMPUTE_BIT)
+		);
+		spdlog::info("Compute shader loaded: {}", computePath);
+
+	} catch (const VulkanException& e) {
+		/// If shader creation fails, we log the error and rethrow
+		spdlog::error("Failed to create compute shader program: {}", e.what());
+		throw;
+	}
+
+	spdlog::info("Compute shader program created successfully");
+	return program;
+}
+
 std::vector<VkPipelineShaderStageCreateInfo> ShaderProgram::getShaderStages() const {
 	/// Create a vector to hold the shader stages
 	/// We reserve space for the maximum number of stages we expect
