@@ -69,6 +69,7 @@ set(MAIN_SOURCES
 		src/vulkan/commandbuffermanager.cpp
 		src/vulkan/framebuffermanager.cpp
 		src/rendering/buffermanager.cpp
+		src/rendering/computetest.cpp
 		src/rendering/models/modelmanager.cpp
 		src/rendering/models/gltfmodelloader.cpp
 		src/rendering/models/meshextractor.cpp
@@ -145,6 +146,7 @@ add_custom_target(Shaders
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/debug.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/debug.frag.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/normal_debug.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/normal_debug.frag.spv
 	COMMAND glslc -fshader-stage=compute ${CMAKE_CURRENT_SOURCE_DIR}/shaders/test.comp.glsl -o ${CMAKE_BINARY_DIR}/shaders/test.comp.spv
+	COMMAND glslc -fshader-stage=compute ${CMAKE_CURRENT_SOURCE_DIR}/shaders/storage_test.comp.glsl -o ${CMAKE_BINARY_DIR}/shaders/storage_test.comp.spv
 	COMMENT "Compiling shaders"
 )
 add_dependencies(LillUgsi Shaders)

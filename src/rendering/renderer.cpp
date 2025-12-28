@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "computetest.h"
 #include "rendering/cubemesh.h"
 #include "rendering/icospheremesh.h"
 #include "rendering/pbrmaterial.h"
@@ -147,6 +148,34 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Initialize model loading components
 		/// This sets up the pipeline factory, material mapper, and texture loader
 		this->initializeModelLoadingComponents();
+
+		/// Run compute shader storage buffer test
+		/// This verifies our compute pipeline infrastructure works correctly
+		/// The test creates a storage buffer, dispatches a compute shader to write to it,
+		/// then verifies the results on CPU
+		{
+			ComputeTest computeTest(
+				this->vulkanContext->getDevice()->getDevice(),
+				this->vulkanContext->getPhysicalDevice(),
+				this->bufferManager.get(),
+				this->pipelineManager.get(),
+				this->commandBufferManager,
+				this->vulkanContext->getDevice()->getGraphicsQueue(),
+				this->vulkanContext->getDevice()->getGraphicsQueueFamilyIndex());
+
+			if (computeTest.initialize()) {
+				if (!computeTest.runTest()) {
+					spdlog::warn("Compute test failed - compute pipeline may not be working correctly");
+				}
+			} else {
+				spdlog::warn("Failed to initialize compute test");
+			}
+			/// ComputeTest destructor handles cleanup
+		}
+
+		/// Explicitly remove test pipeline from cache to avoid validation errors
+		/// The test pipeline is temporary and shouldn't persist
+		this->pipelineManager->removeComputePipeline("storage_buffer_test");
 
 		/// Initialize the scene
 		this->initializeScene();
@@ -738,6 +767,10 @@ void Renderer::recordCommandBuffers() {
 	/// Start with clean command buffers
 	/// Free existing command buffers if any exist
 	if (!this->commandBuffers.empty()) {
+		/// CRITICAL: Must wait for device idle before freeing command buffers
+		/// They may still be executing on the GPU from previous frames
+		vkDeviceWaitIdle(this->vulkanContext->getDevice()->getDevice());
+
 		this->commandBufferManager->freeCommandBuffers(
 			this->commandPool,
 			this->commandBuffers);

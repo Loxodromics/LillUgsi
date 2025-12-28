@@ -219,6 +219,11 @@ void CommandBufferManager::endSingleTimeCommands(
 	VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, fence));
 	VK_CHECK(vkWaitForFences(this->device, 1, &fence, VK_TRUE, UINT64_MAX));
 
+	/// On MoltenVK, even fence + queue wait isn't always sufficient
+	/// Use device wait idle as the most reliable synchronization
+	/// This is acceptable for single-time commands (they're not performance-critical)
+	VK_CHECK(vkDeviceWaitIdle(this->device));
+
 	/// Clean up resources
 	vkDestroyFence(this->device, fence, nullptr);
 	vkFreeCommandBuffers(this->device, commandPool, 1, &commandBuffer);

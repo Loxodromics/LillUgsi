@@ -355,6 +355,14 @@ std::shared_ptr<VulkanPipelineLayoutHandle> PipelineManager::getComputePipelineL
 	return nullptr;
 }
 
+void PipelineManager::removeComputePipeline(const std::string& name) {
+	auto it = this->computePipelines.find(name);
+	if (it != this->computePipelines.end()) {
+		spdlog::debug("Removing compute pipeline '{}'", name);
+		this->computePipelines.erase(it);
+	}
+}
+
 void PipelineManager::cleanup() {
 	if (this->isCleanedUp) {
 		return; /// Already cleaned up, prevent double-cleanup
@@ -381,8 +389,13 @@ void PipelineManager::cleanup() {
 	/// Clean up shared pipeline resources
 	for (const auto& [hash, cache] : this->pipelinesByConfig)
 	{
-		vkDestroyPipelineLayout(this->device, cache.layout, nullptr);
-		vkDestroyPipeline(this->device, cache.pipeline, nullptr);
+		/// Only destroy non-null handles to avoid errors from failed pipeline creation
+		if (cache.layout != VK_NULL_HANDLE) {
+			vkDestroyPipelineLayout(this->device, cache.layout, nullptr);
+		}
+		if (cache.pipeline != VK_NULL_HANDLE) {
+			vkDestroyPipeline(this->device, cache.pipeline, nullptr);
+		}
 		spdlog::debug("Destroyed shared pipeline configuration {:#x}", hash);
 	}
 	this->pipelinesByConfig.clear();

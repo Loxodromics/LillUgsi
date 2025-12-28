@@ -115,6 +115,10 @@ class PipelineManager {
 	[[nodiscard]] std::shared_ptr<VulkanPipelineLayoutHandle> getComputePipelineLayout(
 		const std::string& name) const;
 
+	/// Remove a compute pipeline from the cache
+	/// @param name The name of the compute pipeline to remove
+	void removeComputePipeline(const std::string& name);
+
 	/// Clean up all pipelines and shader resources
 	void cleanup();
 
@@ -146,8 +150,8 @@ private:
 	/// Multiple materials can share the same underlying pipeline and layout
 	/// while maintaining their own RAII handles
 	struct PipelineCache {
-		VkPipeline pipeline;         /// Raw pipeline handle for sharing
-		VkPipelineLayout layout;     /// Raw layout handle for sharing
+		VkPipeline pipeline = VK_NULL_HANDLE;         /// Raw pipeline handle for sharing
+		VkPipelineLayout layout = VK_NULL_HANDLE;     /// Raw layout handle for sharing
 		uint32_t referenceCount{0};  /// Track number of materials using this pipeline
 	};
 
