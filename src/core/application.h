@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include <string>
 #include <memory>
+#include <optional>
 
 namespace lillugsi::core {
 
@@ -45,6 +46,10 @@ public:
 	/// Set the maximum allowed delta time
 	/// @param maxDelta Maximum time step in seconds
 	void setMaxDeltaTime(float maxDelta) { this->maxDeltaTime = maxDelta; }
+
+	/// Set timeout in seconds after which the application will exit
+	/// @param seconds Number of seconds to run before auto-exit
+	void setTimeoutSeconds(float seconds);
 
 protected:
 	/// Handle input events
@@ -90,5 +95,6 @@ protected:
 	float fixedTimeAccumulator{0.0f}; /// Tracks leftover time for fixed updates
 	float logInterval{5.0f};
 	float maxDeltaTime{0.1f};
+	std::optional<float> timeoutSeconds{std::nullopt};
 };
 }

@@ -168,6 +168,15 @@ void Application::updateTime() {
 		/// Update total game time
 		this->gameTime.totalTime += this->gameTime.deltaTime;
 
+		/// Check if timeout has been reached
+		if (this->timeoutSeconds.has_value() &&
+		    this->gameTime.totalTime >= this->timeoutSeconds.value()) {
+			spdlog::info("Timeout of {:.2f} seconds reached, shutting down",
+			             this->timeoutSeconds.value());
+			this->isRunning = false;
+			return;
+		}
+
 		/// We use integer division to check if we crossed a 5 second boundary
 		int lastInterval = static_cast<int>((this->gameTime.totalTime - this->gameTime.deltaTime) / this->logInterval);
 		int currentInterval = static_cast<int>(this->gameTime.totalTime / this->logInterval);
@@ -187,6 +196,15 @@ void Application::updateTime() {
 			this->gameTime.deltaTime, this->maxDeltaTime);
 		this->gameTime.deltaTime = this->maxDeltaTime;
 	}
+}
+
+void Application::setTimeoutSeconds(float seconds) {
+	if (seconds <= 0.0f) {
+		spdlog::error("Timeout must be positive, got: {}", seconds);
+		return;
+	}
+	this->timeoutSeconds = seconds;
+	spdlog::info("Application timeout set to {:.2f} seconds", seconds);
 }
 
 void Application::update() {
