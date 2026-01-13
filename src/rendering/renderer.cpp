@@ -341,6 +341,11 @@ void Renderer::cleanup() {
 
 	this->screenshotManager.reset();
 
+	/// Clean up MandelbrotDemo before VulkanContext
+	/// The unique_ptr's deleter will call the destructor, which calls cleanup()
+	/// This must happen while VkDevice is still valid
+	this->mandelbrotDemo.reset();
+
 	/// Clean up Vulkan context (this will handle swap chain, device, and instance cleanup)
 	this->vulkanContext.reset();
 
