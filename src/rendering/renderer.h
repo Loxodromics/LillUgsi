@@ -21,6 +21,7 @@
 #include "pipelinefactory.h"
 #include "models/materialparametermapper.h"
 #include "models/textureloadingpipeline.h"
+#include "mandelbrotdemo.h"
 
 
 #ifdef USE_PLANET
@@ -299,6 +300,10 @@ private:
 	/// Debug visualization tracking
 	uint32_t currentDebugMode = 0;      /// Current active debug mode (0-20)
 	static constexpr uint32_t maxDebugModes = static_cast<uint32_t>(NormalDebugMode::NormalStrength) + 1;  /// Total number of debug modes (derived from enum)
+
+	/// Mandelbrot fractal demo (compute shader learning project)
+	std::unique_ptr<MandelbrotDemo> mandelbrotDemo;
+	bool showMandelbrot = false;  /// Toggle for showing fractal vs normal scene
 
 };
 

@@ -180,6 +180,24 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Initialize the scene
 		this->initializeScene();
 
+		/// Initialize Mandelbrot demo (compute shader learning project)
+		this->mandelbrotDemo = std::make_unique<MandelbrotDemo>(
+			this->vulkanContext->getDevice()->getDevice(),
+			this->vulkanContext->getPhysicalDevice());
+
+		if (!this->mandelbrotDemo->initialize()) {
+			spdlog::error("Failed to initialize Mandelbrot demo");
+			return false;
+		}
+
+		/// Create graphics pipeline with our render pass
+		if (!this->mandelbrotDemo->createGraphicsPipeline(this->renderPass.get())) {
+			spdlog::error("Failed to create Mandelbrot graphics pipeline");
+			return false;
+		}
+
+		spdlog::info("Mandelbrot demo initialized - press 'M' to toggle");
+
 		/// Create command buffers
 		this->createCommandBuffers();
 
@@ -814,13 +832,24 @@ void Renderer::recordCommandBuffers() {
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassInfo.pClearValues = clearValues.data();
 
+		/// If showing Mandelbrot, dispatch compute shader BEFORE render pass
+		if (this->showMandelbrot) {
+			this->mandelbrotDemo->generate(this->commandBuffers[i]);
+		}
+
 		/// Begin the render pass
 		/// VK_SUBPASS_CONTENTS_INLINE means the render pass commands will be embedded in the primary command buffer
 		/// and no secondary command buffers will be executed
 		vkCmdBeginRenderPass(this->commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		/// Collect render data from visible objects in the scene
-		std::vector<Mesh::RenderData> renderData;
+		/// Choose what to render based on toggle state
+		if (this->showMandelbrot) {
+			/// Render Mandelbrot fractal on fullscreen quad
+			this->mandelbrotDemo->render(this->commandBuffers[i]);
+		} else {
+			/// Render normal 3D scene
+			/// Collect render data from visible objects in the scene
+			std::vector<Mesh::RenderData> renderData;
 		this->scene->getRenderData(*this->camera, renderData);
 
 		/// Track current material to minimize pipeline switches
@@ -920,6 +949,7 @@ void Renderer::recordCommandBuffers() {
 				data.indexBuffer->getIndexCount(),
 				1, 0, 0, 0);
 		}
+		} /// End of normal scene rendering
 
 		/// End the render pass
 		vkCmdEndRenderPass(this->commandBuffers[i]);
@@ -1161,8 +1191,26 @@ void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
 				this->cycleDebugMode(false);
 				return;
 
+			/// M: Toggle Mandelbrot fractal demo
+			case SDLK_M:
+				this->showMandelbrot = !this->showMandelbrot;
+				spdlog::info("Mandelbrot demo: {}", this->showMandelbrot ? "ON" : "OFF");
+				/// Need to re-record command buffers when toggling
+				this->recordCommandBuffers();
+				return;
+
 			default:
 				break;
+		}
+	}
+
+	/// Step 13: If showing Mandelbrot, delegate input to MandelbrotDemo
+	/// This allows interactive exploration of the fractal
+	if (this->showMandelbrot && this->mandelbrotDemo) {
+		if (this->mandelbrotDemo->handleInput(event)) {
+			/// Parameters changed, need to re-record command buffers
+			this->recordCommandBuffers();
+			return;
 		}
 	}
 
