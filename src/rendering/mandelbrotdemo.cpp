@@ -1085,15 +1085,15 @@ bool MandelbrotDemo::handleInput(const SDL_Event& event) {
 			spdlog::info("Zoom out: zoom = {:.4f}", this->params.zoom);
 			break;
 
-		/// [ key: Decrease iterations
-		case SDLK_LEFTBRACKET:
+		/// ( key: Decrease iterations
+		case SDLK_1:
 			this->params.maxIter = std::max(32, this->params.maxIter - kIterStep);
 			paramsChanged = true;
 			spdlog::info("Decrease iterations: maxIter = {}", this->params.maxIter);
 			break;
 
-		/// ] key: Increase iterations
-		case SDLK_RIGHTBRACKET:
+		/// ) key: Increase iterations
+		case SDLK_2:
 			this->params.maxIter = std::min(2048, this->params.maxIter + kIterStep);
 			paramsChanged = true;
 			spdlog::info("Increase iterations: maxIter = {}", this->params.maxIter);
