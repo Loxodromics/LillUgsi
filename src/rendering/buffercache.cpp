@@ -103,9 +103,9 @@ std::shared_ptr<vulkan::VertexBuffer> BufferCache::getOrCreateVertexBuffer(VkDev
 
 	/// Create RAII handle for the device buffer
 	auto bufferHandle = vulkan::VulkanBufferHandle(buffer,
-		[this](VkBuffer b) {
+		[device = this->device](VkBuffer b) {
 			spdlog::debug("Destroying device buffer - Handle: {}", (void*)b);
-			vkDestroyBuffer(this->device, b, nullptr);
+			vkDestroyBuffer(device, b, nullptr);
 		});
 
 	/// Create and store the vertex buffer
@@ -217,9 +217,9 @@ std::shared_ptr<vulkan::IndexBuffer> BufferCache::getOrCreateIndexBuffer(VkDevic
 
 	/// Create RAII handle
 	auto bufferHandle = vulkan::VulkanBufferHandle(buffer,
-		[this](VkBuffer b) {
+		[device = this->device](VkBuffer b) {
 			spdlog::debug("Destroying device index buffer - Handle: {}", (void*)b);
-			vkDestroyBuffer(this->device, b, nullptr);
+			vkDestroyBuffer(device, b, nullptr);
 		});
 
 	/// Create and store the index buffer

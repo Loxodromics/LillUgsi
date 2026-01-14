@@ -1,5 +1,7 @@
 #include "mandelbrotdemo.h"
 
+#include "buffermanager.h"
+#include "vulkan/shadermodule.h"
 #include "vulkan/vulkanexception.h"
 
 #include <SDL3/SDL.h>
@@ -11,23 +13,27 @@
 
 namespace lillugsi::rendering {
 
-MandelbrotDemo::MandelbrotDemo(VkDevice device, VkPhysicalDevice physicalDevice)
-	: device(device), physicalDevice(physicalDevice) {
+MandelbrotDemo::MandelbrotDemo(VkDevice device, VkPhysicalDevice physicalDevice, BufferManager* bufferManager)
+	: device(device), physicalDevice(physicalDevice), bufferManager(bufferManager) {
 }
 
 MandelbrotDemo::~MandelbrotDemo() {
 	this->cleanup();
 }
 
-bool MandelbrotDemo::initialize() {
-	spdlog::info("Initializing MandelbrotDemo");
+bool MandelbrotDemo::initialize(uint32_t width, uint32_t height) {
+	spdlog::info("Initializing MandelbrotDemo ({}x{})", width, height);
+
+	/// Store dimensions for later use
+	this->imageWidth = width;
+	this->imageHeight = height;
 
 	if (!this->createStorageImage()) {
 		spdlog::error("Failed to create storage image");
 		return false;
 	}
 
-	spdlog::info("Created storage image ({}x{} RGBA8)", kImageSize, kImageSize);
+	spdlog::info("Created storage image ({}x{} RGBA8)", this->imageWidth, this->imageHeight);
 
 	if (!this->createImageView()) {
 		spdlog::error("Failed to create image view");
@@ -80,8 +86,8 @@ bool MandelbrotDemo::createStorageImage() {
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = kImageFormat;
-	imageInfo.extent.width = kImageSize;
-	imageInfo.extent.height = kImageSize;
+	imageInfo.extent.width = this->imageWidth;
+	imageInfo.extent.height = this->imageHeight;
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = 1;
 	imageInfo.arrayLayers = 1;
@@ -93,15 +99,23 @@ bool MandelbrotDemo::createStorageImage() {
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	/// Create the image
-	VkResult result = vkCreateImage(this->device, &imageInfo, nullptr, &this->storageImage);
+	VkImage rawImage;
+	VkResult result = vkCreateImage(this->device, &imageInfo, nullptr, &rawImage);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create storage image: {}", static_cast<int>(result));
 		return false;
 	}
 
+	/// Wrap in RAII handle
+	this->storageImage = vulkan::VulkanImageHandle(
+		rawImage,
+		[device = this->device](VkImage img) {
+			vkDestroyImage(device, img, nullptr);
+		});
+
 	/// Get memory requirements
 	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(this->device, this->storageImage, &memRequirements);
+	vkGetImageMemoryRequirements(this->device, this->storageImage.get(), &memRequirements);
 
 	/// Allocate memory
 	/// DEVICE_LOCAL for best GPU performance
@@ -119,7 +133,7 @@ bool MandelbrotDemo::createStorageImage() {
 	}
 
 	/// Bind memory to image
-	vkBindImageMemory(this->device, this->storageImage, this->storageImageMemory, 0);
+	vkBindImageMemory(this->device, this->storageImage.get(), this->storageImageMemory, 0);
 
 	spdlog::debug("Storage image created with STORAGE_BIT + SAMPLED_BIT usage");
 
@@ -133,7 +147,7 @@ bool MandelbrotDemo::createImageView() {
 	/// - Fragment shader reads (combined image sampler in descriptor)
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = this->storageImage;
+	viewInfo.image = this->storageImage.get();
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = kImageFormat;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -142,11 +156,19 @@ bool MandelbrotDemo::createImageView() {
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
 
-	VkResult result = vkCreateImageView(this->device, &viewInfo, nullptr, &this->storageImageView);
+	VkImageView rawView;
+	VkResult result = vkCreateImageView(this->device, &viewInfo, nullptr, &rawView);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create image view: {}", static_cast<int>(result));
 		return false;
 	}
+
+	/// Wrap in RAII handle
+	this->storageImageView = vulkan::VulkanImageViewHandle(
+		rawView,
+		[device = this->device](VkImageView view) {
+			vkDestroyImageView(device, view, nullptr);
+		});
 
 	spdlog::debug("Image view created for both compute and fragment access");
 
@@ -171,13 +193,20 @@ bool MandelbrotDemo::createComputeDescriptorLayout() {
 	layoutInfo.bindingCount = 1;
 	layoutInfo.pBindings = &layoutBinding;
 
-	VkResult result = vkCreateDescriptorSetLayout(this->device, &layoutInfo, nullptr,
-												   &this->computeDescriptorSetLayout);
+	VkDescriptorSetLayout rawLayout;
+	VkResult result = vkCreateDescriptorSetLayout(this->device, &layoutInfo, nullptr, &rawLayout);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create compute descriptor set layout: {}",
 					  static_cast<int>(result));
 		return false;
 	}
+
+	/// Wrap in RAII handle
+	this->computeDescriptorSetLayout = vulkan::VulkanDescriptorSetLayoutHandle(
+		rawLayout,
+		[device = this->device](VkDescriptorSetLayout layout) {
+			vkDestroyDescriptorSetLayout(device, layout, nullptr);
+		});
 
 	spdlog::debug("Compute descriptor layout created (STORAGE_IMAGE at binding 0)");
 
@@ -197,21 +226,29 @@ bool MandelbrotDemo::createComputeDescriptorSet() {
 	poolInfo.pPoolSizes = &poolSize;
 	poolInfo.maxSets = 1;
 
-	VkResult result = vkCreateDescriptorPool(this->device, &poolInfo, nullptr,
-											 &this->computeDescriptorPool);
+	VkDescriptorPool rawPool;
+	VkResult result = vkCreateDescriptorPool(this->device, &poolInfo, nullptr, &rawPool);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create compute descriptor pool: {}", static_cast<int>(result));
 		return false;
 	}
+
+	/// Wrap in RAII handle
+	this->computeDescriptorPool = vulkan::VulkanDescriptorPoolHandle(
+		rawPool,
+		[device = this->device](VkDescriptorPool pool) {
+			vkDestroyDescriptorPool(device, pool, nullptr);
+		});
 
 	spdlog::debug("Compute descriptor pool created");
 
 	/// Step 4b: Allocate descriptor set from pool
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = this->computeDescriptorPool;
+	allocInfo.descriptorPool = this->computeDescriptorPool.get();
 	allocInfo.descriptorSetCount = 1;
-	allocInfo.pSetLayouts = &this->computeDescriptorSetLayout;
+	VkDescriptorSetLayout layouts[] = {this->computeDescriptorSetLayout.get()};
+	allocInfo.pSetLayouts = layouts;
 
 	result = vkAllocateDescriptorSets(this->device, &allocInfo, &this->computeDescriptorSet);
 	if (result != VK_SUCCESS) {
@@ -226,7 +263,7 @@ bool MandelbrotDemo::createComputeDescriptorSet() {
 	/// GENERAL layout is required for storage images in compute shaders
 	VkDescriptorImageInfo imageInfo{};
 	imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	imageInfo.imageView = this->storageImageView;
+	imageInfo.imageView = this->storageImageView.get();
 	imageInfo.sampler = VK_NULL_HANDLE;  /// No sampler needed for storage images
 
 	VkWriteDescriptorSet descriptorWrite{};
@@ -259,71 +296,60 @@ bool MandelbrotDemo::createComputePipeline() {
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &this->computeDescriptorSetLayout;
+	VkDescriptorSetLayout computeLayouts[] = {this->computeDescriptorSetLayout.get()};
+	pipelineLayoutInfo.pSetLayouts = computeLayouts;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
+	VkPipelineLayout rawPipelineLayout;
 	VkResult result = vkCreatePipelineLayout(this->device, &pipelineLayoutInfo, nullptr,
-											 &this->computePipelineLayout);
+											 &rawPipelineLayout);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create compute pipeline layout: {}", static_cast<int>(result));
 		return false;
 	}
 
+	/// Wrap in RAII handle
+	this->computePipelineLayout = vulkan::VulkanPipelineLayoutHandle(
+		rawPipelineLayout,
+		[device = this->device](VkPipelineLayout layout) {
+			vkDestroyPipelineLayout(device, layout, nullptr);
+		});
+
 	spdlog::debug("Compute pipeline layout created with push constants (size={})",
 				  sizeof(MandelbrotPushConstants));
 
-	/// Step 6c: Load compute shader module
-	/// Read SPIR-V bytecode from compiled shader
-	std::ifstream file("shaders/mandelbrot.comp.spv", std::ios::ate | std::ios::binary);
-	if (!file.is_open()) {
-		spdlog::error("Failed to open shader file: shaders/mandelbrot.comp.spv");
-		return false;
-	}
-
-	size_t fileSize = static_cast<size_t>(file.tellg());
-	std::vector<char> code(fileSize);
-	file.seekg(0);
-	file.read(code.data(), fileSize);
-	file.close();
-
-	VkShaderModuleCreateInfo shaderModuleInfo{};
-	shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleInfo.codeSize = code.size();
-	shaderModuleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-	VkShaderModule shaderModule;
-	result = vkCreateShaderModule(this->device, &shaderModuleInfo, nullptr, &shaderModule);
-	if (result != VK_SUCCESS) {
-		spdlog::error("Failed to create shader module: {}", static_cast<int>(result));
-		return false;
-	}
-
-	spdlog::debug("Loaded compute shader module ({} bytes)", fileSize);
+	/// Step 6c: Load compute shader module using ShaderModule helper
+	/// This handles all file I/O and VkShaderModule creation automatically
+	vulkan::ShaderModule computeShader = vulkan::ShaderModule::fromSpirV(
+		this->device, kComputeShaderPath, VK_SHADER_STAGE_COMPUTE_BIT);
 
 	/// Step 6d: Create compute pipeline
 	/// Simpler than graphics pipeline - just one shader stage
-	VkPipelineShaderStageCreateInfo shaderStageInfo{};
-	shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	shaderStageInfo.module = shaderModule;
-	shaderStageInfo.pName = "main";
+	VkPipelineShaderStageCreateInfo shaderStageInfo = computeShader.getStageCreateInfo();
 
 	VkComputePipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	pipelineInfo.stage = shaderStageInfo;
-	pipelineInfo.layout = this->computePipelineLayout;
+	pipelineInfo.layout = this->computePipelineLayout.get();
 
+	VkPipeline rawPipeline;
 	result = vkCreateComputePipelines(this->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
-									  &this->computePipeline);
+									  &rawPipeline);
 
-	/// Shader module can be destroyed after pipeline creation
-	vkDestroyShaderModule(this->device, shaderModule, nullptr);
+	/// Shader module cleaned up automatically by ShaderModule RAII
 
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create compute pipeline: {}", static_cast<int>(result));
 		return false;
 	}
+
+	/// Wrap in RAII handle
+	this->computePipeline = vulkan::VulkanPipelineHandle(
+		rawPipeline,
+		[device = this->device](VkPipeline pipeline) {
+			vkDestroyPipeline(device, pipeline, nullptr);
+		});
 
 	spdlog::debug("Compute pipeline created");
 
@@ -347,7 +373,7 @@ void MandelbrotDemo::generate(VkCommandBuffer cmd) {
 	barrier1.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 	barrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier1.image = this->storageImage;
+	barrier1.image = this->storageImage.get();
 	barrier1.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	barrier1.subresourceRange.baseMipLevel = 0;
 	barrier1.subresourceRange.levelCount = 1;
@@ -369,13 +395,13 @@ void MandelbrotDemo::generate(VkCommandBuffer cmd) {
 	);
 
 	/// Step 7b: Bind compute pipeline
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, this->computePipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, this->computePipeline.get());
 
 	/// Step 7c: Bind descriptor set (contains storage image)
 	vkCmdBindDescriptorSets(
 		cmd,
 		VK_PIPELINE_BIND_POINT_COMPUTE,
-		this->computePipelineLayout,
+		this->computePipelineLayout.get(),
 		0,                              /// First set
 		1,                              /// One set
 		&this->computeDescriptorSet,
@@ -387,7 +413,7 @@ void MandelbrotDemo::generate(VkCommandBuffer cmd) {
 	/// Now using member variable that can be modified via handleInput()
 	vkCmdPushConstants(
 		cmd,
-		this->computePipelineLayout,
+		this->computePipelineLayout.get(),
 		VK_SHADER_STAGE_COMPUTE_BIT,
 		0,                              /// Offset
 		sizeof(MandelbrotPushConstants),
@@ -395,13 +421,12 @@ void MandelbrotDemo::generate(VkCommandBuffer cmd) {
 	);
 
 	/// Step 7e: Dispatch compute work
-	/// Work groups: 512 / 16 = 32 groups in each dimension
-	/// Total: 32x32 = 1024 work groups
+	/// Work groups calculated based on image dimensions
 	/// Each work group has 16x16 = 256 threads
-	/// Total threads: 1024 * 256 = 262,144 threads (one per pixel)
+	/// Total threads: groupCountX * groupCountY * 256 (one per pixel)
 	constexpr uint32_t workGroupSize = 16;  /// Matches shader local_size_x/y
-	const uint32_t groupCountX = (kImageSize + workGroupSize - 1) / workGroupSize;
-	const uint32_t groupCountY = (kImageSize + workGroupSize - 1) / workGroupSize;
+	const uint32_t groupCountX = (this->imageWidth + workGroupSize - 1) / workGroupSize;
+	const uint32_t groupCountY = (this->imageHeight + workGroupSize - 1) / workGroupSize;
 
 	vkCmdDispatch(cmd, groupCountX, groupCountY, 1);
 
@@ -413,7 +438,7 @@ void MandelbrotDemo::generate(VkCommandBuffer cmd) {
 	barrier2.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier2.image = this->storageImage;
+	barrier2.image = this->storageImage.get();
 	barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	barrier2.subresourceRange.baseMipLevel = 0;
 	barrier2.subresourceRange.levelCount = 1;
@@ -450,23 +475,23 @@ void MandelbrotDemo::render(VkCommandBuffer cmd) {
 	/// Must be called INSIDE a render pass after generate() has been called
 
 	/// Part 1: Bind graphics pipeline
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphicsPipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphicsPipeline.get());
 
 	/// Part 2: Set dynamic viewport and scissor
 	/// These are dynamic states, so we set them at draw time rather than pipeline creation
-	/// We'll use the fractal image size (512x512) as our viewport size
+	/// We use the fullscreen dimensions from swap chain extent
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(kImageSize);
-	viewport.height = static_cast<float>(kImageSize);
+	viewport.width = static_cast<float>(this->imageWidth);
+	viewport.height = static_cast<float>(this->imageHeight);
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 
 	VkRect2D scissor{};
 	scissor.offset = {0, 0};
-	scissor.extent = {kImageSize, kImageSize};
+	scissor.extent = {this->imageWidth, this->imageHeight};
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 	/// Part 3: Bind descriptor set with fractal texture
@@ -474,7 +499,7 @@ void MandelbrotDemo::render(VkCommandBuffer cmd) {
 	vkCmdBindDescriptorSets(
 		cmd,
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		this->graphicsPipelineLayout,
+		this->graphicsPipelineLayout.get(),
 		0,                                /// First set (set=0)
 		1,                                /// Bind 1 descriptor set
 		&this->graphicsDescriptorSet,
@@ -483,13 +508,13 @@ void MandelbrotDemo::render(VkCommandBuffer cmd) {
 
 	/// Part 4: Bind vertex buffer
 	/// Our quad has 4 vertices (QuadVertex = position + texCoord)
-	VkBuffer vertexBuffers[] = {this->quadVertexBuffer};
+	VkBuffer vertexBuffers[] = {this->quadVertexBuffer.get()};
 	VkDeviceSize offsets[] = {0};
 	vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
 
 	/// Part 5: Bind index buffer
 	/// Our quad uses 6 indices (2 triangles) with UINT32 indices
-	vkCmdBindIndexBuffer(cmd, this->quadIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(cmd, this->quadIndexBuffer->get(), 0, VK_INDEX_TYPE_UINT32);
 
 	/// Part 6: Draw indexed
 	/// Draw 6 indices (2 triangles), 1 instance, starting at index 0, vertex offset 0
@@ -525,27 +550,39 @@ bool MandelbrotDemo::createQuadGeometry() {
 	/// Triangle 2: 2-3-0 (top-right, top-left, bottom-left)
 	std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
 
-	/// Calculate buffer sizes
-	VkDeviceSize vertexBufferSize = sizeof(QuadVertex) * vertices.size();
-	VkDeviceSize indexBufferSize = sizeof(uint32_t) * indices.size();
+	/// Create index buffer via BufferManager (standard uint32_t indices)
+	this->quadIndexBuffer = this->bufferManager->createIndexBuffer(indices);
+	if (!this->quadIndexBuffer) {
+		spdlog::error("Failed to create quad index buffer");
+		return false;
+	}
 
-	/// Create vertex buffer
+	/// Create vertex buffer manually (QuadVertex format differs from standard Vertex)
+	VkDeviceSize vertexBufferSize = sizeof(QuadVertex) * vertices.size();
+
 	VkBufferCreateInfo vertexBufferInfo{};
 	vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	vertexBufferInfo.size = vertexBufferSize;
 	vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	VkResult result = vkCreateBuffer(this->device, &vertexBufferInfo, nullptr,
-									 &this->quadVertexBuffer);
+	VkBuffer rawBuffer;
+	VkResult result = vkCreateBuffer(this->device, &vertexBufferInfo, nullptr, &rawBuffer);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create quad vertex buffer: {}", static_cast<int>(result));
 		return false;
 	}
 
+	/// Wrap in RAII handle
+	this->quadVertexBuffer = vulkan::VulkanBufferHandle(
+		rawBuffer,
+		[device = this->device](VkBuffer buf) {
+			vkDestroyBuffer(device, buf, nullptr);
+		});
+
 	/// Allocate vertex buffer memory
 	VkMemoryRequirements vertexMemReq;
-	vkGetBufferMemoryRequirements(this->device, this->quadVertexBuffer, &vertexMemReq);
+	vkGetBufferMemoryRequirements(this->device, this->quadVertexBuffer.get(), &vertexMemReq);
 
 	VkMemoryAllocateInfo vertexAllocInfo{};
 	vertexAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -566,48 +603,9 @@ bool MandelbrotDemo::createQuadGeometry() {
 	memcpy(vertexData, vertices.data(), static_cast<size_t>(vertexBufferSize));
 	vkUnmapMemory(this->device, this->quadVertexMemory);
 
-	vkBindBufferMemory(this->device, this->quadVertexBuffer, this->quadVertexMemory, 0);
+	vkBindBufferMemory(this->device, this->quadVertexBuffer.get(), this->quadVertexMemory, 0);
 
-	/// Create index buffer
-	VkBufferCreateInfo indexBufferInfo{};
-	indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	indexBufferInfo.size = indexBufferSize;
-	indexBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-	indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	result = vkCreateBuffer(this->device, &indexBufferInfo, nullptr, &this->quadIndexBuffer);
-	if (result != VK_SUCCESS) {
-		spdlog::error("Failed to create quad index buffer: {}", static_cast<int>(result));
-		return false;
-	}
-
-	/// Allocate index buffer memory
-	VkMemoryRequirements indexMemReq;
-	vkGetBufferMemoryRequirements(this->device, this->quadIndexBuffer, &indexMemReq);
-
-	VkMemoryAllocateInfo indexAllocInfo{};
-	indexAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	indexAllocInfo.allocationSize = indexMemReq.size;
-	indexAllocInfo.memoryTypeIndex = this->findMemoryType(
-		indexMemReq.memoryTypeBits,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	result = vkAllocateMemory(this->device, &indexAllocInfo, nullptr, &this->quadIndexMemory);
-	if (result != VK_SUCCESS) {
-		spdlog::error("Failed to allocate quad index memory: {}", static_cast<int>(result));
-		return false;
-	}
-
-	/// Copy index data to buffer
-	void* indexData;
-	vkMapMemory(this->device, this->quadIndexMemory, 0, indexBufferSize, 0, &indexData);
-	memcpy(indexData, indices.data(), static_cast<size_t>(indexBufferSize));
-	vkUnmapMemory(this->device, this->quadIndexMemory);
-
-	vkBindBufferMemory(this->device, this->quadIndexBuffer, this->quadIndexMemory, 0);
-
-	spdlog::debug("Quad geometry created ({} vertices, {} indices)", vertices.size(),
-				  indices.size());
+	spdlog::debug("Quad geometry created ({} vertices, {} indices)", vertices.size(), indices.size());
 
 	return true;
 }
@@ -641,11 +639,19 @@ bool MandelbrotDemo::createGraphicsPipeline(VkRenderPass renderPass) {
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = 0.0f;
 
-	VkResult result = vkCreateSampler(this->device, &samplerInfo, nullptr, &this->sampler);
+	VkSampler rawSampler;
+	VkResult result = vkCreateSampler(this->device, &samplerInfo, nullptr, &rawSampler);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create sampler: {}", static_cast<int>(result));
 		return false;
 	}
+
+	/// Wrap in RAII handle
+	this->sampler = vulkan::VulkanSamplerHandle(
+		rawSampler,
+		[device = this->device](VkSampler s) {
+			vkDestroySampler(device, s, nullptr);
+		});
 
 	/// Part 2: Create descriptor set layout
 	/// This defines COMBINED_IMAGE_SAMPLER at set=0, binding=0 for fragment shader
@@ -661,12 +667,19 @@ bool MandelbrotDemo::createGraphicsPipeline(VkRenderPass renderPass) {
 	layoutInfo.bindingCount = 1;
 	layoutInfo.pBindings = &layoutBinding;
 
-	result = vkCreateDescriptorSetLayout(this->device, &layoutInfo, nullptr,
-										 &this->graphicsDescriptorSetLayout);
+	VkDescriptorSetLayout rawGraphicsLayout;
+	result = vkCreateDescriptorSetLayout(this->device, &layoutInfo, nullptr, &rawGraphicsLayout);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create graphics descriptor set layout: {}", static_cast<int>(result));
 		return false;
 	}
+
+	/// Wrap in RAII handle
+	this->graphicsDescriptorSetLayout = vulkan::VulkanDescriptorSetLayoutHandle(
+		rawGraphicsLayout,
+		[device = this->device](VkDescriptorSetLayout layout) {
+			vkDestroyDescriptorSetLayout(device, layout, nullptr);
+		});
 
 	/// Part 3: Create descriptor pool
 	VkDescriptorPoolSize poolSize{};
@@ -679,19 +692,27 @@ bool MandelbrotDemo::createGraphicsPipeline(VkRenderPass renderPass) {
 	poolInfo.pPoolSizes = &poolSize;
 	poolInfo.maxSets = 1;
 
-	result = vkCreateDescriptorPool(this->device, &poolInfo, nullptr,
-									&this->graphicsDescriptorPool);
+	VkDescriptorPool rawGraphicsPool;
+	result = vkCreateDescriptorPool(this->device, &poolInfo, nullptr, &rawGraphicsPool);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create graphics descriptor pool: {}", static_cast<int>(result));
 		return false;
 	}
 
+	/// Wrap in RAII handle
+	this->graphicsDescriptorPool = vulkan::VulkanDescriptorPoolHandle(
+		rawGraphicsPool,
+		[device = this->device](VkDescriptorPool pool) {
+			vkDestroyDescriptorPool(device, pool, nullptr);
+		});
+
 	/// Part 4: Allocate descriptor set
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = this->graphicsDescriptorPool;
+	allocInfo.descriptorPool = this->graphicsDescriptorPool.get();
 	allocInfo.descriptorSetCount = 1;
-	allocInfo.pSetLayouts = &this->graphicsDescriptorSetLayout;
+	VkDescriptorSetLayout graphicsLayouts[] = {this->graphicsDescriptorSetLayout.get()};
+	allocInfo.pSetLayouts = graphicsLayouts;
 
 	result = vkAllocateDescriptorSets(this->device, &allocInfo, &this->graphicsDescriptorSet);
 	if (result != VK_SUCCESS) {
@@ -703,8 +724,8 @@ bool MandelbrotDemo::createGraphicsPipeline(VkRenderPass renderPass) {
 	/// KEY: Image layout is SHADER_READ_ONLY_OPTIMAL (from compute barrier)
 	VkDescriptorImageInfo imageInfo{};
 	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;  /// For optimal sampling
-	imageInfo.imageView = this->storageImageView;  /// Same view used in compute
-	imageInfo.sampler = this->sampler;  /// Sampler for filtering
+	imageInfo.imageView = this->storageImageView.get();  /// Same view used in compute
+	imageInfo.sampler = this->sampler.get();  /// Sampler for filtering
 
 	VkWriteDescriptorSet descriptorWrite{};
 	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -722,80 +743,37 @@ bool MandelbrotDemo::createGraphicsPipeline(VkRenderPass renderPass) {
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &this->graphicsDescriptorSetLayout;
+	VkDescriptorSetLayout graphicsPipelineLayouts[] = {this->graphicsDescriptorSetLayout.get()};
+	pipelineLayoutInfo.pSetLayouts = graphicsPipelineLayouts;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;  /// No push constants
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
+	VkPipelineLayout rawGraphicsPipelineLayout;
 	result = vkCreatePipelineLayout(this->device, &pipelineLayoutInfo, nullptr,
-									&this->graphicsPipelineLayout);
+									&rawGraphicsPipelineLayout);
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create graphics pipeline layout: {}", static_cast<int>(result));
 		return false;
 	}
 
-	/// Part 7: Load shader modules
-	std::ifstream vertFile("shaders/fullscreenquad.vert.spv", std::ios::ate | std::ios::binary);
-	if (!vertFile.is_open()) {
-		spdlog::error("Failed to open vertex shader file");
-		return false;
-	}
+	/// Wrap in RAII handle
+	this->graphicsPipelineLayout = vulkan::VulkanPipelineLayoutHandle(
+		rawGraphicsPipelineLayout,
+		[device = this->device](VkPipelineLayout layout) {
+			vkDestroyPipelineLayout(device, layout, nullptr);
+		});
 
-	size_t vertFileSize = static_cast<size_t>(vertFile.tellg());
-	std::vector<char> vertCode(vertFileSize);
-	vertFile.seekg(0);
-	vertFile.read(vertCode.data(), vertFileSize);
-	vertFile.close();
+	/// Part 7: Load shader modules using ShaderModule helper
+	/// This handles all file I/O and VkShaderModule creation automatically
+	vulkan::ShaderModule vertShader = vulkan::ShaderModule::fromSpirV(
+		this->device, kVertexShaderPath, VK_SHADER_STAGE_VERTEX_BIT);
+	vulkan::ShaderModule fragShader = vulkan::ShaderModule::fromSpirV(
+		this->device, kFragmentShaderPath, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	std::ifstream fragFile("shaders/fullscreenquad.frag.spv", std::ios::ate | std::ios::binary);
-	if (!fragFile.is_open()) {
-		spdlog::error("Failed to open fragment shader file");
-		return false;
-	}
-
-	size_t fragFileSize = static_cast<size_t>(fragFile.tellg());
-	std::vector<char> fragCode(fragFileSize);
-	fragFile.seekg(0);
-	fragFile.read(fragCode.data(), fragFileSize);
-	fragFile.close();
-
-	VkShaderModuleCreateInfo vertModuleInfo{};
-	vertModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	vertModuleInfo.codeSize = vertCode.size();
-	vertModuleInfo.pCode = reinterpret_cast<const uint32_t*>(vertCode.data());
-
-	VkShaderModule vertShaderModule;
-	result = vkCreateShaderModule(this->device, &vertModuleInfo, nullptr, &vertShaderModule);
-	if (result != VK_SUCCESS) {
-		spdlog::error("Failed to create vertex shader module: {}", static_cast<int>(result));
-		return false;
-	}
-
-	VkShaderModuleCreateInfo fragModuleInfo{};
-	fragModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	fragModuleInfo.codeSize = fragCode.size();
-	fragModuleInfo.pCode = reinterpret_cast<const uint32_t*>(fragCode.data());
-
-	VkShaderModule fragShaderModule;
-	result = vkCreateShaderModule(this->device, &fragModuleInfo, nullptr, &fragShaderModule);
-	if (result != VK_SUCCESS) {
-		spdlog::error("Failed to create fragment shader module: {}", static_cast<int>(result));
-		vkDestroyShaderModule(this->device, vertShaderModule, nullptr);
-		return false;
-	}
-
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
-
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = fragShaderModule;
-	fragShaderStageInfo.pName = "main";
-
-	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+	VkPipelineShaderStageCreateInfo shaderStages[] = {
+		vertShader.getStageCreateInfo(),
+		fragShader.getStageCreateInfo()
+	};
 
 	/// Part 8: Create graphics pipeline
 	/// This is a simple fullscreen quad pipeline with no depth testing or culling
@@ -898,22 +876,28 @@ bool MandelbrotDemo::createGraphicsPipeline(VkRenderPass renderPass) {
 	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = &dynamicState;
-	pipelineInfo.layout = this->graphicsPipelineLayout;
+	pipelineInfo.layout = this->graphicsPipelineLayout.get();
 	pipelineInfo.renderPass = renderPass;  /// Provided by renderer
 	pipelineInfo.subpass = 0;
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
+	VkPipeline rawGraphicsPipeline;
 	result = vkCreateGraphicsPipelines(this->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
-									   &this->graphicsPipeline);
+									   &rawGraphicsPipeline);
 
-	/// Clean up shader modules (no longer needed after pipeline creation)
-	vkDestroyShaderModule(this->device, vertShaderModule, nullptr);
-	vkDestroyShaderModule(this->device, fragShaderModule, nullptr);
+	/// Shader modules cleaned up automatically by ShaderModule RAII
 
 	if (result != VK_SUCCESS) {
 		spdlog::error("Failed to create graphics pipeline: {}", static_cast<int>(result));
 		return false;
 	}
+
+	/// Wrap in RAII handle
+	this->graphicsPipeline = vulkan::VulkanPipelineHandle(
+		rawGraphicsPipeline,
+		[device = this->device](VkPipeline pipeline) {
+			vkDestroyPipeline(device, pipeline, nullptr);
+		});
 
 	spdlog::debug("Graphics pipeline created (COMBINED_IMAGE_SAMPLER, no depth test)");
 
@@ -936,84 +920,14 @@ uint32_t MandelbrotDemo::findMemoryType(uint32_t typeFilter,
 }
 
 void MandelbrotDemo::cleanup() {
-	/// Destroy in reverse creation order
-	/// Quad buffers (Step 8)
-	if (this->quadIndexBuffer != VK_NULL_HANDLE) {
-		vkDestroyBuffer(this->device, this->quadIndexBuffer, nullptr);
-		this->quadIndexBuffer = VK_NULL_HANDLE;
-	}
-	if (this->quadIndexMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(this->device, this->quadIndexMemory, nullptr);
-		this->quadIndexMemory = VK_NULL_HANDLE;
-	}
-	if (this->quadVertexBuffer != VK_NULL_HANDLE) {
-		vkDestroyBuffer(this->device, this->quadVertexBuffer, nullptr);
-		this->quadVertexBuffer = VK_NULL_HANDLE;
-	}
+	/// Descriptor sets freed automatically when pools destroyed
+	this->graphicsDescriptorSet = VK_NULL_HANDLE;
+	this->computeDescriptorSet = VK_NULL_HANDLE;
+
+	/// Free raw device memory (consistency with Texture pattern)
 	if (this->quadVertexMemory != VK_NULL_HANDLE) {
 		vkFreeMemory(this->device, this->quadVertexMemory, nullptr);
 		this->quadVertexMemory = VK_NULL_HANDLE;
-	}
-
-	/// Graphics pipeline (Step 10)
-	if (this->graphicsPipeline != VK_NULL_HANDLE) {
-		vkDestroyPipeline(this->device, this->graphicsPipeline, nullptr);
-		this->graphicsPipeline = VK_NULL_HANDLE;
-	}
-
-	/// Graphics pipeline layout (Step 10)
-	if (this->graphicsPipelineLayout != VK_NULL_HANDLE) {
-		vkDestroyPipelineLayout(this->device, this->graphicsPipelineLayout, nullptr);
-		this->graphicsPipelineLayout = VK_NULL_HANDLE;
-	}
-
-	/// Graphics descriptor pool (Step 10) - destroys descriptor sets automatically
-	if (this->graphicsDescriptorPool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(this->device, this->graphicsDescriptorPool, nullptr);
-		this->graphicsDescriptorPool = VK_NULL_HANDLE;
-		this->graphicsDescriptorSet = VK_NULL_HANDLE;  /// Implicitly freed
-	}
-
-	/// Graphics descriptor layout (Step 10)
-	if (this->graphicsDescriptorSetLayout != VK_NULL_HANDLE) {
-		vkDestroyDescriptorSetLayout(this->device, this->graphicsDescriptorSetLayout, nullptr);
-		this->graphicsDescriptorSetLayout = VK_NULL_HANDLE;
-	}
-
-	/// Sampler (Step 10)
-	if (this->sampler != VK_NULL_HANDLE) {
-		vkDestroySampler(this->device, this->sampler, nullptr);
-		this->sampler = VK_NULL_HANDLE;
-	}
-
-	/// Compute pipeline (Step 6)
-	if (this->computePipeline != VK_NULL_HANDLE) {
-		vkDestroyPipeline(this->device, this->computePipeline, nullptr);
-		this->computePipeline = VK_NULL_HANDLE;
-	}
-
-	/// Pipeline layout (Step 6)
-	if (this->computePipelineLayout != VK_NULL_HANDLE) {
-		vkDestroyPipelineLayout(this->device, this->computePipelineLayout, nullptr);
-		this->computePipelineLayout = VK_NULL_HANDLE;
-	}
-
-	/// Descriptor pool (Step 4) - destroys descriptor sets automatically
-	if (this->computeDescriptorPool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(this->device, this->computeDescriptorPool, nullptr);
-		this->computeDescriptorPool = VK_NULL_HANDLE;
-		this->computeDescriptorSet = VK_NULL_HANDLE;  /// Implicitly freed
-	}
-
-	/// Descriptor layout (Step 3)
-	if (this->computeDescriptorSetLayout != VK_NULL_HANDLE) {
-		vkDestroyDescriptorSetLayout(this->device, this->computeDescriptorSetLayout, nullptr);
-		this->computeDescriptorSetLayout = VK_NULL_HANDLE;
-	}
-
-	if (this->storageImageView != VK_NULL_HANDLE) {
-		vkDestroyImageView(this->device, this->storageImageView, nullptr);
-		this->storageImageView = VK_NULL_HANDLE;
 	}
 
 	if (this->storageImageMemory != VK_NULL_HANDLE) {
@@ -1021,10 +935,7 @@ void MandelbrotDemo::cleanup() {
 		this->storageImageMemory = VK_NULL_HANDLE;
 	}
 
-	if (this->storageImage != VK_NULL_HANDLE) {
-		vkDestroyImage(this->device, this->storageImage, nullptr);
-		this->storageImage = VK_NULL_HANDLE;
-	}
+	/// All other resources (pipelines, layouts, sampler, images, views, buffers, descriptors) cleaned up by RAII wrappers
 }
 
 bool MandelbrotDemo::handleInput(const SDL_Event& event) {
@@ -1085,14 +996,14 @@ bool MandelbrotDemo::handleInput(const SDL_Event& event) {
 			spdlog::info("Zoom out: zoom = {:.4f}", this->params.zoom);
 			break;
 
-		/// ( key: Decrease iterations
+		/// 1 key: Decrease iterations
 		case SDLK_1:
 			this->params.maxIter = std::max(32, this->params.maxIter - kIterStep);
 			paramsChanged = true;
 			spdlog::info("Decrease iterations: maxIter = {}", this->params.maxIter);
 			break;
 
-		/// ) key: Increase iterations
+		/// 2 key: Increase iterations
 		case SDLK_2:
 			this->params.maxIter = std::min(2048, this->params.maxIter + kIterStep);
 			paramsChanged = true;

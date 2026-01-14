@@ -183,9 +183,11 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Initialize Mandelbrot demo (compute shader learning project)
 		this->mandelbrotDemo = std::make_unique<MandelbrotDemo>(
 			this->vulkanContext->getDevice()->getDevice(),
-			this->vulkanContext->getPhysicalDevice());
+			this->vulkanContext->getPhysicalDevice(),
+			this->bufferManager.get());
 
-		if (!this->mandelbrotDemo->initialize()) {
+		VkExtent2D extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
+		if (!this->mandelbrotDemo->initialize(extent.width, extent.height)) {
 			spdlog::error("Failed to initialize Mandelbrot demo");
 			return false;
 		}

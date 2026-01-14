@@ -159,13 +159,4 @@ I have provided you with a comprehensive indexing system organized by subsystem:
 **General Overview:**
 - The file @general_index.md contains a high-level list of all files in the codebase with simple descriptions.
 
-**Detailed API Documentation (by category):**
-- @detailed_index_core.md - Core application layer (3 files)
-- @detailed_index_vulkan.md - Vulkan abstraction (30 files)
-- @detailed_index_rendering.md - Rendering system (48 files)
-- @detailed_index_models.md - Model loading system (14 files)
-- @detailed_index_scene.md - Scene management (8 files)
-- @detailed_index_planet.md - Planet generation module (16 files)
-- @detailed_index_shaders.md - GLSL shaders (9 files)
-
 Each detailed index contains comprehensive class, function, and method documentation with signatures and descriptions. This index may or may not be up to date.

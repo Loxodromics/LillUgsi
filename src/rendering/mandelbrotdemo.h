@@ -4,11 +4,18 @@
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
+#include <memory>
 
 /// Forward declarations
 union SDL_Event;
 
+namespace lillugsi::vulkan {
+class IndexBuffer;
+}
+
 namespace lillugsi::rendering {
+
+class BufferManager;
 
 /// Push constant structure matching the shader
 /// Must match the layout in mandelbrot.comp.glsl
@@ -25,19 +32,27 @@ struct QuadVertex {
 	glm::vec2 texCoord;   /// UV coordinates (0 to 1)
 };
 
-/// MandelbrotDemo is a standalone compute shader learning project
+/// MandelbrotDemo demonstrates modern Vulkan resource management
 ///
 /// This class demonstrates:
+/// - RAII wrappers (VulkanHandle) for automatic cleanup
+/// - BufferManager integration for efficient buffer creation
 /// - Storage images for compute shader writes (VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
-/// - imageStore() in GLSL compute shaders
 /// - Image memory barriers between compute and fragment stages
 /// - Push constants for interactive parameters
+/// - ShaderModule::fromSpirV() for simplified shader loading
 /// - Complete mini-pipeline: compute generates → graphics displays
+///
+/// Resource Management:
+/// - Most handles use RAII wrappers for automatic cleanup
+/// - VkDescriptorSet remains raw (freed by pool destruction)
+/// - VkDeviceMemory remains raw (consistent with Texture pattern)
+/// - Buffers use shared_ptr from BufferManager
 ///
 /// Usage:
 /// @code
-/// MandelbrotDemo demo(device, physicalDevice);
-/// demo.initialize();
+/// MandelbrotDemo demo(device, physicalDevice, bufferManager);
+/// demo.initialize(width, height);
 /// // In command buffer recording:
 /// demo.generate(cmd);  // Before render pass - dispatches compute
 /// // Inside render pass:
@@ -48,14 +63,17 @@ public:
 	/// Constructor
 	/// @param device The logical Vulkan device
 	/// @param physicalDevice The physical device for memory queries
-	MandelbrotDemo(VkDevice device, VkPhysicalDevice physicalDevice);
+	/// @param bufferManager Buffer manager for creating quad geometry
+	MandelbrotDemo(VkDevice device, VkPhysicalDevice physicalDevice, BufferManager* bufferManager);
 
 	/// Destructor
 	~MandelbrotDemo();
 
 	/// Initialize all resources
+	/// @param width Width of the storage image and viewport
+	/// @param height Height of the storage image and viewport
 	/// @return True if initialization succeeded
-	bool initialize();
+	bool initialize(uint32_t width, uint32_t height);
 
 	/// Clean up all resources
 	void cleanup();
@@ -132,42 +150,50 @@ private:
 	/// Vulkan handles
 	VkDevice device;
 	VkPhysicalDevice physicalDevice;
+	BufferManager* bufferManager;  /// Buffer manager for creating quad geometry (not owned)
 
 	/// Storage image resources (Step 1)
-	VkImage storageImage = VK_NULL_HANDLE;
-	VkDeviceMemory storageImageMemory = VK_NULL_HANDLE;
+	vulkan::VulkanImageHandle storageImage;
+	VkDeviceMemory storageImageMemory{VK_NULL_HANDLE};  /// Keep raw for consistency with Texture pattern
 
 	/// Image view for both compute and fragment access (Step 2)
-	VkImageView storageImageView = VK_NULL_HANDLE;
+	vulkan::VulkanImageViewHandle storageImageView;
 
 	/// Compute descriptor layout (Step 3)
-	VkDescriptorSetLayout computeDescriptorSetLayout = VK_NULL_HANDLE;
+	vulkan::VulkanDescriptorSetLayoutHandle computeDescriptorSetLayout;
 
 	/// Compute descriptor pool and set (Step 4)
-	VkDescriptorPool computeDescriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSet computeDescriptorSet = VK_NULL_HANDLE;
+	vulkan::VulkanDescriptorPoolHandle computeDescriptorPool;
+	VkDescriptorSet computeDescriptorSet{VK_NULL_HANDLE};  /// Keep raw (freed when pool destroyed)
 
 	/// Compute pipeline with push constants (Step 6)
-	VkPipelineLayout computePipelineLayout = VK_NULL_HANDLE;
-	VkPipeline computePipeline = VK_NULL_HANDLE;
+	vulkan::VulkanPipelineLayoutHandle computePipelineLayout;
+	vulkan::VulkanPipelineHandle computePipeline;
 
 	/// Fullscreen quad geometry (Step 8)
-	VkBuffer quadVertexBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory quadVertexMemory = VK_NULL_HANDLE;
-	VkBuffer quadIndexBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory quadIndexMemory = VK_NULL_HANDLE;
+	/// Note: QuadVertex format differs from standard Vertex, so vertex buffer created manually
+	/// Index buffer uses BufferManager since it's just uint32_t indices
+	vulkan::VulkanBufferHandle quadVertexBuffer;
+	VkDeviceMemory quadVertexMemory{VK_NULL_HANDLE};  /// Keep raw for consistency
+	std::shared_ptr<vulkan::IndexBuffer> quadIndexBuffer;
 
 	/// Graphics pipeline and descriptors (Step 10)
-	VkDescriptorSetLayout graphicsDescriptorSetLayout = VK_NULL_HANDLE;
-	VkDescriptorPool graphicsDescriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
-	VkSampler sampler = VK_NULL_HANDLE;
-	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
-	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
+	vulkan::VulkanDescriptorSetLayoutHandle graphicsDescriptorSetLayout;
+	vulkan::VulkanDescriptorPoolHandle graphicsDescriptorPool;
+	VkDescriptorSet graphicsDescriptorSet{VK_NULL_HANDLE};  /// Keep raw (freed when pool destroyed)
+	vulkan::VulkanSamplerHandle sampler;
+	vulkan::VulkanPipelineLayoutHandle graphicsPipelineLayout;
+	vulkan::VulkanPipelineHandle graphicsPipeline;
 
 	/// Configuration
-	static constexpr uint32_t kImageSize = 512;
+	uint32_t imageWidth{0};    /// Width of storage image (dynamic, set from swap chain)
+	uint32_t imageHeight{0};   /// Height of storage image (dynamic, set from swap chain)
 	static constexpr VkFormat kImageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+
+	/// Shader paths for automated loading
+	static constexpr const char* kComputeShaderPath = "shaders/mandelbrot.comp.spv";
+	static constexpr const char* kVertexShaderPath = "shaders/fullscreenquad.vert.spv";
+	static constexpr const char* kFragmentShaderPath = "shaders/fullscreenquad.frag.spv";
 
 	/// Interactive parameter tracking (Step 13)
 	MandelbrotPushConstants params{
