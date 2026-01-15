@@ -101,6 +101,15 @@ public:
 		VkBlendFactor dstAlphaBlendFactor,
 		VkBlendOp alphaBlendOp);
 
+	/// Set the subpass index this pipeline will be used with
+	/// Pipelines must be compatible with the subpass they target
+	/// @param index The subpass index within the render pass
+	void setSubpassIndex(uint32_t index);
+
+	/// Get the current subpass index
+	/// @return The subpass index this pipeline targets
+	[[nodiscard]] uint32_t getSubpassIndex() const;
+
 	/// Generate a hash value for this configuration
 	/// This hash is used for pipeline caching and comparison
 	/// @return A hash value uniquely identifying this configuration
@@ -157,6 +166,10 @@ private:
 	/// Multisampling state
 	/// We keep this as member to ensure pointer validity
 	VkPipelineMultisampleStateCreateInfo multisampling{};
+
+	/// Subpass index within the render pass
+	/// Pipelines are compatible only with the subpass they were created for
+	uint32_t subpassIndex{0};
 
 	/// Initialize all state structures with default values
 	/// Called by constructor to ensure consistent initialization

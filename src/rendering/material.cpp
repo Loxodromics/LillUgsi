@@ -78,6 +78,13 @@ vulkan::PipelineConfig Material::getPipelineConfig() const {
 	/// Start with default configuration for this material type
 	auto config = this->getDefaultConfig();
 
+	/// Set subpass index for rendering
+	/// All standard materials render in subpass 1 (main pass)
+	/// DepthOnlyMaterial overrides this to use subpass 0
+	if (this->materialType != MaterialType::DepthOnly) {
+		config.setSubpassIndex(1);
+	}
+
 	/// Configure vertex input state
 	/// We use the Vertex struct's static methods to get consistent vertex layout
 	config.setVertexInput(

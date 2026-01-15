@@ -151,6 +151,8 @@ add_custom_target(Shaders
 	COMMAND glslc -fshader-stage=compute ${CMAKE_CURRENT_SOURCE_DIR}/shaders/mandelbrot.comp.glsl -o ${CMAKE_BINARY_DIR}/shaders/mandelbrot.comp.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/fullscreenquad.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/fullscreenquad.vert.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/fullscreenquad.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/fullscreenquad.frag.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/depth.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/depth.vert.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/depth.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/depth.frag.spv
 	COMMENT "Compiling shaders"
 )
 add_dependencies(LillUgsi Shaders)

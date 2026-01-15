@@ -676,7 +676,7 @@ void Renderer::createRenderPass() {
 	depthAttachment.format = this->depthBuffer->getFormat(); /// Use the format from our DepthBuffer class
 	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT; /// No multisampling for depth buffer
 	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; /// Clear the depth buffer at the start of the render pass
-	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; /// We don't need to store depth data after rendering
+	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; /// Store depth data for use between subpasses
 	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; /// We're not using stencil buffer
 	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; /// We don't care about the initial layout
@@ -692,36 +692,61 @@ void Renderer::createRenderPass() {
 	depthAttachmentRef.attachment = 1; /// Index of the depth attachment in the attachment descriptions array
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; /// Layout to use during the subpass
 
-	/// Subpass description
-	/// This describes the structure of a subpass within the render pass
-	VkSubpassDescription subpass{};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; /// This is a graphics subpass
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &colorAttachmentRef;
-	subpass.pDepthStencilAttachment = &depthAttachmentRef; /// Include depth attachment in the subpass
+	/// Subpass 0: Depth pre-pass
+	/// Renders only to the depth buffer to establish depth values early
+	/// This enables early-Z optimization in the main pass
+	VkSubpassDescription depthPrepass{};
+	depthPrepass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	depthPrepass.colorAttachmentCount = 0; /// No color attachments
+	depthPrepass.pColorAttachments = nullptr;
+	depthPrepass.pDepthStencilAttachment = &depthAttachmentRef;
+
+	/// Subpass 1: Main pass
+	/// Renders color with depth testing against the pre-populated depth buffer
+	VkSubpassDescription mainPass{};
+	mainPass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	mainPass.colorAttachmentCount = 1;
+	mainPass.pColorAttachments = &colorAttachmentRef;
+	mainPass.pDepthStencilAttachment = &depthAttachmentRef;
+
+	/// Combine subpasses
+	std::array<VkSubpassDescription, 2> subpasses = {depthPrepass, mainPass};
 
 	/// Subpass dependencies
-	/// These define the dependencies between subpasses or with external operations
-	/// We need two dependencies: one for color and one for depth
-	std::array<VkSubpassDependency, 2> dependencies;
+	/// These define synchronization between subpasses and external operations
+	/// We need three dependencies for proper depth pre-pass synchronization
+	std::array<VkSubpassDependency, 3> dependencies;
 
-	/// First dependency: Wait for color attachment output and depth testing before rendering
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL; /// Dependency on operations outside the render pass
-	dependencies[0].dstSubpass = 0; /// Our subpass index
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	dependencies[0].srcAccessMask = 0; /// No access in the source subpass
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = 0; /// Not needed, we're doing straightforward rendering without any special case
+	/// Dependency 0: External → Subpass 0 (depth pre-pass)
+	/// Wait for previous frame operations before starting depth pre-pass
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependencies[0].srcAccessMask = 0;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = 0;
 
-	/// Second dependency: Wait for rendering to finish before presenting
-	dependencies[1].srcSubpass = 0; /// Our subpass index
-	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL; /// Dependency on operations outside the render pass
-	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[1].dstAccessMask = 0; /// No access in the destination subpass
-	dependencies[1].dependencyFlags = 0; /// Not needed, we're doing straightforward rendering without any special case
+	/// Dependency 1: Subpass 0 → Subpass 1 (depth pre-pass → main pass)
+	/// Ensure depth writes complete before main pass reads depth
+	/// This is the critical synchronization between the two subpasses
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = 1;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dependencyFlags = 0;
+
+	/// Dependency 2: Subpass 1 → External (main pass → presentation)
+	/// Wait for main pass to complete before presenting
+	dependencies[2].srcSubpass = 1;
+	dependencies[2].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	dependencies[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[2].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[2].dstAccessMask = 0;
+	dependencies[2].dependencyFlags = 0;
 
 	/// Combine attachments
 	std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
@@ -732,8 +757,8 @@ void Renderer::createRenderPass() {
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 	renderPassInfo.pAttachments = attachments.data();
-	renderPassInfo.subpassCount = 1;
-	renderPassInfo.pSubpasses = &subpass;
+	renderPassInfo.subpassCount = static_cast<uint32_t>(subpasses.size());
+	renderPassInfo.pSubpasses = subpasses.data();
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
@@ -746,7 +771,7 @@ void Renderer::createRenderPass() {
 		vkDestroyRenderPass(this->vulkanContext->getDevice()->getDevice(), rp, nullptr);
 	});
 
-	spdlog::info("Render pass with color and depth attachments created successfully");
+	spdlog::info("Render pass created with {} subpasses: depth pre-pass + main pass", subpasses.size());
 }
 
 void Renderer::createFramebuffers() {

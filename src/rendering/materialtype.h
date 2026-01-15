@@ -26,6 +26,7 @@ enum class MaterialType : uint32_t {
 	/// Special purpose materials
 	Skybox,         /// Specialized material for skybox rendering
 	Post,           /// Post-processing material
+	DepthOnly,      /// Depth-only material for depth pre-pass
 	Custom          /// User-defined material type
 };
 
@@ -43,6 +44,7 @@ enum class MaterialType : uint32_t {
 		case MaterialType::Normals:   return "Normals";
 		case MaterialType::Skybox:    return "Skybox";
 		case MaterialType::Post:      return "Post";
+		case MaterialType::DepthOnly: return "DepthOnly";
 		case MaterialType::Custom:    return "Custom";
 		default:                      return "Unknown";
 	}

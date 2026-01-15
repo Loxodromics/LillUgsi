@@ -165,6 +165,15 @@ void PipelineConfig::setBlendState(bool enableBlending,
 	spdlog::debug("Set blend state - enabled: {}, color blend op: {}", enableBlending, colorBlendOp);
 }
 
+void PipelineConfig::setSubpassIndex(uint32_t index) {
+	this->subpassIndex = index;
+	spdlog::debug("Set pipeline subpass index: {}", index);
+}
+
+uint32_t PipelineConfig::getSubpassIndex() const {
+	return this->subpassIndex;
+}
+
 size_t PipelineConfig::hash() const {
 	/// Generate a hash combining all pipeline state
 	/// We use the FNV-1a hash algorithm for good distribution
@@ -187,6 +196,7 @@ size_t PipelineConfig::hash() const {
 	hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(this->rasterization.cullMode));
 	hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(this->depthStencil.depthCompareOp));
 	hash ^= std::hash<uint32_t>{}(this->colorBlendAttachment.blendEnable);
+	hash ^= std::hash<uint32_t>{}(this->subpassIndex);
 
 	return hash;
 }
@@ -269,6 +279,13 @@ VkGraphicsPipelineCreateInfo PipelineConfig::getCreateInfo(
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+	/// Handle depth-only subpass (subpass 0 has no color attachments)
+	/// Pipelines for depth pre-pass must have zero color blend attachments
+	if (this->subpassIndex == 0) {
+		this->colorBlend.attachmentCount = 0;
+		this->colorBlend.pAttachments = nullptr;
+	}
+
 	/// Create the final pipeline create info
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -284,7 +301,7 @@ VkGraphicsPipelineCreateInfo PipelineConfig::getCreateInfo(
 	pipelineInfo.pDynamicState = &this->dynamicState;
 	pipelineInfo.layout = layout;
 	pipelineInfo.renderPass = renderPass;
-	pipelineInfo.subpass = 0;
+	pipelineInfo.subpass = this->subpassIndex;
 
 	return pipelineInfo;
 }
