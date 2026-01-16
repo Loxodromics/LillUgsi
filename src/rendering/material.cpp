@@ -182,11 +182,20 @@ void Material::initializeDepthState(vulkan::PipelineConfig& config) const {
 			break;
 
 		default:
-			/// Standard materials use normal depth testing:
-			/// - Enable depth testing and writing
-			/// - Use GREATER for Reverse-Z configuration
-			/// - This provides better depth precision
-			config.setDepthState(true, true, VK_COMPARE_OP_GREATER);
+			/// Standard materials use depth testing with configuration based on depth pre-pass
+			if (Material::sUseDepthPrepass) {
+				/// When depth pre-pass is enabled (subpass 0 writes depth):
+				/// - Enable depth testing but disable depth writes (depth already written)
+				/// - Use GREATER_OR_EQUAL to handle floating-point precision
+				/// - This prevents Z-fighting between pre-pass and main pass
+				config.setDepthState(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
+			} else {
+				/// When depth pre-pass is disabled (single pass rendering):
+				/// - Enable depth testing and writing
+				/// - Use GREATER for Reverse-Z configuration
+				/// - This provides better depth precision
+				config.setDepthState(true, true, VK_COMPARE_OP_GREATER);
+			}
 			break;
 	}
 

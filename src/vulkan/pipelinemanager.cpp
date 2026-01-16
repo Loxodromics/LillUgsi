@@ -1,19 +1,33 @@
 #include "pipelinemanager.h"
+#include "rendering/depthonlymaterial.h"
 #include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::vulkan {
 
-PipelineManager::PipelineManager(VkDevice device, VkRenderPass renderPass)
+PipelineManager::PipelineManager(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass)
 	: device(device)
+	, physicalDevice(physicalDevice)
 	, renderPass(renderPass) {
 	spdlog::debug("Created pipeline manager");
 }
+
+PipelineManager::~PipelineManager() = default;
 
 void PipelineManager::initialize() {
 	/// Create global descriptor layouts before any pipeline creation
 	/// These layouts are required for all materials
 	this->createGlobalDescriptorLayouts();
+
+	/// Create shared depth-only material for all depth pipelines
+	/// This provides the correct pipeline config (subpass 0, depth shaders)
+	this->depthMaterial = std::make_unique<rendering::DepthOnlyMaterial>(
+		this->device,
+		"DepthPrepass",
+		this->physicalDevice
+	);
+	spdlog::debug("Created shared depth-only material for depth pre-pass");
+
 	spdlog::info("Pipeline manager initialized with global descriptor layouts");
 }
 
@@ -169,6 +183,89 @@ void PipelineManager::createGlobalDescriptorLayouts() {
 
 		spdlog::debug("Created light descriptor set layout");
 	}
+
+	/// Create depth-only pipeline layout (camera set only, no light/material)
+	/// This is used for depth pre-pass rendering
+	{
+		VkDescriptorSetLayout cameraLayout = this->cameraDescriptorLayout.get();
+
+		VkPipelineLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		layoutInfo.setLayoutCount = 1;
+		layoutInfo.pSetLayouts = &cameraLayout;
+
+		/// Configure push constant for model matrix (same as main pass)
+		VkPushConstantRange pushConstantRange{};
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		pushConstantRange.offset = 0;
+		pushConstantRange.size = sizeof(glm::mat4);
+		layoutInfo.pushConstantRangeCount = 1;
+		layoutInfo.pPushConstantRanges = &pushConstantRange;
+
+		VkPipelineLayout layout;
+		VK_CHECK(vkCreatePipelineLayout(this->device, &layoutInfo, nullptr, &layout));
+
+		this->depthPipelineLayout = VulkanPipelineLayoutHandle(
+			layout,
+			[this](VkPipelineLayout l) {
+				vkDestroyPipelineLayout(this->device, l, nullptr);
+			}
+		);
+
+		spdlog::debug("Created depth-only pipeline layout");
+	}
+}
+
+std::shared_ptr<VulkanPipelineHandle> PipelineManager::getOrCreateDepthPipeline(
+	const rendering::Material& material) {
+	/// Use DepthOnlyMaterial's config instead of input material's config
+	/// This ensures we get:
+	/// - Correct shaders (depth.vert.spv, depth.frag.spv) expecting only set 0
+	/// - Correct subpass index (0 for depth pre-pass)
+	/// - Correct descriptor set expectations (camera only)
+	auto config = this->depthMaterial->getPipelineConfig();
+	size_t configHash = config.hash();
+
+	/// Check if we already have a depth pipeline for this configuration
+	auto it = this->depthPipelines.find(configHash);
+	if (it != this->depthPipelines.end()) {
+		spdlog::trace("Reusing depth pipeline for material '{}'", material.getName());
+		return it->second.pipeline;
+	}
+
+	/// Create new depth pipeline
+	auto createInfo = config.getCreateInfo(
+		this->device,
+		this->renderPass,
+		this->depthPipelineLayout.get()
+	);
+
+	VkPipeline pipeline;
+	VK_CHECK(vkCreateGraphicsPipelines(
+		this->device, VK_NULL_HANDLE, 1, &createInfo, nullptr, &pipeline));
+
+	/// Wrap in RAII handles
+	MaterialPipeline depthPipeline;
+	depthPipeline.pipeline = std::make_shared<VulkanPipelineHandle>(
+		pipeline,
+		[this, configHash](VkPipeline p) {
+			spdlog::debug("Released depth pipeline reference");
+		}
+	);
+	depthPipeline.layout = std::make_shared<VulkanPipelineLayoutHandle>(
+		this->depthPipelineLayout.get(),
+		[](VkPipelineLayout l) {
+			/// Layout is shared and cleaned up in PipelineManager cleanup
+		}
+	);
+
+	/// Cache the depth pipeline
+	this->depthPipelines[configHash] = depthPipeline;
+
+	spdlog::info("Created depth pipeline for material '{}' with hash {:#x}",
+		material.getName(), configHash);
+
+	return depthPipeline.pipeline;
 }
 
 PipelineManager::MaterialPipeline PipelineManager::getOrCreatePipeline(
@@ -385,6 +482,19 @@ void PipelineManager::cleanup() {
 	this->computePipelines.clear();
 	spdlog::debug("Compute pipelines cleared successfully");
 
+	/// Clean up depth pipelines
+	spdlog::debug("PipelineManager cleanup: About to clear {} depth pipelines",
+		this->depthPipelines.size());
+	for (const auto& [hash, depthPipeline] : this->depthPipelines) {
+		/// Destroy the pipeline manually (layout is shared and destroyed later)
+		if (depthPipeline.pipeline && depthPipeline.pipeline->get() != VK_NULL_HANDLE) {
+			vkDestroyPipeline(this->device, depthPipeline.pipeline->get(), nullptr);
+		}
+		spdlog::debug("Destroyed depth pipeline with hash {:#x}", hash);
+	}
+	this->depthPipelines.clear();
+	spdlog::debug("Depth pipelines cleared successfully");
+
 	/// Clean up shared pipeline resources
 	for (const auto& [hash, cache] : this->pipelinesByConfig)
 	{
@@ -404,6 +514,7 @@ void PipelineManager::cleanup() {
 	this->shaderPrograms.clear();
 
 	/// Clean up global descriptor layouts last
+	this->depthPipelineLayout.reset();
 	this->lightDescriptorLayout.reset();
 	this->cameraDescriptorLayout.reset();
 

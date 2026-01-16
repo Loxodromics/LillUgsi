@@ -305,6 +305,10 @@ private:
 	std::unique_ptr<MandelbrotDemo> mandelbrotDemo;
 	bool showMandelbrot = false;  /// Toggle for showing fractal vs normal scene
 
+	/// Depth pre-pass toggle
+	/// When enabled, renders depth-only pass before main pass for early-Z optimization
+	bool useDepthPrepass = true;
+
 };
 
 } /// namespace lillugsi::rendering

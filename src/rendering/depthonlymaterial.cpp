@@ -13,8 +13,8 @@ DepthOnlyMaterial::DepthOnlyMaterial(VkDevice device,
 
 ShaderPaths DepthOnlyMaterial::getShaderPaths() const {
 	return ShaderPaths{
-		"build/shaders/depth.vert.spv",
-		"build/shaders/depth.frag.spv"
+		"shaders/depth.vert.spv",
+		"shaders/depth.frag.spv"
 	};
 }
 

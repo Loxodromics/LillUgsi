@@ -9,6 +9,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace lillugsi::rendering {
+	class DepthOnlyMaterial;
+}
+
 namespace lillugsi::vulkan {
 
 /// PipelineManager class
@@ -43,11 +47,12 @@ class PipelineManager {
 	public:
 		/// Constructor
 		/// @param device The logical Vulkan device
+		/// @param physicalDevice The physical Vulkan device
 		/// @param renderPass The render pass with which the pipelines will be compatible
-	PipelineManager(VkDevice device, VkRenderPass renderPass);
+	PipelineManager(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass);
 
-	/// Destructor
-	~PipelineManager() = default;
+	/// Destructor - defined in .cpp for complete type
+	~PipelineManager();
 
 	/// Initialize global descriptor layouts
 	/// Must be called before any pipeline creation
@@ -85,6 +90,20 @@ class PipelineManager {
 	[[nodiscard]] VkDescriptorSetLayout getLightDescriptorLayout() const {
 		return this->lightDescriptorLayout.get();
 	}
+
+	/// Get the depth-only pipeline layout
+	/// Used for depth pre-pass rendering (only camera set)
+	/// @return The depth-only pipeline layout
+	[[nodiscard]] VkPipelineLayout getDepthPipelineLayout() const {
+		return this->depthPipelineLayout.get();
+	}
+
+	/// Get or create a depth-only pipeline for the given material
+	/// Depth pipelines use a simplified layout (camera only)
+	/// @param material The material to create a depth pipeline for
+	/// @return A shared pointer to the depth pipeline handle
+	[[nodiscard]] std::shared_ptr<VulkanPipelineHandle> getOrCreateDepthPipeline(
+		const rendering::Material& material);
 
 	/// Check if a pipeline exists for a material
 	/// This is needed for the PipelineFactory to avoid creating duplicate pipelines
@@ -171,7 +190,12 @@ private:
 		const rendering::Material& material);
 
 	VkDevice device;
+	VkPhysicalDevice physicalDevice;
 	VkRenderPass renderPass;
+
+	/// Shared depth-only material for all depth pipelines
+	/// This provides the correct pipeline config (subpass 0, depth shaders)
+	std::unique_ptr<rendering::DepthOnlyMaterial> depthMaterial;
 
 	/// Cache of shared pipeline resources by configuration
 	/// Multiple materials with the same configuration share these pipelines
@@ -185,6 +209,14 @@ private:
 	/// These are shared across all pipelines
 	VulkanDescriptorSetLayoutHandle cameraDescriptorLayout;
 	VulkanDescriptorSetLayoutHandle lightDescriptorLayout;
+
+	/// Depth-only pipeline layout (camera set only)
+	/// Used for depth pre-pass rendering
+	VulkanPipelineLayoutHandle depthPipelineLayout;
+
+	/// Storage for depth-only pipelines
+	/// Each material type gets its own depth pipeline
+	std::unordered_map<size_t, MaterialPipeline> depthPipelines;
 
 	/// Named pipelines for direct lookup
 	/// We keep this for compatibility and explicit pipeline access

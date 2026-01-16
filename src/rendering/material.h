@@ -58,6 +58,11 @@ public:
 
 	void setCullingMode(CullingMode cullingMode) { this->cullingMode = cullingMode; }
 
+	/// Static flag to control depth pre-pass behavior
+	/// When true, materials in the main pass will use GREATER_OR_EQUAL and disable depth writes
+	/// This flag is set by the Renderer based on its depth pre-pass configuration
+	static inline bool sUseDepthPrepass = true;
+
 	/// Bind this material's resources for rendering
 	/// This includes setting up descriptor sets and push constants
 	/// @param cmdBuffer The command buffer to record binding commands to

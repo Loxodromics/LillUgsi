@@ -92,6 +92,7 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// as they depend on the global descriptor layouts
 		this->pipelineManager = std::make_unique<vulkan::PipelineManager>(
 			this->vulkanContext->getDevice()->getDevice(),
+			this->vulkanContext->getPhysicalDevice(),
 			this->renderPass.get()
 		);
 		this->pipelineManager->initialize();
@@ -139,6 +140,9 @@ bool Renderer::initialize(SDL_Window* window) {
 		/// Create descriptor sets
 		/// Using global layouts from pipeline manager
 		this->createDescriptorSets();
+
+		/// Set global material depth pre-pass flag to match renderer configuration
+		Material::sUseDepthPrepass = this->useDepthPrepass;
 
 		/// Initialize material system
 		this->initializeMaterials();
@@ -874,6 +878,111 @@ void Renderer::recordCommandBuffers() {
 		/// and no secondary command buffers will be executed
 		vkCmdBeginRenderPass(this->commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+		/// Subpass 0: Depth pre-pass (optional)
+		/// Renders depth-only to populate depth buffer for early-Z optimization
+		if (this->useDepthPrepass && !this->showMandelbrot) {
+			/// Collect render data from visible objects
+			std::vector<Mesh::RenderData> depthRenderData;
+			this->scene->getRenderData(*this->camera, depthRenderData);
+
+			/// Track current material for pipeline switches
+			std::string currentDepthMaterial;
+
+			/// Render depth-only for all opaque objects
+			for (const auto& data : depthRenderData) {
+				/// Skip invalid objects
+				if (!data.vertexBuffer || !data.indexBuffer || !data.material) {
+					continue;
+				}
+
+				/// Skip transparent materials - they need proper depth sorting in main pass
+				if (data.material->hasFeature(MaterialFeatureFlags::Transparent)) {
+					continue;
+				}
+
+				/// Get material for depth pipeline lookup
+				const auto& materialName = data.material->getName();
+
+				/// Switch depth pipeline only if material changes
+				if (materialName != currentDepthMaterial) {
+					/// Get or create depth pipeline for this material
+					auto depthPipeline = this->pipelineManager->getOrCreateDepthPipeline(*data.material);
+					if (!depthPipeline) {
+						spdlog::error("Failed to create depth pipeline for material '{}'", materialName);
+						continue;
+					}
+
+					/// Get depth pipeline layout
+					VkPipelineLayout depthLayout = this->pipelineManager->getDepthPipelineLayout();
+
+					/// Bind depth-only pipeline
+					vkCmdBindPipeline(this->commandBuffers[i],
+						VK_PIPELINE_BIND_POINT_GRAPHICS,
+						depthPipeline->get());
+
+					/// Set dynamic viewport and scissor for depth pass
+					VkViewport viewport{};
+					viewport.x = 0.0f;
+					viewport.y = 0.0f;
+					viewport.width = static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().width);
+					viewport.height = static_cast<float>(this->vulkanContext->getSwapChain()->getSwapChainExtent().height);
+					viewport.minDepth = 0.0f;
+					viewport.maxDepth = 1.0f;
+
+					VkRect2D scissor{};
+					scissor.offset = {0, 0};
+					scissor.extent = this->vulkanContext->getSwapChain()->getSwapChainExtent();
+
+					vkCmdSetViewport(this->commandBuffers[i], 0, 1, &viewport);
+					vkCmdSetScissor(this->commandBuffers[i], 0, 1, &scissor);
+
+					/// Bind camera descriptor (set 0 only for depth pass)
+					VkDescriptorSet cameraSet = this->cameraDescriptorSets[this->currentFrame][i];
+					vkCmdBindDescriptorSets(
+						this->commandBuffers[i],
+						VK_PIPELINE_BIND_POINT_GRAPHICS,
+						depthLayout,
+						0,  /// First set = 0 (camera)
+						1,  /// Bind only camera set
+						&cameraSet,
+						0, nullptr
+					);
+
+					currentDepthMaterial = materialName;
+				}
+
+				/// Update push constants with model matrix
+				vkCmdPushConstants(
+					this->commandBuffers[i],
+					this->pipelineManager->getDepthPipelineLayout(),
+					VK_SHADER_STAGE_VERTEX_BIT,
+					0,
+					sizeof(glm::mat4),
+					&data.modelMatrix
+				);
+
+				/// Bind vertex and index buffers
+				VkBuffer vertexBuffers[] = {data.vertexBuffer->get()};
+				VkDeviceSize offsets[] = {0};
+				vkCmdBindVertexBuffers(this->commandBuffers[i], 0, 1, vertexBuffers, offsets);
+				vkCmdBindIndexBuffer(this->commandBuffers[i], data.indexBuffer->get(), 0,
+					VK_INDEX_TYPE_UINT32);
+
+				/// Draw depth-only
+				vkCmdDrawIndexed(this->commandBuffers[i],
+					data.indexBuffer->getIndexCount(),
+					1, 0, 0, 0);
+			}
+
+			/// Transition to subpass 1 (main pass)
+			vkCmdNextSubpass(this->commandBuffers[i], VK_SUBPASS_CONTENTS_INLINE);
+		} else if (!this->showMandelbrot) {
+			/// If depth pre-pass is disabled, transition immediately to subpass 1
+			/// without rendering anything in subpass 0
+			vkCmdNextSubpass(this->commandBuffers[i], VK_SUBPASS_CONTENTS_INLINE);
+		}
+
+		/// Subpass 1: Main pass (color + lighting)
 		/// Choose what to render based on toggle state
 		if (this->showMandelbrot) {
 			/// Render Mandelbrot fractal on fullscreen quad
@@ -1228,6 +1337,25 @@ void Renderer::handleCameraInput(SDL_Window* window, const SDL_Event& event) {
 				this->showMandelbrot = !this->showMandelbrot;
 				spdlog::info("Mandelbrot demo: {}", this->showMandelbrot ? "ON" : "OFF");
 				/// Need to re-record command buffers when toggling
+				this->recordCommandBuffers();
+				return;
+
+			/// P: Toggle depth pre-pass
+			case SDLK_P:
+				this->useDepthPrepass = !this->useDepthPrepass;
+				spdlog::info("Depth pre-pass: {}", this->useDepthPrepass ? "ON" : "OFF");
+
+				/// Wait for device to finish current operations
+				vkDeviceWaitIdle(this->vulkanContext->getDevice()->getDevice());
+
+				/// Update the global material flag to affect pipeline creation
+				Material::sUseDepthPrepass = this->useDepthPrepass;
+
+				/// Recreate pipelines with new depth state
+				/// This is necessary because depth state is baked into the pipeline
+				this->initializeMaterials();
+
+				/// Re-record command buffers with new pipelines
 				this->recordCommandBuffers();
 				return;
 

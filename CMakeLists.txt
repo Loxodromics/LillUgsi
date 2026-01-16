@@ -66,6 +66,7 @@ set(MAIN_SOURCES
 		src/rendering/texturemanager.cpp
 		src/rendering/orbitcamera.cpp
 		src/rendering/debugmaterial.cpp
+		src/rendering/depthonlymaterial.cpp
 		src/vulkan/commandbuffermanager.cpp
 		src/vulkan/framebuffermanager.cpp
 		src/rendering/buffermanager.cpp
