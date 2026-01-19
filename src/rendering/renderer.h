@@ -239,8 +239,8 @@ private:
 
 	/// The camera used for rendering the scene
 	/// We use a unique_ptr for automatic memory management and to allow for easy replacement if needed
-	// std::unique_ptr<EditorCamera> camera;
-	std::unique_ptr<OrbitCamera> camera;
+	std::unique_ptr<EditorCamera> camera;
+	// std::unique_ptr<OrbitCamera> camera;
 
 	/// Flag to track if cleanup has been performed
 	bool isCleanedUp;
@@ -257,8 +257,6 @@ private:
 #ifdef USE_PLANET
 	std::shared_ptr<planet::PlanetData> icosphere;
 #endif
-
-	std::shared_ptr<scene::SceneNode> texturedCubeNode;
 
 	/// Screenshot manager variables
 	std::unique_ptr<Screenshot> screenshotManager;

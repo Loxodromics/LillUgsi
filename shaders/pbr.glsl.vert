@@ -48,9 +48,10 @@ layout(push_constant) uniform PushConstants {
 
 void main() {
 	/// Calculate world-space position by transforming vertex position with model matrix
-	/// We need the world position for lighting calculations in the fragment shader
-	/// and to calculate the view direction from the camera to this fragment
-	fragPosition = vec3(push.model * vec4(inPosition, 1.0));
+	/// IMPORTANT: Keep worldPos as vec4 for gl_Position calculation to ensure
+	/// bit-identical depth values with the depth pre-pass shader
+	vec4 worldPos = push.model * vec4(inPosition, 1.0);
+	fragPosition = worldPos.xyz;
 
 	/// Calculate world-space normal by applying the normal matrix to the input normal
 	/// We use the transpose of the inverse of the model matrix for correct normal transformation
@@ -102,10 +103,8 @@ void main() {
 
 	/// Final required transformation: vertex position to clip space
 	/// This is the position the GPU uses for rasterization and depth testing
-	gl_Position = camera.proj * camera.view * vec4(fragPosition, 1.0);
-
-	/// Negate Z for Reverse-Z depth mapping
-	/// The swapped near/far parameters in glm::perspective() produce negative Z values
-	/// Negating restores correct Reverse-Z: near objects→1.0, far objects→0.0
-	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
+	/// IMPORTANT: Use worldPos (vec4) directly, not vec4(fragPosition, 1.0)
+	/// This ensures bit-identical depth values with the depth pre-pass shader,
+	/// avoiding z-fighting from floating-point precision differences
+	gl_Position = camera.proj * camera.view * worldPos;
 }

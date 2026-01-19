@@ -166,16 +166,14 @@ glm::mat4 OrbitCamera::getViewMatrix() const {
 }
 
 glm::mat4 OrbitCamera::getProjectionMatrix(float aspectRatio) const {
-	/// Create a projection matrix that's consistent with the base camera class
-	/// While we could customize the projection for orbiting cameras (e.g., for
-	/// orthographic views), we maintain consistency with the existing system
-
-	/// For perspective projection, we use the standard approach with the camera's FOV
+	/// Create a standard perspective projection matrix
+	/// With GLM_FORCE_DEPTH_ZERO_TO_ONE, this produces [0,1] depth range for Vulkan
+	/// Normal Z: near objects have lower depth values, far objects have higher values
 	return glm::perspective(
-		glm::radians(this->getFov()), /// Vertical field of view in radians
+		glm::radians(this->getFov()),
 		aspectRatio,
-		this->getFarPlane(), /// Far clipping plane and
-		this->getNearPlane() /// Near clipping plane are revesed since we are using Reverse-Z
+		this->getNearPlane(),
+		this->getFarPlane()
 	);
 }
 

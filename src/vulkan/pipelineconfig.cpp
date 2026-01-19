@@ -194,6 +194,10 @@ size_t PipelineConfig::hash() const {
 	hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(this->inputAssembly.topology));
 	hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(this->rasterization.polygonMode));
 	hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(this->rasterization.cullMode));
+	/// Include all depth state in hash - not just compare op
+	/// This ensures pipelines with different depth test/write settings get different hashes
+	hash ^= std::hash<uint32_t>{}(this->depthStencil.depthTestEnable);
+	hash ^= std::hash<uint32_t>{}(this->depthStencil.depthWriteEnable);
 	hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(this->depthStencil.depthCompareOp));
 	hash ^= std::hash<uint32_t>{}(this->colorBlendAttachment.blendEnable);
 	hash ^= std::hash<uint32_t>{}(this->subpassIndex);

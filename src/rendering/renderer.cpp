@@ -48,8 +48,8 @@ Renderer::Renderer()
 
 	/// Initialize the camera with a default position
 	/// We place the camera slightly back and up to view the scene
-	// this->camera = std::make_unique<EditorCamera>(glm::vec3(3.0f, -3.0f, -3.0f), 135, 28);
-	this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0, 0.0, 0.0), 2);
+	this->camera = std::make_unique<EditorCamera>(glm::vec3(3.0f, -3.0f, -3.0f), 135, 28);
+	// this->camera = std::make_unique<OrbitCamera>(glm::vec3(0.0, 0.0, 0.0), 2);
 }
 
 Renderer::~Renderer() {
@@ -280,7 +280,6 @@ void Renderer::cleanup() {
 
 	/// Clean up scene first as it might hold GPU resources
 	/// This ensures proper cleanup order and avoids dangling references
-	this->texturedCubeNode.reset();
 	this->scene.reset();
 
 	/// Clean up synchronization objects
@@ -456,17 +455,6 @@ void Renderer::update(float deltaTime) {
 	/// Store frame time for effects and animations
 	this->currentFrameTime = deltaTime;
 	
-	/// Rotate at x degrees per second
-	float rotationSpeed = 10.0f; /// degrees per second
-	float angleInRadians = glm::radians(rotationSpeed * deltaTime);
-	glm::vec3 yAxis(0.0f, 1.0f, 0.0f);
-	glm::quat deltaRotation = glm::angleAxis(angleInRadians, yAxis);
-
-	/// Apply the incremental rotation
-	auto transform = this->texturedCubeNode->getLocalTransform();
-	transform.rotation = transform.rotation * deltaRotation;
-	// this->texturedCubeNode->setLocalTransform(transform);
-
 	/// Update scene with the provided delta time
 	/// This ensures all scene objects use the same time step
 	this->scene->update(deltaTime);
@@ -860,10 +848,9 @@ void Renderer::recordCommandBuffers() {
 		/// Set clear values for color and depth attachments
 		std::array<VkClearValue, 2> clearValues{};
 		clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};  /// Black with 100% opacity
-		/// For Reverse-Z, we clear to 0.0f instead of 1.0f
-		/// This represents the furthest possible depth value in Reverse-Z
-		/// Objects closer to the camera will have depth values closer to 1.0
-		clearValues[1].depthStencil = {0.0f, 0};            /// Using 0.0f for Reverse-Z
+		/// For Normal Z, clear depth to 1.0 (furthest)
+		/// Objects closer to the camera will have lower depth values (near 0)
+		clearValues[1].depthStencil = {1.0f, 0};
 
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassInfo.pClearValues = clearValues.data();
@@ -1486,96 +1473,78 @@ void Renderer::initializeScene() {
 	/// We use the Scene API to create and position objects
 	auto rootNode = this->scene->getRoot();
 
-	/// Create a metallic material for the icosphere
-	/// We use different material properties to better showcase the geometry
-	auto metallicMaterial = this->materialManager->createPBRMaterial("metallic");
-	metallicMaterial->setBaseColor(glm::vec4(0.95f, 0.95f, 0.95f, 1.0f));  /// Almost white
-	metallicMaterial->setMetallic(1.0f);     /// Fully metallic
-	metallicMaterial->setRoughness(0.2f);    /// Fairly smooth for good reflection
-	metallicMaterial->setAmbient(1.0f);      /// Full ambient occlusion
+	/// Create depth test scene with simple geometry
+	/// This scene has objects at different depths to verify depth ordering works correctly
+	spdlog::info("Creating depth test scene with cubes and sphere...");
 
-	auto wireframeMaterial = this->materialManager->createWireframeMaterial("wireframe");
+	/// Get materials that were created in initializeMaterials()
+	auto greenMaterial = this->materialManager->getMaterial("green");
+	auto blueMaterial = this->materialManager->getMaterial("blue");
+	auto metallicMaterial = this->materialManager->getMaterial("metallic");
+	auto redMaterial = this->materialManager->getMaterial("red");
 
-	auto debugMaterial = this->materialManager->getMaterial("debug");
-	if (!debugMaterial) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Debugmaterial not found",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
+	/// FRONT CUBE (Red) - Closest to camera at Z = -5
+	/// This should render in front of everything else
+	auto frontCubeNode = this->scene->createNode("FrontCube", rootNode);
+	auto frontCubeMesh = this->meshManager->createMesh<CubeMesh>(1.5f);
+	frontCubeMesh->setMaterial(redMaterial);
+	frontCubeNode->setMesh(std::move(frontCubeMesh));
 
-	auto texturedMaterial = this->materialManager->createPBRMaterial("textured");
-	auto redMaterial = this->materialManager->createPBRMaterial("red");
+	scene::Transform frontTransform;
+	frontTransform.position = glm::vec3(-2.0f, 0.0f, -5.0f);
+	frontCubeNode->setLocalTransform(frontTransform);
 
-	/// Create normal debug material with custom normal_debug shader
-	/// This uses the same vertex shader but the debug fragment shader
-	/// Managed by MaterialManager for proper cleanup ordering
-	auto normalDebugMaterial = this->materialManager->createPBRMaterialWithCustomShaders(
-		"normal_debug",
-		"shaders/pbr.vert.spv",              /// Same vertex shader
-		"shaders/normal_debug.frag.spv"     /// Debug fragment shader
-	);
+	/// MIDDLE CUBE (Green) - At Z = -8
+	/// This should be behind the front cube and in front of the back cube
+	auto middleCubeNode = this->scene->createNode("MiddleCube", rootNode);
+	auto middleCubeMesh = this->meshManager->createMesh<CubeMesh>(1.5f);
+	middleCubeMesh->setMaterial(greenMaterial);
+	middleCubeNode->setMesh(std::move(middleCubeMesh));
 
-	/// Load test normal map for debugging normal calculations
-	auto testNormalMap = this->textureManager->getOrLoadTexture(
-		"resources/textures/test_normalmap.png",
-		"resources/textures/test_normalmap.png"
-	);
+	scene::Transform middleTransform;
+	middleTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	middleCubeNode->setLocalTransform(middleTransform);
 
-	/// Assign textures to material
-	/// The MaterialManager already set default textures, we only need to override the normal map
-	normalDebugMaterial->setNormalMap(testNormalMap);
-	normalDebugMaterial->setNormalStrength(1.0f);  /// Full strength for testing
+	/// BACK CUBE (Blue) - Furthest from camera at Z = -11
+	/// This should render behind everything else
+	auto backCubeNode = this->scene->createNode("BackCube", rootNode);
+	auto backCubeMesh = this->meshManager->createMesh<CubeMesh>(1.5f);
+	backCubeMesh->setMaterial(blueMaterial);
+	backCubeNode->setMesh(std::move(backCubeMesh));
 
-	/// Create pipeline for normal debug material
-	auto normalDebugPipeline = this->pipelineManager->createPipeline(*normalDebugMaterial);
-	if (!normalDebugPipeline) {
-		throw vulkan::VulkanException(
-			VK_ERROR_INITIALIZATION_FAILED,
-			"Failed to create pipeline for normal debug material",
-			__FUNCTION__, __FILE__, __LINE__
-		);
-	}
+	scene::Transform backTransform;
+	backTransform.position = glm::vec3(2.0f, 0.0f, -11.0f);
+	backCubeNode->setLocalTransform(backTransform);
 
-	/// Create a node for our test cube
-	this->texturedCubeNode = this->scene->createNode("TexturedCube", rootNode);
+	/// SPHERE (Metallic) - At Z = -8, to the right
+	/// This should have the same depth as the middle cube
+	auto sphereNode = this->scene->createNode("Sphere", rootNode);
+	auto sphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.2f, 2);
+	sphereMesh->setMaterial(metallicMaterial);
+	sphereNode->setMesh(std::move(sphereMesh));
 
-	/// Create and set up the cube mesh using MeshManager
-	auto cubeMesh = this->meshManager->createMesh<CubeMesh>();
+	scene::Transform sphereTransform;
+	sphereTransform.position = glm::vec3(3.0f, 1.0f, -8.0f);
+	sphereNode->setLocalTransform(sphereTransform);
 
-	/// Set the material before adding to scene
-	/// Use normal debug material to see normal visualizations
-	cubeMesh->setMaterial(texturedMaterial);
-	// cubeMesh->setMaterial(redMaterial);
-	// cubeMesh->setMaterial(normalDebugMaterial);
-	this->texturedCubeNode->setMesh(std::move(cubeMesh));
+	spdlog::info("Depth test scene created:");
+	spdlog::info("  - Front cube (red) at Z = -5");
+	spdlog::info("  - Middle cube (green) at Z = -8");
+	spdlog::info("  - Back cube (blue) at Z = -11");
+	spdlog::info("  - Sphere (metallic) at Z = -8");
+	spdlog::info("Expected order (front to back): Red -> Green/Sphere -> Blue");
 
-	/// Position the cube slightly offset from center
-	scene::Transform transform;
-	transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	this->texturedCubeNode->setLocalTransform(transform);
-
-	/// Load a sample model to demonstrate model loading
-	/// We place it at the center of the scene to showcase the loaded geometry
+	/// Load glTF model to test depth with imported geometry
 	try {
 		spdlog::info("Loading sample model...");
 
-		/// Create a parent node for our model
 		auto modelParentNode = this->scene->createNode("SampleModelParent", this->scene->getRoot());
-
-		/// Position the model appropriately in the scene
 		scene::Transform modelTransform;
-		modelTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-		modelTransform.scale = glm::vec3(1.0f); /// Adjust scale as needed for your model
+		modelTransform.position = glm::vec3(0.0f, 0.0f, -8.0f);
+		modelTransform.scale = glm::vec3(1.0f);
 		modelParentNode->setLocalTransform(modelTransform);
 
-		/// Load the model and attach it to our parent node
-		/// Using a relative path that will be resolved using the base directory
-		auto modelRootNode = this->loadModel(
-			"DamagedHelmet.glb",
-			modelParentNode
-		);
+		auto modelRootNode = this->loadModel("DamagedHelmet.glb", modelParentNode);
 
 		if (modelRootNode) {
 			spdlog::info("Sample model loaded successfully");
@@ -1711,6 +1680,21 @@ void Renderer::initializeMaterials() {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
 			"Failed to create pipeline for blue material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	auto greenMaterial = this->materialManager->createPBRMaterial("green");
+	greenMaterial->setBaseColor(glm::vec4(0.2f, 0.8f, 0.2f, 1.0f));
+	greenMaterial->setMetallic(0.1f);
+	greenMaterial->setRoughness(0.7f);
+
+	/// Create pipeline for green material
+	auto greenPipeline = this->pipelineManager->createPipeline(*greenMaterial);
+	if (!greenPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for green material",
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}

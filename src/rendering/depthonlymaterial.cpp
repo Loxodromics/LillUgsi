@@ -22,8 +22,8 @@ void DepthOnlyMaterial::configurePipeline(vulkan::PipelineConfig& config) const 
 	/// Target subpass 0 (depth pre-pass)
 	config.setSubpassIndex(0);
 
-	/// Depth state: test and write enabled, GREATER for Reverse-Z
-	config.setDepthState(true, true, VK_COMPARE_OP_GREATER);
+	/// Depth state: test and write enabled, LESS for Normal Z
+	config.setDepthState(true, true, VK_COMPARE_OP_LESS);
 
 	spdlog::trace("Configured depth-only pipeline for subpass 0");
 }
