@@ -69,9 +69,7 @@ void main() {
 	fragHeight = inColor.r;
 
 	/// Transform vertex position to clip space
+	/// With GLM_FORCE_DEPTH_ZERO_TO_ONE and swapped near/far planes,
+	/// Reverse-Z is handled directly by the projection matrix
 	gl_Position = camera.proj * camera.view * worldPos;
-
-	/// For Reverse-Z, we invert the Z component
-	/// This provides better depth precision
-	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 }

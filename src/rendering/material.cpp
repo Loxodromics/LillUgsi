@@ -164,14 +164,15 @@ void Material::initializeBlendState(vulkan::PipelineConfig& config) const {
 
 void Material::initializeDepthState(vulkan::PipelineConfig& config) const {
 	/// Configure depth testing based on material type
-	/// Each type has specific depth requirements for correct rendering
+	/// Using Reverse-Z: near objects have depth ~1.0, far objects have depth ~0.0
+	/// This provides better floating-point precision for distant objects
 	switch (this->materialType) {
 		case MaterialType::Skybox:
 			/// Skybox needs special depth handling:
 			/// - Enable depth testing to ensure proper occlusion
 			/// - Disable depth writing as skybox is infinitely far
-			/// - Use LESS_OR_EQUAL to render at maximum depth
-			config.setDepthState(true, false, VK_COMPARE_OP_LESS_OR_EQUAL);
+			/// - Use GREATER_OR_EQUAL to render at minimum depth (0.0 = furthest)
+			config.setDepthState(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 			break;
 
 		case MaterialType::Post:
@@ -182,16 +183,16 @@ void Material::initializeDepthState(vulkan::PipelineConfig& config) const {
 			break;
 
 		default:
-			/// Standard materials use depth testing
-			/// Normal Z: near objects have lower depth, use LESS to pass closer fragments
+			/// Standard materials use depth testing with Reverse-Z
+			/// Near objects have higher depth values, use GREATER to pass closer fragments
 			if (Material::sUseDepthPrepass) {
 				/// Depth pre-pass already wrote exact depth values for all visible geometry
-				/// Use LESS_OR_EQUAL so fragments with identical depth pass the test
-				/// (LESS would fail since newDepth == existingDepth, not less than)
-				config.setDepthState(true, false, VK_COMPARE_OP_LESS_OR_EQUAL);
+				/// Use GREATER_OR_EQUAL so fragments with identical depth pass the test
+				/// (GREATER would fail since newDepth == existingDepth, not greater than)
+				config.setDepthState(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 			} else {
 				/// Single pass: test and write depth
-				config.setDepthState(true, true, VK_COMPARE_OP_LESS);
+				config.setDepthState(true, true, VK_COMPARE_OP_GREATER);
 			}
 			break;
 	}

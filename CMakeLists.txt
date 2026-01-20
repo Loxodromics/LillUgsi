@@ -25,6 +25,7 @@ find_package(tinygltf REQUIRED)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
 add_compile_definitions(GLM_ENABLE_EXPERIMENTAL)
+add_compile_definitions(GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 # Define the main executable sources without planet files
 set(MAIN_SOURCES

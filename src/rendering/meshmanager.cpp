@@ -139,6 +139,7 @@ void MeshManager::updateBuffersIfNeeded(const std::shared_ptr<Mesh> &mesh) {
 
 /// Explicit template instantiations for known mesh types
 template std::shared_ptr<Mesh> MeshManager::createMesh<CubeMesh>();
+template std::shared_ptr<Mesh> MeshManager::createMesh<CubeMesh, float>(float &&);
 template std::shared_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float &&, int &&);
 template std::shared_ptr<Mesh> MeshManager::createMeshWithGeometry<ModelMesh>(
 	const std::vector<Vertex>&, const std::vector<uint32_t>&);

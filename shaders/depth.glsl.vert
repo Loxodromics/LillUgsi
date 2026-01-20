@@ -25,10 +25,8 @@ layout(push_constant) uniform PushConstants {
 
 void main() {
 	/// Transform vertex to clip space
+	/// With GLM_FORCE_DEPTH_ZERO_TO_ONE and swapped near/far planes,
+	/// Reverse-Z is handled directly by the projection matrix
 	vec4 worldPos = push.model * vec4(inPosition, 1.0);
 	gl_Position = camera.proj * camera.view * worldPos;
-
-	/// Apply Reverse-Z transformation
-	/// This remaps depth from [0,1] to [1,0] for better precision
-	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 }

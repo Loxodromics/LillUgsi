@@ -848,9 +848,9 @@ void Renderer::recordCommandBuffers() {
 		/// Set clear values for color and depth attachments
 		std::array<VkClearValue, 2> clearValues{};
 		clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};  /// Black with 100% opacity
-		/// For Normal Z, clear depth to 1.0 (furthest)
-		/// Objects closer to the camera will have lower depth values (near 0)
-		clearValues[1].depthStencil = {1.0f, 0};
+		/// For Reverse-Z, clear depth to 0.0 (furthest)
+		/// Objects closer to the camera will have higher depth values (near 1.0)
+		clearValues[1].depthStencil = {0.0f, 0};
 
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassInfo.pClearValues = clearValues.data();

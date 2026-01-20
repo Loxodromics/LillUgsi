@@ -28,11 +28,8 @@ void main() {
 	/// 1. Model matrix transforms vertex to world space
 	/// 2. View matrix transforms to camera space
 	/// 3. Projection matrix transforms to clip space
+	/// With GLM_FORCE_DEPTH_ZERO_TO_ONE and swapped near/far planes,
+	/// Reverse-Z is handled directly by the projection matrix
 	vec4 worldPos = push.model * vec4(inPosition, 1.0);
 	gl_Position = camera.proj * camera.view * worldPos;
-
-	/// For Reverse-Z, we invert the Z component
-	/// This matches the depth buffer configuration in the renderer
-	/// and provides better depth precision
-	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 }

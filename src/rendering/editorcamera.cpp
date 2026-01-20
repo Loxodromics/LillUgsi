@@ -94,10 +94,11 @@ glm::mat4 EditorCamera::getViewMatrix() const {
 }
 
 glm::mat4 EditorCamera::getProjectionMatrix(float aspectRatio) const {
-	/// Create a standard perspective projection matrix
-	/// With GLM_FORCE_DEPTH_ZERO_TO_ONE, this produces [0,1] depth range for Vulkan
-	/// Normal Z: near objects have lower depth values, far objects have higher values
-	return glm::perspective(glm::radians(this->fov), aspectRatio, this->nearPlane, this->farPlane);
+	/// Create a perspective projection matrix with Reverse-Z depth mapping
+	/// Swapping near/far planes inverts the depth range: near→1.0, far→0.0
+	/// This provides better floating-point precision for distant objects
+	/// since more precision bits are available near 0.0
+	return glm::perspective(glm::radians(this->fov), aspectRatio, this->farPlane, this->nearPlane);
 }
 
 void EditorCamera::updateOrientation(float xoffset, float yoffset) {

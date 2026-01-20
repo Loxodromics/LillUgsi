@@ -56,8 +56,4 @@ void main() {
 
 	/// Pass vertex color - will be used in vertex color mode
 	fragColor = inColor;
-
-	/// For Reverse-Z, we invert the Z component
-	/// This provides better depth precision in our renderer
-	gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 }

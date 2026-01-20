@@ -166,14 +166,14 @@ glm::mat4 OrbitCamera::getViewMatrix() const {
 }
 
 glm::mat4 OrbitCamera::getProjectionMatrix(float aspectRatio) const {
-	/// Create a standard perspective projection matrix
-	/// With GLM_FORCE_DEPTH_ZERO_TO_ONE, this produces [0,1] depth range for Vulkan
-	/// Normal Z: near objects have lower depth values, far objects have higher values
+	/// Create a perspective projection matrix with Reverse-Z depth mapping
+	/// Swapping near/far planes inverts the depth range: near→1.0, far→0.0
+	/// This provides better floating-point precision for distant objects
 	return glm::perspective(
 		glm::radians(this->getFov()),
 		aspectRatio,
-		this->getNearPlane(),
-		this->getFarPlane()
+		this->getFarPlane(),
+		this->getNearPlane()
 	);
 }
 
