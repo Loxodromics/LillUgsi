@@ -4,6 +4,7 @@
 #include "rendering/icospheremesh.h"
 #include "rendering/pbrmaterial.h"
 #include "terrainmaterial.h"
+#include "snowmaterial.h"
 #include "vulkan/indexbuffer.h"
 #include "vulkan/vertexbuffer.h"
 #ifdef USE_PLANET
@@ -1482,57 +1483,57 @@ void Renderer::initializeScene() {
 	auto blueMaterial = this->materialManager->getMaterial("blue");
 	auto metallicMaterial = this->materialManager->getMaterial("metallic");
 	auto redMaterial = this->materialManager->getMaterial("red");
+	auto snowMaterial = this->materialManager->getMaterial("snow");
 
-	/// FRONT CUBE (Red) - Closest to camera at Z = -5
-	/// This should render in front of everything else
+	/// SNOW SPHERE - Primary test object for Phase 1 snow shader effects
+	/// Camera is at (3, -3, -3) looking with yaw=135°, pitch=28°
+	/// This translates to looking direction: (-0.62, 0.47, 0.62) approximately
+	/// Position the snow sphere at origin where camera is naturally looking
+	auto snowSphereNode = this->scene->createNode("SnowSphere", rootNode);
+	auto snowSphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.8f, 3);
+	snowSphereMesh->setMaterial(snowMaterial);
+	snowSphereNode->setMesh(std::move(snowSphereMesh));
+
+	scene::Transform snowTransform;
+	snowTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+	snowSphereNode->setLocalTransform(snowTransform);
+
+	/// FRONT CUBE (Red) - Offset to the side for depth reference
 	auto frontCubeNode = this->scene->createNode("FrontCube", rootNode);
-	auto frontCubeMesh = this->meshManager->createMesh<CubeMesh>(1.5f);
+	auto frontCubeMesh = this->meshManager->createMesh<CubeMesh>(1.0f);
 	frontCubeMesh->setMaterial(redMaterial);
 	frontCubeNode->setMesh(std::move(frontCubeMesh));
 
 	scene::Transform frontTransform;
-	frontTransform.position = glm::vec3(-2.0f, 0.0f, -5.0f);
+	frontTransform.position = glm::vec3(-3.0f, 0.0f, -5.0f);
 	frontCubeNode->setLocalTransform(frontTransform);
 
-	/// MIDDLE CUBE (Green) - At Z = -8
-	/// This should be behind the front cube and in front of the back cube
-	auto middleCubeNode = this->scene->createNode("MiddleCube", rootNode);
-	auto middleCubeMesh = this->meshManager->createMesh<CubeMesh>(1.5f);
-	middleCubeMesh->setMaterial(greenMaterial);
-	middleCubeNode->setMesh(std::move(middleCubeMesh));
-
-	scene::Transform middleTransform;
-	middleTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-	middleCubeNode->setLocalTransform(middleTransform);
-
-	/// BACK CUBE (Blue) - Furthest from camera at Z = -11
-	/// This should render behind everything else
+	/// BACK CUBE (Blue) - Behind snow sphere for depth comparison
 	auto backCubeNode = this->scene->createNode("BackCube", rootNode);
-	auto backCubeMesh = this->meshManager->createMesh<CubeMesh>(1.5f);
+	auto backCubeMesh = this->meshManager->createMesh<CubeMesh>(1.0f);
 	backCubeMesh->setMaterial(blueMaterial);
 	backCubeNode->setMesh(std::move(backCubeMesh));
 
 	scene::Transform backTransform;
-	backTransform.position = glm::vec3(2.0f, 0.0f, -11.0f);
+	backTransform.position = glm::vec3(3.0f, -1.0f, 3.0f);
 	backCubeNode->setLocalTransform(backTransform);
 
-	/// SPHERE (Metallic) - At Z = -8, to the right
-	/// This should have the same depth as the middle cube
+	/// SPHERE (Metallic) - Companion sphere for material comparison
 	auto sphereNode = this->scene->createNode("Sphere", rootNode);
-	auto sphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.2f, 2);
+	auto sphereMesh = this->meshManager->createMesh<IcosphereMesh>(1.0f, 2);
 	sphereMesh->setMaterial(metallicMaterial);
 	sphereNode->setMesh(std::move(sphereMesh));
 
 	scene::Transform sphereTransform;
-	sphereTransform.position = glm::vec3(3.0f, 1.0f, -8.0f);
+	sphereTransform.position = glm::vec3(3.5f, 0.5f, 0.5f);
 	sphereNode->setLocalTransform(sphereTransform);
 
-	spdlog::info("Depth test scene created:");
-	spdlog::info("  - Front cube (red) at Z = -5");
-	spdlog::info("  - Middle cube (green) at Z = -8");
-	spdlog::info("  - Back cube (blue) at Z = -11");
-	spdlog::info("  - Sphere (metallic) at Z = -8");
-	spdlog::info("Expected order (front to back): Red -> Green/Sphere -> Blue");
+	spdlog::info("Snow shader test scene created:");
+	spdlog::info("  - Snow sphere (center) at origin");
+	spdlog::info("  - Red cube (left) at (-3, 0, -5)");
+	spdlog::info("  - Blue cube (back-right) at (3, -1, 3)");
+	spdlog::info("  - Metallic sphere (right) at (3.5, 0.5, 0.5)");
+	spdlog::info("Camera positioned to focus on snow sphere");
 
 	/// Load glTF model to test depth with imported geometry
 	try {
@@ -1728,6 +1729,30 @@ void Renderer::initializeMaterials() {
 		throw vulkan::VulkanException(
 			VK_ERROR_INITIALIZATION_FAILED,
 			"Failed to create pipeline for terrain material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create snow material for testing Phase 1 snow shader
+	auto snowMaterial = this->materialManager->createSnowMaterial("snow");
+
+	/// Configure snow properties with slightly adjusted defaults for better visibility
+	snowMaterial->setBaseAlbedo(glm::vec4(0.95f, 0.95f, 0.97f, 1.0f));
+	snowMaterial->setDarkeningAmount(0.85f);
+	snowMaterial->setDarkeningPower(2.5f);
+	snowMaterial->setFresnelPower(4.0f);
+	snowMaterial->setRimIntensity(0.25f);  /// Slightly higher for better rim visibility
+	snowMaterial->setSkyColor(glm::vec3(0.6f, 0.7f, 1.0f));
+	snowMaterial->setSparkleScale(120.0f);  /// Slightly denser sparkles
+	snowMaterial->setSparkleThreshold(0.985f);
+	snowMaterial->setSparkleIntensity(12.0f);  /// Slightly brighter sparkles
+
+	/// Create pipeline for snow material
+	auto snowPipeline = this->pipelineManager->createPipeline(*snowMaterial);
+	if (!snowPipeline) {
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Failed to create pipeline for snow material",
 			__FUNCTION__, __FILE__, __LINE__
 		);
 	}
