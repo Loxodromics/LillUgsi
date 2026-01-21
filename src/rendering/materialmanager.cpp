@@ -213,6 +213,39 @@ std::shared_ptr<DebugMaterial> MaterialManager::createDebugMaterial(const std::s
 	return material;
 }
 
+std::shared_ptr<SnowMaterial> MaterialManager::createSnowMaterial(const std::string& name) {
+	/// Check if material already exists
+	auto it = this->materials.find(name);
+	if (it != this->materials.end()) {
+		/// Try to cast existing material to SnowMaterial
+		auto snowMaterial = std::dynamic_pointer_cast<SnowMaterial>(it->second);
+		if (snowMaterial) {
+			spdlog::debug("Returning existing Snow material '{}'", name);
+			return snowMaterial;
+		}
+
+		/// Material exists but is not a Snow material
+		throw vulkan::VulkanException(
+			VK_ERROR_INITIALIZATION_FAILED,
+			"Material '" + name + "' exists but is not a Snow material",
+			__FUNCTION__, __FILE__, __LINE__
+		);
+	}
+
+	/// Create new Snow material
+	auto material = std::make_shared<SnowMaterial>(
+		this->device,
+		name,
+		this->physicalDevice
+	);
+
+	/// Store in material map
+	this->materials[name] = material;
+
+	spdlog::info("Created new Snow material '{}'", name);
+	return material;
+}
+
 std::shared_ptr<Material> MaterialManager::getMaterial(
 	const std::string& name
 ) const {

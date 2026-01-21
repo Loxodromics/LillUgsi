@@ -8,6 +8,7 @@
 #include "vulkan/vulkanwrappers.h"
 #include "wireframematerial.h"
 #include "debugmaterial.h"
+#include "snowmaterial.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -80,6 +81,12 @@ public:
 	[[nodiscard]] std::shared_ptr<TerrainMaterial> createTerrainMaterial(const std::string& name);
 
 	[[nodiscard]] std::shared_ptr<DebugMaterial> createDebugMaterial(const std::string& name);
+
+	/// Create a new Snow material
+	/// If a material with the given name already exists, it will be returned
+	/// @param name Unique identifier for the material
+	/// @return Shared pointer to the created or existing material
+	[[nodiscard]] std::shared_ptr<SnowMaterial> createSnowMaterial(const std::string& name);
 
 	/// Get a material by name
 	/// @param name The name of the material to retrieve

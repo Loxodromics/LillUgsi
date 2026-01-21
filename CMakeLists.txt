@@ -60,6 +60,7 @@ set(MAIN_SOURCES
 		src/rendering/icospheremesh.cpp
 		src/vulkan/pipelineconfig.cpp
 		src/rendering/wireframematerial.cpp
+		src/rendering/snowmaterial.cpp
 		src/rendering/terrainmaterial.cpp
 		src/rendering/screenshot.cpp
 		src/rendering/texture.cpp
@@ -155,6 +156,8 @@ add_custom_target(Shaders
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/fullscreenquad.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/fullscreenquad.frag.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/depth.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/depth.vert.spv
 	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/depth.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/depth.frag.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/snow.glsl.vert -o ${CMAKE_BINARY_DIR}/shaders/snow.vert.spv
+	COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shaders/snow.glsl.frag -o ${CMAKE_BINARY_DIR}/shaders/snow.frag.spv
 	COMMENT "Compiling shaders"
 )
 add_dependencies(LillUgsi Shaders)
