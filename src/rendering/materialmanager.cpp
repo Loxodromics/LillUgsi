@@ -242,6 +242,11 @@ std::shared_ptr<SnowMaterial> MaterialManager::createSnowMaterial(const std::str
 	/// Store in material map
 	this->materials[name] = material;
 
+	/// Set default SSS LUT texture to avoid undefined binding
+	/// This will be replaced with the actual SSS LUT later
+	auto defaultTexture = this->textureManager->getDefaultTexture();
+	material->setSSSLUT(defaultTexture);
+
 	spdlog::info("Created new Snow material '{}'", name);
 	return material;
 }

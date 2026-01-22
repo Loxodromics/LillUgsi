@@ -102,19 +102,49 @@ void SnowMaterial::setSparkleIntensity(float intensity) {
 	spdlog::trace("Set sparkle intensity to {} for snow material '{}'", intensity, this->name);
 }
 
+void SnowMaterial::setScatterColor(const glm::vec3& color) {
+	this->properties.scatterColor = color;
+	this->updateUniformBuffer();
+	spdlog::trace("Set scatter color to ({}, {}, {}) for snow material '{}'",
+		color.r, color.g, color.b, this->name);
+}
+
+void SnowMaterial::setCurvatureScale(float scale) {
+	this->properties.curvatureScale = scale;
+	this->updateUniformBuffer();
+	spdlog::trace("Set curvature scale to {} for snow material '{}'", scale, this->name);
+}
+
+void SnowMaterial::setSSSLUT(std::shared_ptr<Texture> texture) {
+	this->sssLUT = texture;
+	this->updateTextureDescriptors();
+	spdlog::info("Set SSS LUT texture for snow material '{}'", this->name);
+}
+
 void SnowMaterial::createDescriptorSetLayout() {
-	/// Create the descriptor layout for our uniform buffer
-	VkDescriptorSetLayoutBinding binding{};
-	binding.binding = 0;
-	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	binding.descriptorCount = 1;
-	binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	binding.pImmutableSamplers = nullptr;
+	/// Create the descriptor layout for our uniform buffer and SSS LUT sampler
+	/// Binding 0: Uniform buffer for material properties
+	/// Binding 1: SSS LUT sampler
+	VkDescriptorSetLayoutBinding bindings[2];
+
+	/// Binding 0: Uniform buffer
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[0].pImmutableSamplers = nullptr;
+
+	/// Binding 1: SSS LUT sampler
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].descriptorCount = 1;
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[1].pImmutableSamplers = nullptr;
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &binding;
+	layoutInfo.bindingCount = 2;
+	layoutInfo.pBindings = bindings;
 
 	VkDescriptorSetLayout layout;
 	VK_CHECK(vkCreateDescriptorSetLayout(this->device, &layoutInfo, nullptr, &layout));
@@ -127,6 +157,48 @@ void SnowMaterial::createDescriptorSetLayout() {
 		});
 
 	spdlog::debug("Created descriptor set layout for snow material '{}'", this->name);
+}
+
+bool SnowMaterial::createDescriptorPool() {
+	/// We need:
+	/// - 1 uniform buffer descriptor for material properties
+	/// - 1 combined image sampler descriptor for SSS LUT texture
+	constexpr uint32_t uniformBufferCount = 1;
+	constexpr uint32_t samplerCount = 1;
+
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+
+	/// Uniform buffer pool size
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = uniformBufferCount;
+
+	/// Combined image sampler pool size for SSS LUT
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = samplerCount;
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
+	poolInfo.maxSets = 1;  /// One descriptor set per material
+
+	VkDescriptorPool pool;
+	VkResult result = vkCreateDescriptorPool(this->device, &poolInfo, nullptr, &pool);
+	if (result != VK_SUCCESS) {
+		spdlog::error("Failed to create descriptor pool for snow material '{}'", this->name);
+		return false;
+	}
+
+	/// Wrap in RAII handle
+	this->descriptorPool = vulkan::VulkanDescriptorPoolHandle(
+		pool,
+		[this](VkDescriptorPool p) {
+			vkDestroyDescriptorPool(this->device, p, nullptr);
+		});
+
+	spdlog::debug("Created descriptor pool for snow material '{}'", this->name);
+	return true;
 }
 
 void SnowMaterial::createUniformBuffer() {
@@ -214,6 +286,9 @@ void SnowMaterial::createDescriptorSet() {
 
 	vkUpdateDescriptorSets(this->device, 1, &descriptorWrite, 0, nullptr);
 
+	/// Bind the SSS LUT texture if present
+	this->updateTextureDescriptors();
+
 	spdlog::debug("Created descriptor set for snow material '{}'", this->name);
 }
 
@@ -225,6 +300,47 @@ void SnowMaterial::updateUniformBuffer() {
 	vkUnmapMemory(this->device, this->uniformBufferMemory);
 
 	spdlog::trace("Updated uniform buffer for snow material '{}'", this->name);
+}
+
+void SnowMaterial::updateTextureDescriptors() {
+	/// If we don't have an SSS LUT texture yet, skip updating
+	if (!this->sssLUT) {
+		return;
+	}
+
+	/// Update descriptor set binding 1 with SSS LUT texture
+	VkDescriptorImageInfo imageInfo{};
+	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	imageInfo.imageView = this->sssLUT->getImageView();
+	imageInfo.sampler = this->sssLUT->getSampler();
+
+	VkWriteDescriptorSet descriptorWrite{};
+	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite.dstSet = this->descriptorSet;
+	descriptorWrite.dstBinding = 1;  /// SSS LUT is at binding 1
+	descriptorWrite.dstArrayElement = 0;
+	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrite.descriptorCount = 1;
+	descriptorWrite.pImageInfo = &imageInfo;
+
+	vkUpdateDescriptorSets(this->device, 1, &descriptorWrite, 0, nullptr);
+
+	spdlog::debug("Updated SSS LUT texture descriptor for snow material '{}'", this->name);
+}
+
+void SnowMaterial::bind(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) const {
+	/// Bind the descriptor set to set 2 (material set)
+	/// Set 0 is camera uniforms, set 1 is light uniforms
+	vkCmdBindDescriptorSets(
+		cmdBuffer,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		pipelineLayout,
+		2,  /// Material descriptor set
+		1,
+		&this->descriptorSet,
+		0,
+		nullptr
+	);
 }
 
 } /// namespace lillugsi::rendering

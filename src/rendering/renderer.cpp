@@ -1747,6 +1747,31 @@ void Renderer::initializeMaterials() {
 	snowMaterial->setSparkleThreshold(0.985f);
 	snowMaterial->setSparkleIntensity(12.0f);  /// Slightly brighter sparkles
 
+	/// Phase 2: Subsurface scattering configuration
+	snowMaterial->setScatterColor(glm::vec3(1.0f, 0.98f, 0.95f));  /// Slight warm tint for depth scattering
+	snowMaterial->setCurvatureScale(10.0f);  /// Amplify curvature to make SSS more visible on smooth surfaces
+
+	/// Load SSS LUT texture
+	auto sssLUT = this->textureManager->getOrLoadTexture(
+		"resources/textures/sss_lut.png",
+		false
+	);
+	if (sssLUT) {
+		/// Configure LUT sampler (no mipmaps, clamp to edge)
+		sssLUT->configureSampler(
+			rendering::Texture::FilterMode::Linear,
+			rendering::Texture::FilterMode::Linear,
+			rendering::Texture::WrapMode::ClampToEdge,
+			rendering::Texture::WrapMode::ClampToEdge,
+			false,  /// No anisotropic filtering for LUTs
+			1.0f
+		);
+		snowMaterial->setSSSLUT(sssLUT);
+		spdlog::info("Loaded SSS LUT texture for snow material");
+	} else {
+		spdlog::warn("Failed to load SSS LUT texture, snow will use fallback rendering");
+	}
+
 	/// Create pipeline for snow material
 	auto snowPipeline = this->pipelineManager->createPipeline(*snowMaterial);
 	if (!snowPipeline) {

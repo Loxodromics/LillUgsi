@@ -34,7 +34,13 @@ layout(set = 2, binding = 0) uniform SnowMaterial {
 	float sparkleThreshold;
 	float sparkleIntensity;
 	float _pad2;
+	/// Phase 2: Subsurface scattering
+	vec3 scatterColor;
+	float curvatureScale;
 } snow;
+
+/// Phase 2: SSS lookup texture
+layout(set = 2, binding = 1) uniform sampler2D sssLUT;
 
 const float PI = 3.14159265359;
 const float EPSILON = 0.0001;
@@ -84,8 +90,27 @@ void main() {
 		/// Accumulate ambient
 		ambientColor += light.ambient.rgb * lightIntensity;
 
-		/// Lambert diffuse (energy conserving)
-		vec3 diffuse = albedo / PI * NdotL;
+		/// Phase 2: Subsurface scattering diffuse (replaces Lambert)
+		/// Wrap NdotL into [0,1] range for LUT sampling
+		float wrappedNdotL = NdotL * 0.5 + 0.5;
+
+		/// Estimate surface curvature using screen-space normal derivatives
+		/// fwidth() gives us the rate of change of normal across the screen
+		/// Higher values indicate more curved surfaces
+		float curvature = length(fwidth(N)) * snow.curvatureScale;
+		curvature = clamp(curvature, 0.0, 1.0);  /// Keep in valid LUT range
+
+		/// Sample pre-integrated SSS LUT
+		/// X-axis: wrapped NdotL (light angle)
+		/// Y-axis: curvature (surface bending)
+		/// Returns diffuse response with subsurface scattering baked in
+		vec3 sssResponse = texture(sssLUT, vec2(wrappedNdotL, curvature)).rgb;
+
+		/// Apply scatter color tint for depth-dependent warm scattering
+		sssResponse *= snow.scatterColor;
+
+		/// Final diffuse with SSS
+		vec3 diffuse = albedo * sssResponse;
 
 		/// 3. Sparkle effect
 		vec3 noiseCoord = fragPosition * snow.sparkleScale;
