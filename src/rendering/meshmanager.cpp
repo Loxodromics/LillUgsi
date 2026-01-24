@@ -4,6 +4,8 @@
 #include "cubemesh.h"
 #include "icospheremesh.h"
 #include "modelmesh.h"
+#include "torusmesh.h"
+#include "torusknotmesh.h"
 #include <spdlog/spdlog.h>
 
 namespace lillugsi::rendering {
@@ -143,5 +145,15 @@ template std::shared_ptr<Mesh> MeshManager::createMesh<CubeMesh, float>(float &&
 template std::shared_ptr<Mesh> MeshManager::createMesh<IcosphereMesh, float, int>(float &&, int &&);
 template std::shared_ptr<Mesh> MeshManager::createMeshWithGeometry<ModelMesh>(
 	const std::vector<Vertex>&, const std::vector<uint32_t>&);
+
+/// Torus instantiations
+template std::shared_ptr<Mesh> MeshManager::createMesh<TorusMesh>();
+template std::shared_ptr<Mesh> MeshManager::createMesh<TorusMesh, float, float, uint32_t, uint32_t>(
+	float&&, float&&, uint32_t&&, uint32_t&&);
+
+/// TorusKnot instantiations
+template std::shared_ptr<Mesh> MeshManager::createMesh<TorusKnotMesh>();
+template std::shared_ptr<Mesh> MeshManager::createMesh<TorusKnotMesh, float, float, uint32_t, uint32_t, uint32_t, uint32_t>(
+	float&&, float&&, uint32_t&&, uint32_t&&, uint32_t&&, uint32_t&&);
 
 } /// namespace lillugsi::rendering

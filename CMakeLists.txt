@@ -58,6 +58,8 @@ set(MAIN_SOURCES
 		src/rendering/materialmanager.cpp
 		src/rendering/material.cpp
 		src/rendering/icospheremesh.cpp
+		src/rendering/torusmesh.cpp
+		src/rendering/torusknotmesh.cpp
 		src/vulkan/pipelineconfig.cpp
 		src/rendering/wireframematerial.cpp
 		src/rendering/snowmaterial.cpp

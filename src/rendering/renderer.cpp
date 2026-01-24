@@ -2,6 +2,8 @@
 #include "computetest.h"
 #include "rendering/cubemesh.h"
 #include "rendering/icospheremesh.h"
+#include "rendering/torusmesh.h"
+#include "rendering/torusknotmesh.h"
 #include "rendering/pbrmaterial.h"
 #include "terrainmaterial.h"
 #include "snowmaterial.h"
@@ -1528,11 +1530,46 @@ void Renderer::initializeScene() {
 	sphereTransform.position = glm::vec3(3.5f, 0.5f, 0.5f);
 	sphereNode->setLocalTransform(sphereTransform);
 
+	/// TORUS - Test doubly-curved surface for PBR and normal mapping
+	auto torusNode = this->scene->createNode("Torus", rootNode);
+	auto torusMesh = this->meshManager->createMesh<TorusMesh>(
+		1.5f,   /// majorRadius
+		0.5f,   /// minorRadius
+		64u,    /// majorSegments (high quality)
+		32u     /// minorSegments
+	);
+	torusMesh->setMaterial(snowMaterial);  /// Use snow material for testing
+	torusMesh->setTextureTiling(4.0f, 2.0f);  /// Repeat texture around surface
+	torusNode->setMesh(std::move(torusMesh));
+
+	scene::Transform torusTransform;
+	torusTransform.position = glm::vec3(5.0f, -2.0f, 2.0f);  /// Position to side
+	torusNode->setLocalTransform(torusTransform);
+
+	/// TORUS KNOT - Test complex geometry with self-proximity
+	auto knotNode = this->scene->createNode("TorusKnot", rootNode);
+	auto knotMesh = this->meshManager->createMesh<TorusKnotMesh>(
+		1.0f,   /// majorRadius
+		0.25f,  /// minorRadius (thinner tube for intricate detail)
+		3u,     /// p windings
+		4u,     /// q windings
+		256u,   /// path segments (smooth curve)
+		24u     /// tube segments
+	);
+	knotMesh->setMaterial(metallicMaterial);  /// Metallic shows off complex geometry
+	knotNode->setMesh(std::move(knotMesh));
+
+	scene::Transform knotTransform;
+	knotTransform.position = glm::vec3(-5.0f, -2.0f, 0.0f);  /// Position to other side
+	knotNode->setLocalTransform(knotTransform);
+
 	spdlog::info("Snow shader test scene created:");
 	spdlog::info("  - Snow sphere (center) at origin");
 	spdlog::info("  - Red cube (left) at (-3, 0, -5)");
 	spdlog::info("  - Blue cube (back-right) at (3, -1, 3)");
 	spdlog::info("  - Metallic sphere (right) at (3.5, 0.5, 0.5)");
+	spdlog::info("  - Torus (right-down) at (5, -2, 2)");
+	spdlog::info("  - Torus knot (left-down) at (-5, -2, 0)");
 	spdlog::info("Camera positioned to focus on snow sphere");
 
 	/// Load glTF model to test depth with imported geometry
