@@ -36,3 +36,5 @@ LillUgsi
 # Others
 sources.txt
 logs/
+Claude/
+.claude/
