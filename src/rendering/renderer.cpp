@@ -1538,7 +1538,7 @@ void Renderer::initializeScene() {
 		64u,    /// majorSegments (high quality)
 		32u     /// minorSegments
 	);
-	torusMesh->setMaterial(snowMaterial);  /// Use snow material for testing
+	torusMesh->setMaterial(snowMaterial);
 	torusMesh->setTextureTiling(4.0f, 2.0f);  /// Repeat texture around surface
 	torusNode->setMesh(std::move(torusMesh));
 
@@ -1556,7 +1556,7 @@ void Renderer::initializeScene() {
 		256u,   /// path segments (smooth curve)
 		24u     /// tube segments
 	);
-	knotMesh->setMaterial(metallicMaterial);  /// Metallic shows off complex geometry
+	knotMesh->setMaterial(metallicMaterial);
 	knotNode->setMesh(std::move(knotMesh));
 
 	scene::Transform knotTransform;

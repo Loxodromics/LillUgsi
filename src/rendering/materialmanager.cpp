@@ -50,14 +50,10 @@ std::shared_ptr<PBRMaterial> MaterialManager::createPBRMaterial(
 	/// Store in material map
 	this->materials[name] = material;
 
-	/// Set default textures for all material slots, since they are all need when binding
-	/// They might be overwriten with propper textures later
-	auto defaultTexture = this->textureManager->getDefaultTexture();
-	material->setAlbedoTexture(defaultTexture);
-	material->setNormalMap(defaultTexture);
-	material->setRoughnessMap(defaultTexture);
-	material->setMetallicMap(defaultTexture);
-	material->setOcclusionMap(defaultTexture);
+	/// We do NOT set default textures for any material maps because that enables
+	/// their "use" flags and overrides the uniform values. For normal maps specifically,
+	/// the white default texture (1,1,1) becomes invalid tangent normal (1,1,1) which
+	/// corrupts all lighting calculations.
 
 	spdlog::info("Created new PBR material '{}'", name);
 	return material;
@@ -83,13 +79,7 @@ std::shared_ptr<PBRMaterial> MaterialManager::createPBRMaterialWithCustomShaders
 	/// Store in material map
 	this->materials[name] = material;
 
-	/// Set default textures for all material slots
-	auto defaultTexture = this->textureManager->getDefaultTexture();
-	material->setAlbedoTexture(defaultTexture);
-	material->setNormalMap(defaultTexture);
-	material->setRoughnessMap(defaultTexture);
-	material->setMetallicMap(defaultTexture);
-	material->setOcclusionMap(defaultTexture);
+	/// No default textures - see createPBRMaterial for explanation
 
 	spdlog::info("Created new PBR material '{}' with custom shaders: {} and {}",
 		name, vertexShaderPath, fragmentShaderPath);

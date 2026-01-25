@@ -78,15 +78,30 @@ void main() {
 	/// The TBN matrix transforms normal vectors from tangent space (normal map) to world space
 	/// This is crucial for normal mapping to correctly orient detailed normals
 
-	/// Transform the tangent to world space using the same normal matrix
-	/// Since tangent is a direction vector like normal, it needs the same transformation
-	vec3 T = normalize(normalMatrix * inTangent);
+	/// Check for degenerate tangent data (zero or near-zero length)
+	/// This can happen with procedural geometry or malformed model data
+	/// Without this check, normalize(zero) produces NaN which corrupts the entire TBN matrix
+	float tangentLength = length(inTangent);
+	vec3 T;
 
-	/// Re-orthogonalize tangent with respect to normal using Gram-Schmidt process
-	/// This step is crucial because even if tangents and normals are perpendicular in model space,
-	/// the non-uniform scaling in the model matrix might make them non-perpendicular in world space
-	/// Without this correction, normal mapping can produce distorted results
-	T = normalize(T - dot(T, fragNormal) * fragNormal);
+	if (tangentLength < 0.001) {
+		/// Generate a fallback tangent perpendicular to the normal
+		/// We choose a reference vector that's not parallel to the normal
+		if (abs(fragNormal.y) < 0.999) {
+			T = normalize(cross(fragNormal, vec3(0.0, 1.0, 0.0)));
+		} else {
+			T = normalize(cross(fragNormal, vec3(1.0, 0.0, 0.0)));
+		}
+	} else {
+		/// Transform the tangent to world space using the normal matrix
+		/// Since tangent is a direction vector like normal, it needs the same transformation
+		T = normalize(normalMatrix * inTangent);
+
+		/// Re-orthogonalize tangent with respect to normal using Gram-Schmidt process
+		/// This step is crucial because even if tangents and normals are perpendicular in model space,
+		/// the non-uniform scaling in the model matrix might make them non-perpendicular in world space
+		T = normalize(T - dot(T, fragNormal) * fragNormal);
+	}
 
 	/// Calculate bitangent using cross product of normal and tangent
 	/// We use cross product to ensure the bitangent is perpendicular to both normal and tangent
@@ -96,9 +111,6 @@ void main() {
 	/// Construct the TBN matrix with the three orthonormal basis vectors
 	/// Each column of the matrix represents one basis vector of the tangent space
 	/// This matrix will transform vectors from tangent space to world space
-	///
-	/// Note that we use the columns in T, B, N order which is the convention for
-	/// tangent space to world space transformation (maps x->T, y->B, z->N)
 	fragTBN = mat3(T, B, fragNormal);
 
 	/// Final required transformation: vertex position to clip space

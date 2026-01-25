@@ -70,11 +70,15 @@ const float EPSILON = 0.0001; /// Small value to prevent division by zero
 /// NoH: dot(normal, halfVector)
 /// roughness: surface roughness parameter [0,1]
 float distributionGGX(float NoH, float roughness) {
+	/// Clamp roughness to prevent singularity at roughness=0, NoH=1
+	/// where denom becomes zero, producing NaN
+	/// Minimum 0.04 matches the F0 for dielectrics and provides stable calculations
+	roughness = max(roughness, 0.04);
 	float a = roughness * roughness;
 	float a2 = a * a;
 	float NoH2 = NoH * NoH;
 	float denom = (NoH2 * (a2 - 1.0) + 1.0);
-	denom = PI * denom * denom;
+	denom = PI * denom * denom + EPSILON;  /// Add EPSILON as additional safety
 	return a2 / denom;
 }
 
@@ -83,9 +87,11 @@ float distributionGGX(float NoH, float roughness) {
 /// NdotV: dot product between normal and view/light direction
 /// roughness: surface roughness parameter [0,1]
 float geometrySchlickGGX(float NdotV, float roughness) {
+	/// Clamp roughness to same minimum as GGX for consistency
+	roughness = max(roughness, 0.04);
 	float r = (roughness + 1.0);
 	float k = (r * r) / 8.0;  /// Direct lighting formulation
-	float denom = NdotV * (1.0 - k) + k;
+	float denom = NdotV * (1.0 - k) + k + EPSILON;  /// Add EPSILON for safety
 	return NdotV / denom;
 }
 
@@ -106,6 +112,10 @@ float geometrySmith(float NoV, float NoL, float roughness) {
 /// cosTheta: dot(halfVector, viewDir) or dot(normal, viewDir) depending on use
 /// F0: base reflectivity at normal incidence (0.04 for dielectrics, albedo for metals)
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+	/// Clamp cosTheta to [0,1] to prevent pow() with negative base
+	/// which is undefined in GLSL and produces NaN
+	/// This can happen due to floating-point precision when vectors are nearly parallel
+	cosTheta = clamp(cosTheta, 0.0, 1.0);
 	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
@@ -183,9 +193,10 @@ void main() {
 		/// the surface geometry and texture coordinates
 		normal = normalize(TBN * tangentNormal);
 	} else {
-		/// If no normal map is used, just use the renormalized surface normal from TBN
-		/// This provides basic lighting without the added surface detail
-		normal = TBN[2];  /// Already normalized when TBN was constructed
+		/// If no normal map is used, use the interpolated vertex normal directly
+		/// This avoids dependency on TBN matrix which may be corrupted if tangent data is bad
+		/// We normalize because interpolation of unit vectors doesn't preserve unit length
+		normal = normalize(fragNormal);
 	}
 
 	/// Sample roughness from texture or use uniform value
